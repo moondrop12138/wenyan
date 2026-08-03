@@ -20,17 +20,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,11 +57,13 @@ import com.goutoujunshi.app.ui.components.CrisisCard
 import com.goutoujunshi.app.ui.components.ErrorCard
 import com.goutoujunshi.app.ui.components.GtjIconButton
 import com.goutoujunshi.app.ui.components.ModelSheet
+import com.goutoujunshi.app.ui.components.ThinkingPanel
 import com.goutoujunshi.app.ui.components.TranscriptionCard
 import com.goutoujunshi.app.ui.components.TypingIndicator
 import com.goutoujunshi.app.ui.contract.AppContainer
 import com.goutoujunshi.app.ui.contract.ChatMessageUi
 import com.goutoujunshi.app.ui.contract.MessageType
+import com.goutoujunshi.app.ui.contract.SessionSummaryUi
 import com.goutoujunshi.app.ui.navigation.rememberViewModel
 import com.goutoujunshi.app.ui.theme.GtjShape
 import com.goutoujunshi.app.ui.theme.GtjType
@@ -78,10 +85,13 @@ fun ChatScreen(
     val messages by vm.messages.collectAsState()
     val streaming by vm.streaming.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
+    val streamingThinking by vm.streamingThinking.collectAsState()
     val input by vm.input.collectAsState()
     val lastError by vm.lastError.collectAsState()
     val transcription by vm.transcription.collectAsState()
     val modelName by vm.currentModelName.collectAsState()
+    val sessions by vm.sessions.collectAsState()
+    val currentSessionId by vm.currentSessionId.collectAsState()
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -90,7 +100,9 @@ fun ChatScreen(
     // 长按消息菜单 / 删除确认（局部 UI 态，与 showModelSheet 同模式）
     var menuFor by remember { mutableStateOf<ChatMessageUi?>(null) }
     var confirmDeleteFor by remember { mutableStateOf<ChatMessageUi?>(null) }
+    var confirmDeleteSession by remember { mutableStateOf<SessionSummaryUi?>(null) }
     val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val models by container.settingsRepository.models.collectAsState(initial = emptyList())
     val currentId by container.settingsRepository.currentModelId.collectAsState(initial = null)
     val p = LocalGtjColors.current
@@ -100,6 +112,28 @@ fun ChatScreen(
         Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
     }
 
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = p.bg,
+            ) {
+                SessionDrawerContent(
+                    sessions = sessions,
+                    currentSessionId = currentSessionId,
+                    onNewSession = {
+                        vm.startNewSession()
+                        scope.launch { drawerState.close() }
+                    },
+                    onSelectSession = { id ->
+                        vm.switchSession(id)
+                        scope.launch { drawerState.close() }
+                    },
+                    onLongPressSession = { confirmDeleteSession = it },
+                )
+            }
+        },
+    ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -107,6 +141,7 @@ fun ChatScreen(
                 modelName = modelName,
                 onModelClick = { showModelSheet = true },
                 onSettings = onOpenSettings,
+                onMenu = { scope.launch { drawerState.open() } },
             )
         },
         bottomBar = {
@@ -177,21 +212,31 @@ fun ChatScreen(
                         }
                     }
                     if (streaming) {
+                        // 深度思考模型的 reasoning_content：折叠面板，用户可选展开
+                        if (streamingThinking.isNotBlank()) {
+                            item(key = "thinking") {
+                                ThinkingPanel(thinking = streamingThinking, streaming = true)
+                            }
+                        }
                         item(key = "streaming") {
-                            if (streamingText.isNotBlank()) {
-                                StreamingBubble(text = streamingText)
-                            } else {
-                                TypingIndicator()
+                            // 正文按"reply 预览"渲染：模型输出 JSON，流式期间只看到 reply 字段的内容，
+                            // 避免把 {"steps":[{"key":"emotion",... 这种原始 JSON 当回复糊在气泡里
+                            val replyPreview = StreamingPreview.extractReplyPreview(streamingText)
+                            when {
+                                replyPreview != null -> StreamingBubble(text = replyPreview)
+                                streamingThinking.isNotBlank() -> StreamingPlaceholderBubble()
+                                else -> TypingIndicator()
                             }
                         }
                     }
                 }
-                LaunchedEffect(messages.size, streamingText, transcription) {
+                LaunchedEffect(messages.size, streamingText, streamingThinking, transcription) {
                     val count = listState.layoutInfo.totalItemsCount
                     if (count > 0) listState.scrollToItem(count - 1)
                 }
             }
         }
+    }
     }
 
     // 长按消息操作菜单：文本类可复制/删除，图片仅删除
@@ -240,6 +285,27 @@ fun ChatScreen(
         )
     }
 
+    // 长按会话条目 → 删除确认
+    confirmDeleteSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteSession = null },
+            shape = GtjShape.lg,
+            title = { Text("删除这个会话？") },
+            text = { Text("「${session.title}」将被删除，无法恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.deleteSession(session.id)
+                        confirmDeleteSession = null
+                    },
+                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteSession = null }) { Text("取消") }
+            },
+        )
+    }
+
     if (showModelSheet) {
         ModelSheet(
             models = models,
@@ -262,6 +328,7 @@ private fun ChatTopBar(
     modelName: String,
     onModelClick: () -> Unit,
     onSettings: () -> Unit,
+    onMenu: () -> Unit,
 ) {
     val p = LocalGtjColors.current
     Surface(color = p.bg) {
@@ -273,9 +340,15 @@ private fun ChatTopBar(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
             ) {
-                Text("狗头军师", style = GtjType.Title, color = p.fg)
+                GtjIconButton(
+                    icon = Icons.Outlined.Menu,
+                    contentDescription = "打开历史会话",
+                    onClick = onMenu,
+                    tint = p.fgSecondary,
+                )
+                // 顶栏不显示产品名（UI 定稿：极简，少装饰性文案）
                 Spacer(Modifier.weight(1f))
                 Surface(
                     onClick = onModelClick,

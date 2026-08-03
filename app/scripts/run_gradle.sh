@@ -14,6 +14,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot}"
+# toolchain 探测到的 JRE21（无 javac）会让 release 编译失败：显式从探测列表移除，
+# 只保留完整 JDK（用户目录 JDK21 含 javac + JDK17）。路径含空格，整个 -P 参数须加引号。
+JDK_PATHS_PROP="-Porg.gradle.java.installations.paths=C:\\Users\\Khalil\\Android\\jdk-21.0.12+8,C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.20.8-hotspot"
 GRADLE_DIST="$HOME/.gradle/wrapper/dists/gradle-8.13-bin/5xuhj0ry160q40clulazy9h7d/gradle-8.13/bin/gradle.bat"
 
 # 可读源：gt2（最近成功运行，含完整 transform 缓存）
@@ -59,4 +62,4 @@ for b in "$ROOT/app/build" "$ROOT/build"; do
 done
 
 echo "[run_gradle] 目标: $*"
-"$GRADLE_DIST" "$@" --no-daemon --project-cache-dir "$PROJ_CACHE"
+"$GRADLE_DIST" "$@" "$JDK_PATHS_PROP" --no-daemon --project-cache-dir "$PROJ_CACHE"

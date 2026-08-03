@@ -7,12 +7,22 @@ import org.json.JSONObject
  * OpenAI 兼容 Chat Completions 请求（llm-contract §2）
  * 纯 JVM 可测。
  */
+/**
+ * 历史消息（纯文本对话轮次，role 为 "user"/"assistant"）
+ */
+data class ChatHistoryMessage(
+    val role: String,
+    val content: String,
+)
+
 data class ChatRequest(
     val model: String,
     val system: String,
     val userText: String,
     val imageDataUrl: String? = null,
     val temperature: Double = 0.7,
+    /** 同会话历史消息，注入在 system 之后、当前 user 之前 */
+    val history: List<ChatHistoryMessage> = emptyList(),
 )
 
 /**
@@ -20,7 +30,8 @@ data class ChatRequest(
  * 文本按 ~4 字符/token；图片按固定常量估算（OpenAI 近似，够观测用）。
  */
 fun ChatRequest.estimatedInputTokens(): Int {
-    val textTokens = (system.length + userText.length) / 4
+    val historyLen = history.sumOf { it.content.length }
+    val textTokens = (system.length + userText.length + historyLen) / 4
     val imageTokens = if (imageDataUrl != null) IMAGE_TOKEN_ESTIMATE else 0
     return textTokens + imageTokens
 }
@@ -32,6 +43,8 @@ private const val IMAGE_TOKEN_ESTIMATE = 850
  */
 sealed class LlmEvent {
     data class Delta(val text: String) : LlmEvent()
+    /** 深度思考模型的推理增量（reasoning_content），与正文分开 */
+    data class Thinking(val text: String) : LlmEvent()
     data class Done(val fullText: String) : LlmEvent()
     data class Failed(val error: LlmErrorCode, val detail: String = "") : LlmEvent()
 }
@@ -53,6 +66,14 @@ object ChatRequestBuilder {
         systemMsg.put("role", "system")
         systemMsg.put("content", request.system)
         messages.put(systemMsg)
+
+        // 历史消息：system 之后、当前 user 之前
+        for (h in request.history) {
+            val historyMsg = JSONObject()
+            historyMsg.put("role", h.role)
+            historyMsg.put("content", h.content)
+            messages.put(historyMsg)
+        }
 
         val userMsg = JSONObject()
         userMsg.put("role", "user")

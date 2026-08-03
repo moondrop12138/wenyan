@@ -166,6 +166,37 @@ fun StreamingBubble(
     }
 }
 
+/**
+ * 流式期间占位气泡（reply 还没产出，模型还在写 JSON 的 steps 部分）：
+ * 避免把原始 JSON 当正文展示——这是"思考代码"问题的另一半。
+ */
+@Composable
+fun StreamingPlaceholderBubble(
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalGtjColors.current
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Surface(
+            modifier = Modifier.widthIn(max = 340.dp),
+            shape = RoundedCornerShape(
+                topStart = CornerSize(GtjShape.lgRadius),
+                topEnd = CornerSize(GtjShape.lgRadius),
+                bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
+                bottomEnd = CornerSize(GtjShape.lgRadius),
+            ),
+            color = p.surface,
+            contentColor = p.muted,
+            border = BorderStroke(1.dp, p.borderSoft),
+        ) {
+            Text(
+                text = "正在组织语言…",
+                style = GtjType.Body,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
 private fun bubbleShape(isUser: Boolean): RoundedCornerShape =
     if (isUser) {
         RoundedCornerShape(

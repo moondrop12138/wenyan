@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>狗头军师 · App 高保真原型</title>
+<style>
+:root{
+  --coral:#D85A30; --coral-deep:#993C1D; --coral-bg:#FAECE7;
+  --teal:#0F6E56; --teal-mid:#1D9E75; --teal-bg:#E1F5EE;
+  --ink:#1C1B1A; --ink-2:#5F5E5A; --ink-3:#888780;
+  --line:#E4E2DA; --line-2:#D3D1C7;
+  --bg:#F6F5F1; --card:#FFFFFF;
+  --amber:#BA7517; --amber-bg:#FAEEDA;
+  --blue:#185FA5; --blue-bg:#E6F1FB;
+  --pink:#993556; --pink-bg:#FBEAF0;
+  --red:#A32D2D; --red-bg:#FCEBEB;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#E9E7E0;color:var(--ink);display:flex;flex-direction:column;align-items:center;padding:28px 16px 60px;line-height:1.6}
+h1.deck{font-size:22px;font-weight:600;margin-bottom:4px}
+p.deck{font-size:13px;color:var(--ink-2);margin-bottom:24px}
+.row{display:flex;gap:28px;flex-wrap:wrap;justify-content:center}
+.phone{width:375px;height:780px;background:var(--bg);border-radius:36px;border:1px solid var(--line-2);overflow:hidden;display:flex;flex-direction:column;position:relative;flex-shrink:0}
+.phone-label{width:375px;text-align:center;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:10px;flex-shrink:0}
+.screen-wrap{display:flex;flex-direction:column;align-items:center}
+.statusbar{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:500;flex-shrink:0}
+.statusbar .dots{display:flex;gap:5px;align-items:center}
+.statusbar .dots i{display:block;width:14px;height:8px;border-radius:2px;background:var(--ink);opacity:.85}
+.statusbar .dots i:nth-child(2){width:10px}
+.statusbar .dots i:nth-child(3){width:16px;height:9px;border-radius:3px;background:transparent;border:1.5px solid var(--ink);position:relative}
+.statusbar .dots i:nth-child(3)::after{content:"";position:absolute;inset:1.5px;background:var(--ink);border-radius:1.5px}
+.screen{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.tabbar{flex-shrink:0;height:64px;background:var(--card);border-top:0.5px solid var(--line);display:flex;padding-bottom:10px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;color:var(--ink-3);cursor:pointer}
+.tab svg{width:22px;height:22px}
+.tab.on{color:var(--coral)}
+.tab .badge-dot{position:absolute;margin-left:22px;margin-top:-16px;width:8px;height:8px;border-radius:50%;background:var(--red);border:1.5px solid var(--card)}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;border-radius:12px;transition:opacity .15s}
+.btn:active{opacity:.85}
+.btn-primary{background:var(--coral);color:#fff;padding:12px 20px}
+.btn-ghost{background:transparent;border:0.5px solid var(--line-2);color:var(--ink-2);padding:12px 20px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:3px 9px;border-radius:999px;line-height:1.4}
+.chip-fact{background:var(--teal-bg);color:var(--teal)}
+.chip-hearsay{background:#F1EFE8;color:var(--ink-2)}
+.chip-unknown{background:var(--amber-bg);color:var(--amber)}
+.chip-blue{background:var(--blue-bg);color:var(--blue)}
+.chip-outline{border:0.5px solid var(--line-2);color:var(--ink-2);background:var(--card);cursor:pointer;font-size:12.5px;padding:6px 12px}
+.chip-outline.on{border-color:var(--coral);color:var(--coral-deep);background:var(--coral-bg)}
+.card{background:var(--card);border:0.5px solid var(--line);border-radius:var(--radius)}
+.msg-user{align-self:flex-end;background:var(--coral);color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:14px;max-width:78%;line-height:1.6}
+.img-thumb{width:180px;height:110px;border-radius:12px;background:linear-gradient(135deg,#3A3F58,#6B7290);position:relative;margin-bottom:8px;overflow:hidden;cursor:pointer}
+.img-thumb::after{content:"聊天截图";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.9);font-size:12px;letter-spacing:1px}
+.img-thumb .lines{position:absolute;inset:12px;display:flex;flex-direction:column;gap:8px}
+.img-thumb .lines i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.28)}
+.img-thumb .lines i:nth-child(2){width:70%}
+.img-thumb .lines i:nth-child(3){width:45%;align-self:flex-end;background:rgba(255,255,255,.45)}
+.analysis{overflow:hidden;margin-bottom:4px}
+.analysis .a-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:0.5px solid var(--line)}
+.analysis .a-head .pulse{width:8px;height:8px;border-radius:50%;background:var(--coral)}
+.analysis .a-head b{font-size:13.5px;font-weight:500}
+.analysis .a-head .score{margin-left:auto;font-size:12px;color:var(--ink-2)}
+.analysis .a-body{padding:10px 14px 4px;font-size:13px;color:var(--ink-2)}
+.analysis .a-tags{display:flex;gap:6px;flex-wrap:wrap;padding:6px 14px 12px}
+.replybox{margin:0 14px 12px;border:1.5px solid var(--teal-mid);border-radius:12px;padding:11px 13px;background:#F7FCFA}
+.replybox .r-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.replybox .r-top span{font-size:12px;font-weight:500;color:var(--teal)}
+.copy-btn{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 4px;border-radius:6px}
+.copy-btn.copied{color:var(--teal)}
+.replybox p{font-size:14px;line-height:1.65}
+.replybox .r-meta{margin-top:8px;font-size:11.5px;color:var(--ink-2)}
+.variant-tabs{display:flex;gap:8px;padding:0 14px 13px}
+.variant-tabs .chip-outline.on{border-color:var(--teal-mid);color:var(--teal);background:var(--teal-bg)}
+.collapsed-note{margin:0 14px 12px;font-size:12px;color:var(--blue);cursor:pointer}
+.inputbar{flex-shrink:0;background:var(--card);border-top:0.5px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center}
+.inputbar .field{flex:1;background:var(--bg);border-radius:999px;padding:10px 16px;font-size:14px;color:var(--ink-3);display:flex;align-items:center}
+.iconbtn{width:38px;height:38px;border-radius:50%;border:0.5px solid var(--line-2);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-2);flex-shrink:0}
+.iconbtn.solid{background:var(--coral);border-color:var(--coral);color:#fff}
+.chat-flow{display:flex;flex-direction:column;gap:14px;padding:16px 14px 20px}
+.reminder-card{margin:0 0 4px;border-left:3px solid var(--blue);background:var(--card);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--ink-2);display:flex;gap:10px;align-items:center}
+.reminder-card b{color:var(--blue);font-weight:500}
+.page-head{padding:14px 18px 10px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.page-head h2{font-size:18px;font-weight:600}
+.page-head .sub{font-size:12px;color:var(--ink-2)}
+.avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:15px;flex-shrink:0}
+.avatar.coral{background:var(--coral-bg);color:var(--coral-deep)}
+.avatar.blue{background:var(--blue-bg);color:var(--blue)}
+.avatar.pink{background:var(--pink-bg);color:var(--pink)}
+.avatar.teal{background:var(--teal-bg);color:var(--teal)}
+.profile-card{padding:14px 16px;margin-bottom:12px}
+.profile-card .row1{display:flex;align-items:center;gap:12px}
+.profile-card .row1 .who{flex:1}
+.profile-card .who b{font-size:15px;font-weight:500;display:block}
+.profile-card .who span{font-size:12.5px;color:var(--ink-2)}
+.profile-card .edit{font-size:12.5px;color:var(--ink-3);cursor:pointer}
+.profile-card .tagrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.profile-card .meta{margin-top:10px;font-size:12.5px;color:var(--ink-2)}
+.profile-card .footrow{margin-top:10px;display:flex;justify-content:space-between;align-items:center}
+.profile-card .footrow a{font-size:12.5px;color:var(--blue);text-decoration:none;cursor:pointer}
+.dashed-add{border:1px dashed var(--line-2);border-radius:var(--radius);padding:14px;text-align:center;font-size:13.5px;color:var(--ink-2);cursor:pointer;background:transparent}
+.pad{padding:6px 16px 20px}
+.section-t{font-size:12px;color:var(--ink-3);margin:14px 0 8px;letter-spacing:.5px}
+.q-progress{display:flex;gap:5px;padding:0 20px;margin:6px 0 18px}
+.q-progress i{flex:1;height:3px;border-radius:2px;background:var(--line-2)}
+.q-progress i.done{background:var(--coral)}
+.q-body{padding:0 20px}
+.q-body h3{font-size:20px;font-weight:600;margin-bottom:6px}
+.q-body .hint{font-size:13px;color:var(--ink-2);margin-bottom:20px}
+.q-field{margin-bottom:14px}
+.q-field label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.q-input{width:100%;background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;font-family:inherit;color:var(--ink)}
+.q-input::placeholder{color:var(--ink-3)}
+.select-like{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.select-like .chev{color:var(--ink-3);font-size:12px}
+.slider-row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-2);margin-bottom:8px}
+.slider-row b{color:var(--ink);font-weight:500;font-size:14px}
+.slider-track{height:5px;border-radius:3px;background:#EFEDE6;position:relative;cursor:pointer}
+.slider-fill{position:absolute;left:0;top:0;height:100%;border-radius:3px;background:var(--coral)}
+.slider-knob{position:absolute;top:50%;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--coral);transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.mbti-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mbti-grid .m{background:var(--card);border:0.5px solid var(--line);border-radius:10px;text-align:center;padding:10px 0;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.mbti-grid .m.on{border-color:var(--coral);color:var(--coral-deep);background:var(--coral-bg);font-weight:500}
+.q-foot{flex-shrink:0;padding:14px 20px 22px;display:flex;gap:10px;background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.q-foot .btn-primary{flex:2}
+.q-foot .btn-ghost{flex:1}
+.safety-item{display:flex;gap:12px;padding:14px 16px;align-items:flex-start;margin-bottom:10px}
+.safety-item .ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.safety-item b{font-size:14px;font-weight:500;display:block;margin-bottom:2px}
+.safety-item p{font-size:12.5px;color:var(--ink-2);margin:0}
+.sos-btn{width:100%;background:var(--red-bg);color:var(--red);border:none;border-radius:12px;padding:14px;font-size:14.5px;font-weight:500;cursor:pointer;font-family:inherit}
+.quick-row{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 2px}
+.toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);background:rgba(28,27,26,.92);color:#fff;font-size:12.5px;padding:9px 16px;border-radius:999px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;z-index:50}
+.toast.show{opacity:1}
+.bottom-sheet{position:absolute;inset:0;background:rgba(28,27,26,.4);display:none;align-items:flex-end;z-index:40}
+.bottom-sheet.open{display:flex}
+.sheet{background:var(--card);width:100%;border-radius:20px 20px 0 0;padding:10px 20px 26px}
+.sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-2);margin:6px auto 16px}
+.sheet h4{font-size:15px;font-weight:600;margin-bottom:14px}
+.sheet .opt{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:0.5px solid var(--line);cursor:pointer;font-size:14px}
+.sheet .opt:last-of-type{border-bottom:none}
+.sheet .opt .ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.hidden{display:none!important}
+.nav-head{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:0.5px solid var(--line);background:var(--card)}
+.nav-head .back{color:var(--ink-2);cursor:pointer;font-size:18px;line-height:1}
+.nav-head b{font-size:15px;font-weight:500}
+@media (prefers-reduced-motion:no-preference){.phone{transition:transform .2s}}
+</style>
+</head>
+<body>
+<h1 class="deck">狗头军师 · 移动端高保真原型</h1>
+<p class="deck">手机 App · 四屏：军师对话 / 档案 / 分步问卷 / 安全边界 · 点击界面内元素可交互</p>
+
+<div class="row">
+
+<!-- ============ 屏 1：军师对话 ============ -->
+<div class="screen-wrap">
+<div class="phone-label">屏 1 · 军师对话（首页）</div>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div class="nav-head" style="gap:12px">
+    <div class="avatar coral" style="width:36px;height:36px;font-size:14px">军</div>
+    <div style="flex:1">
+      <b style="display:block">狗头军师</b>
+      <span style="font-size:11.5px;color:var(--teal)">在线 · 已读取你和 A 的档案</span>
+    </div>
+    <div class="iconbtn" style="width:32px;height:32px" title="紧急模式" onclick="goSafety()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5 14.5 13h-13L8 1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.2" r=".8" fill="currentColor"/></svg>
+    </div>
+  </div>
+  <div class="screen">
+    <div class="chat-flow">
+      <div class="quick-row">
+        <span class="chip-outline" onclick="toast(this,'已填入：帮我分析这张截图')">分析聊天截图</span>
+        <span class="chip-outline" onclick="toast(this,'已填入：这句怎么回')">这句怎么回</span>
+        <span class="chip-outline" onclick="toast(this,'已填入：约会怎么安排')">约会怎么安排</span>
+        <span class="chip-outline" onclick="toast(this,'进入紧急模式')">我现在很急</span>
+      </div>
+
+      <div class="msg-user" style="align-self:flex-end">
+        <div class="img-thumb" onclick="toast(this,'查看截图大图（原型示意）')"><div class="lines"><i></i><i></i><i></i></div></div>
+        她昨天说要冷静一下，今天朋友圈发了这首歌，我该怎么回？
+      </div>
+
+      <!-- 结构化分析卡 -->
+      <div class="card analysis">
+        <div class="a-head">
+          <span class="pulse"></span><b>情绪落地</b>
+          <span class="score">焦虑 7/10</span>
+        </div>
+        <div class="a-body">你现在最难受的是<strong>不确定感</strong>——想发消息又怕打扰她。先记住：这条消息的目标只是降低她的压力，不是解决问题。</div>
+        <div class="a-tags">
+          <span class="chip chip-fact">截图能证明 · 她连续3天主动</span>
+          <span class="chip chip-hearsay">转述 · 她说想冷静</span>
+          <span class="chip chip-unknown">仍未知 · 冷静的原因</span>
+        </div>
+        <div class="replybox">
+          <div class="r-top">
+            <span id="variantName">首选回复 · 稳健版</span>
+            <button class="copy-btn" id="copyBtn" onclick="copyReply(this)">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 4.5v-2A1.5 1.5 0 0 0 8 1H3A1.5 1.5 0 0 0 1.5 2.5v5A1.5 1.5 0 0 0 3 9h1.5" stroke="currentColor" stroke-width="1.3"/></svg>
+              <span>复制</span>
+            </button>
+          </div>
+          <p id="replyText">"好，那你先好好休息。我在，不着急。"</p>
+          <p class="r-meta" id="replyMeta">发送时机：今晚 21 点前 · 主要代价：短期内显得不够热烈 · 若 48h 无回应，回来找我</p>
+        </div>
+        <div class="variant-tabs">
+          <span class="chip-outline on" data-v="0" onclick="switchVariant(this)">稳健版</span>
+          <span class="chip-outline" data-v="1" onclick="switchVariant(this)">会撩版</span>
+          <span class="chip-outline" data-v="2" onclick="switchVariant(this)">强势版</span>
+        </div>
+        <div class="collapsed-note" onclick="toggleThinking(this)">看看军师的思路 ▾</div>
+        <div class="a-body hidden" id="thinking" style="padding:0 14px 14px;font-size:12.5px">
+          利益判断：她连续主动 + 主动说"冷静"而不是消失，互惠信号仍在。此刻追问原因会增加她的防御，低成本陪伴表达是最高性价比动作。观察窗口：48h。停止条件：若她两次含糊回应，转入降级策略。
+        </div>
+      </div>
+
+      <!-- 观察窗口提醒（嵌入对话，替代独立记录页） -->
+      <div class="reminder-card">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="6.5" stroke="#185FA5" stroke-width="1.3"/><path d="M8 4.8V8l2.2 1.4" stroke="#185FA5" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span><b>观察窗口已设定</b> · 48 小时后（周三 21:00）我会提醒你回来反馈信号</span>
+      </div>
+    </div>
+  </div>
+  <div class="inputbar">
+    <div class="iconbtn" onclick="openSheet()">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </div>
+    <div class="field">说说你的情况…</div>
+    <div class="iconbtn solid">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 8h12M9.5 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+  <div class="tabbar">
+    <div class="tab on">
+      <svg viewBox="0 0 22 22" fill="none"><path d="M3 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      军师
+    </div>
+    <div class="tab" onclick="goProfiles()">
+      <svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M4 19c1.2-3.2 3.8-5 7-5s5.8 1.8 7 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      档案
+    </div>
+    <div class="tab" onclick="goSafety()">
+      <svg viewBox="0 0 22 22" fill="none"><path d="M11 2.5 19 6v5.5c0 4.5-3.4 7.4-8 8.5-4.6-1.1-8-4-8-8.5V6l8-3.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m7.8 11 2.2 2.2 4.2-4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      安全
+    </div>
+  </div>
+  <div class="toast" id="toast1"></div>
+  <div class="bottom-sheet" id="sheet" onclick="if(event.target===this)closeSheet()">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h4>添加素材</h4>
+      <div class="opt" onclick="closeSheet();toast(this,'打开相册选择截图')">
+        <div class="ic" style="background:var(--blue-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="12" rx="2" stroke="#185FA5" stroke-width="1.3"/><circle cx="6.2" cy="7.2" r="1.4" fill="#185FA5"/><path d="m2 13 4-3.5 3 2.6L12.5 9l3.5 3" stroke="#185FA5" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+        聊天截图
+      </div>
+      <div class="opt" onclick="closeSheet();toast(this,'粘贴文字记录')">
+        <div class="ic" style="background:var(--teal-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M4 3h10M4 7.5h10M4 12h6" stroke="#0F6E56" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+        粘贴文字记录
+      </div>
+      <div class="opt" onclick="closeSheet();toast(this,'语音描述（转文字）')">
+        <div class="ic" style="background:var(--coral-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><rect x="6.5" y="2" width="5" height="9" rx="2.5" stroke="#993C1D" stroke-width="1.3"/><path d="M3.5 8.5a5.5 5.5 0 0 0 11 0M9 14v2.5" stroke="#993C1D" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        语音描述
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 屏 2：档案 ============ -->
+<div class="screen-wrap">
+<div class="phone-label">屏 2 · 档案（用户 + 对象）</div>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div class="page-head">
+    <h2>档案</h2>
+    <span class="sub">军师的建议基于这些，随时修正</span>
+  </div>
+  <div class="screen">
+    <div class="pad">
+      <p class="section-t">我</p>
+      <div class="card profile-card">
+        <div class="row1">
+          <div class="avatar blue">K</div>
+          <div class="who"><b>Khalil</b><span>INTP · 主观自评 72</span></div>
+          <span class="edit" onclick="toast(this,'编辑我的档案')">编辑</span>
+        </div>
+        <div class="tagrow">
+          <span class="chip chip-fact">优势 · 真诚</span>
+          <span class="chip chip-fact">优势 · 情绪稳定</span>
+          <span class="chip chip-unknown">短板 · 容易想太多</span>
+        </div>
+      </div>
+
+      <p class="section-t">对象</p>
+      <div class="card profile-card">
+        <div class="row1">
+          <div class="avatar pink">A</div>
+          <div class="who"><b>对象 A · 小周</b><span>ENFJ · 评分 85 · 暧昧中</span></div>
+          <span class="edit" onclick="toast(this,'编辑对象 A')">编辑</span>
+        </div>
+        <div class="meta">认识 2 个月 · 最近关键事件：对方提出冷静 · 当前目标：修复</div>
+        <div class="tagrow">
+          <span class="chip chip-hearsay">上次更新 · 昨天</span>
+        </div>
+        <div class="footrow">
+          <a onclick="toast(this,'展开 A 的完整事件时间线')">查看事件时间线</a>
+          <span class="chip chip-blue">1 条进行中策略</span>
+        </div>
+      </div>
+      <div class="dashed-add" onclick="toast(this,'添加对象 B（多人选择时分别建档）')">+ 添加对象 B</div>
+
+      <p class="section-t">档案原则</p>
+      <div class="card" style="padding:13px 16px;font-size:12.5px;color:var(--ink-2)">
+        评分是你当下的主观感受，不是人的价值。军师只补问会改变建议的变化，不会反复打扰你。
+      </div>
+    </div>
+  </div>
+  <div class="tabbar">
+    <div class="tab" onclick="goChat()">
+      <svg viewBox="0 0 22 22" fill="none"><path d="M3 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      军师
+    </div>
+    <div class="tab on">
+      <svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M4 19c1.2-3.2 3.8-5 7-5s5.8 1.8 7 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      档案
+    </div>
+    <div class="tab" onclick="goSafety()">
+      <svg viewBox="0 0 22 22" fill="none"><path d="M11 2.5 19 6v5.5c0 4.5-3.4 7.4-8 8.5-4.6-1.1-8-4-8-8.5V6l8-3.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m7.8 11 2.2 2.2 4.2-4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      安全
+    </div>
+  </div>
+  <div class="toast" id="toast2"></div>
+</div>
+</div>
+
+<!-- ============ 屏 3：分步问卷 ============ -->
+<div class="screen-wrap">
+<div class="phone-label">屏 3 · 首次问卷（第 2/4 步）</div>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div class="page-head" style="padding-bottom:0">
+    <h2 style="font-size:16px">先让我认识你和局面</h2>
+  </div>
+  <div class="q-progress"><i class="done"></i><i class="done"></i><i></i><i></i></div>
+  <div class="screen">
+    <div class="q-body">
+      <h3>聊聊对象 A</h3>
+      <p class="hint">不知道可以跳过，之后随时补；紧急的话直接点"我现在很急"</p>
+      <div class="q-field">
+        <label>代号 / 昵称</label>
+        <input class="q-input" value="小周">
+      </div>
+      <div class="q-field">
+        <label>MBTI（可选）</label>
+        <div class="mbti-grid" id="mbtiGrid">
+          <div class="m">INTJ</div><div class="m">INTP</div><div class="m">ENTJ</div><div class="m">ENTP</div>
+          <div class="m">INFJ</div><div class="m">INFP</div><div class="m on">ENFJ</div><div class="m">ENFP</div>
+          <div class="m">ISTJ</div><div class="m">ISFJ</div><div class="m">ESTJ</div><div class="m">ESFJ</div>
+          <div class="m">ISTP</div><div class="m">ISFP</div><div class="m">ESTP</div><div class="m">ESFP</div>
+        </div>
+      </div>
+      <div class="q-field">
+        <label>当前关系</label>
+        <div class="q-input select-like"><span>暧昧中</span><span class="chev">▾</span></div>
+      </div>
+      <div class="q-field" style="margin-top:20px">
+        <div class="slider-row"><span>你的主观评分（0–100）</span><b id="scoreVal">85</b></div>
+        <div class="slider-track" id="slider">
+          <div class="slider-fill" id="sliderFill" style="width:85%"></div>
+          <div class="slider-knob" id="sliderKnob" style="left:85%"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--ink-3);margin-top:8px">评分是你此刻的主观感受，随时可以改</p>
+      </div>
+    </div>
+  </div>
+  <div class="q-foot">
+    <button class="btn btn-ghost" onclick="toast(this,'已跳过，之后可在档案页补充')">跳过</button>
+    <button class="btn btn-primary" onclick="toast(this,'进入第 3 步：最近三件关键事件')">下一步</button>
+  </div>
+  <div class="toast" id="toast3"></div>
+</div>
+</div>
+
+<!-- ============ 屏 4：安全与边界 ============ -->
+<div class="screen-wrap">
+<div class="phone-label">屏 4 · 安全与边界（紧急模式入口）</div>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div class="page-head">
+    <h2>安全与边界</h2>
+  </div>
+  <div class="screen">
+    <div class="pad">
+      <div class="card" style="padding:14px 16px;margin-bottom:14px;background:var(--red-bg);border-color:#F09595">
+        <b style="font-size:14px;font-weight:500;color:var(--red);display:block;margin-bottom:4px">正处于危险或强烈崩溃中？</b>
+        <p style="font-size:12.5px;color:var(--ink-2);margin-bottom:12px">跳过一切档案和流程，先处理眼前的安全。涉及家暴、跟踪、胁迫时，优先安全计划与可信支持，不建议单独摊牌。</p>
+        <button class="sos-btn" onclick="toast(this,'已进入紧急模式：先确认你当下的安全')">我现在很急 · 立即进入</button>
+      </div>
+
+      <p class="section-t">军师的边界</p>
+      <div class="card safety-item">
+        <div class="ic" style="background:var(--teal-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="m3 9.5 4 4 8-9" stroke="#0F6E56" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><b>会做什么</b><p>接住情绪、拆分事实、给可执行的选择；话术追求真实互惠，不是操控。</p></div>
+      </div>
+      <div class="card safety-item">
+        <div class="ic" style="background:var(--amber-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M9 2v8M9 13.5v.5" stroke="#854F0B" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div><b>不会做什么</b><p>不读心、不诊断心理疾病、不保证让特定的人爱上你；拒绝不是待破解的关卡。</p></div>
+      </div>
+      <div class="card safety-item">
+        <div class="ic" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.5" stroke="#A32D2D" stroke-width="1.4"/><path d="m5.5 5.5 7 7" stroke="#A32D2D" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+        <div><b>绝不协助</b><p>性胁迫、跟踪、威胁、散布隐私、贬低操控、煤气灯等一切伤害性策略。</p></div>
+      </div>
+
+      <p class="section-t">危机资源</p>
+      <div class="card safety-item">
+        <div class="ic" style="background:var(--blue-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M3 4a1.5 1.5 0 0 1 1.5-1.5h2L8 6l-1.5 1.5a11 11 0 0 0 4 4L12 10l3.5 1.5v2A1.5 1.5 0 0 1 14 15C8 14.5 3.5 10 3 4Z" stroke="#185FA5" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+        <div><b>紧急电话</b><p>报警 110 · 心理援助热线 12356 · 北京危机干预中心 010-82951332</p></div>
+      </div>
+      <div class="card safety-item" style="margin-bottom:20px">
+        <div class="ic" style="background:var(--coral-bg)"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M9 15.5S2.5 11.5 2.5 7A3.5 3.5 0 0 1 9 5.2 3.5 3.5 0 0 1 15.5 7c0 4.5-6.5 8.5-6.5 8.5Z" stroke="#993C1D" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+        <div><b>你始终有最终决定权</b><p>军师给判断和理由，但采纳与否永远由你决定，也会说明何时该改变策略。</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="tabbar">
+    <div class="tab" onclick="goChat()">
+      <svg viewBox="0 0 22 22" fill="none"><path d="M3 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      军师
+    </div>
+    <div class="tab" onclick="goProfiles()">
+      <svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M4 19c1.2-3.2 3.8-5 7-5s5.8 1.8 7 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      档案
+    </div>
+    <div class="tab on">
+      <svg viewBox="0 0 22 22" fill="none"><path d="M11 2.5 19 6v5.5c0 4.5-3.4 7.4-8 8.5-4.6-1.1-8-4-8-8.5V6l8-3.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m7.8 11 2.2 2.2 4.2-4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      安全
+    </div>
+  </div>
+  <div class="toast" id="toast4"></div>
+</div>
+</div>
+
+</div>
+
+<script>
+const variants=[
+  {name:"首选回复 · 稳健版",text:'"好，那你先好好休息。我在，不着急。"',meta:"发送时机：今晚 21 点前 · 主要代价：短期内显得不够热烈 · 若 48h 无回应，回来找我"},
+  {name:"备选 · 会撩版",text:'"冷静可以，但歌单分我一半。这首我也循环过。"',meta:"发送时机：她发圈后 2 小时内 · 主要代价：若她情绪很低会显得轻佻 · 含糊回应就退回稳健策略"},
+  {name:"备选 · 强势版",text:'"我尊重你需要空间。等你想聊的时候直接说，我不猜。"',meta:"发送时机：确认她不是情绪崩溃时 · 主要代价：可能加速冷却 · 这是边界与筛选，不是施压"}
+];
+function switchVariant(el){
+  document.querySelectorAll(".variant-tabs .chip-outline").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on");
+  const v=variants[+el.dataset.v];
+  document.getElementById("variantName").textContent=v.name;
+  document.getElementById("replyText").textContent=v.text;
+  document.getElementById("replyMeta").textContent=v.meta;
+  const btn=document.getElementById("copyBtn");
+  btn.classList.remove("copied");btn.querySelector("span").textContent="复制";
+}
+function copyReply(btn){
+  const text=document.getElementById("replyText").textContent.replace(/^"|"$/g,"");
+  if(navigator.clipboard)navigator.clipboard.writeText(text).catch(()=>{});
+  btn.classList.add("copied");btn.querySelector("span").textContent="已复制";
+  setTimeout(()=>{btn.classList.remove("copied");btn.querySelector("span").textContent="复制"},1800);
+}
+function toggleThinking(el){
+  const t=document.getElementById("thinking");
+  const open=t.classList.toggle("hidden");
+  el.textContent=open?"看看军师的思路 ▾":"收起军师的思路 ▴";
+}
+function toast(el,msg){
+  const phone=el.closest(".phone");
+  const t=phone?phone.querySelector(".toast"):document.getElementById("toast1");
+  t.textContent=msg;t.classList.add("show");
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),1800);
+}
+function openSheet(){document.getElementById("sheet").classList.add("open")}
+function closeSheet(){document.getElementById("sheet").classList.remove("open")}
+function scrollToPhone(label){
+  const wraps=document.querySelectorAll(".screen-wrap");
+  wraps.forEach(w=>{if(w.querySelector(".phone-label").textContent.includes(label))w.scrollIntoView({behavior:"smooth",inline:"center",block:"nearest"})});
+}
+function goChat(){scrollToPhone("军师对话")}
+function goProfiles(){scrollToPhone("档案")}
+function goSafety(){scrollToPhone("安全与边界")}
+document.querySelectorAll("#mbtiGrid .m").forEach(m=>m.addEventListener("click",()=>{
+  document.querySelectorAll("#mbtiGrid .m").forEach(x=>x.classList.remove("on"));
+  m.classList.add("on");
+}));
+const slider=document.getElementById("slider");
+function setScore(clientX){
+  const r=slider.getBoundingClientRect();
+  let p=Math.round(Math.min(Math.max((clientX-r.left)/r.width,0),1)*100);
+  document.getElementById("sliderFill").style.width=p+"%";
+  document.getElementById("sliderKnob").style.left=p+"%";
+  document.getElementById("scoreVal").textContent=p;
+}
+let dragging=false;
+slider.addEventListener("pointerdown",e=>{dragging=true;setScore(e.clientX);slider.setPointerCapture(e.pointerId)});
+slider.addEventListener("pointermove",e=>{if(dragging)setScore(e.clientX)});
+slider.addEventListener("pointerup",()=>dragging=false);
+</script>
+</body>
+</html>

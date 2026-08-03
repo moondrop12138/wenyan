@@ -2,6 +2,7 @@ package com.goutoujunshi.app.container
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.goutoujunshi.app.data.datastore.SettingsRepository as DataStoreSettings
 import com.goutoujunshi.app.data.image.ImageCompressor
 import com.goutoujunshi.app.data.repository.ConversationRepository
@@ -10,6 +11,7 @@ import com.goutoujunshi.app.data.repository.ProviderRepository
 import com.goutoujunshi.app.knowledge.CrisisDetector
 import com.goutoujunshi.app.knowledge.KnowledgeEngine
 import com.goutoujunshi.app.llm.AnalysisParser
+import com.goutoujunshi.app.llm.ChatHistoryMessage
 import com.goutoujunshi.app.llm.ChatRequest
 import com.goutoujunshi.app.llm.LlmClient
 import com.goutoujunshi.app.llm.LlmEvent
@@ -18,6 +20,7 @@ import com.goutoujunshi.app.ui.contract.AnalysisMode
 import com.goutoujunshi.app.ui.contract.ChatMessageUi
 import com.goutoujunshi.app.ui.contract.ChatRepository
 import com.goutoujunshi.app.ui.contract.LlmError
+import com.goutoujunshi.app.ui.contract.SessionSummaryUi
 import com.goutoujunshi.app.ui.contract.StreamEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,6 +61,30 @@ class RealChatRepository(
             }
         }
 
+    override val currentSessionId: Flow<Long?> = sessionId
+
+    override val sessions: Flow<List<SessionSummaryUi>> =
+        combine(
+            conversationRepository.observeAllSessions(),
+            conversationRepository.observeFirstUserMessages(),
+        ) { sessions, firstMessages ->
+            val firstBySession = firstMessages.associateBy { it.sessionId }
+            sessions.mapNotNull { s ->
+                val first = firstBySession[s.id]
+                // 没有 USER 消息的会话（新建的）也展示，标题用占位
+                val title = first?.firstUserText
+                    ?.replace(Regex("\\s+"), " ")
+                    ?.take(30)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "新会话"
+                SessionSummaryUi(
+                    id = s.id,
+                    title = title,
+                    createdAt = s.createdAt,
+                )
+            }
+        }
+
     override val currentModelName: Flow<String> =
         combine(currentModelId, providerRepository.observeAllModels()) { id, models ->
             models.firstOrNull { it.id == id }?.name ?: "未配置"
@@ -79,8 +106,14 @@ class RealChatRepository(
         val profile = profileRepository.getProfile()
         val target = profileRepository.getTarget()
         val system = promptBuilder.buildSystem(profile, target, knowledge)
+        val history = buildHistory(sid, text)
         val user = if (mode == AnalysisMode.REPLY) {
-            promptBuilder.buildUserReply(text, null)
+            // REPLY 轻量分支：messages 层已带全量历史，这里再把最近几轮拼成简短上下文
+            // 写进 prompt，帮助模型在单条 user 消息里也能抓住对话走向
+            val recentContext = history.takeLast(6)
+                .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
+                .takeIf { it.isNotBlank() }
+            promptBuilder.buildUserReply(text, recentContext)
         } else {
             promptBuilder.buildUserText(text)
         }
@@ -90,9 +123,10 @@ class RealChatRepository(
             return@flow
         }
 
-        client.client.stream(ChatRequest(client.model, system, user)).collect { event ->
+        client.client.stream(ChatRequest(client.model, system, user, history = history)).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
+                is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -148,6 +182,7 @@ class RealChatRepository(
             ).collect { event ->
                 when (event) {
                     is LlmEvent.Delta -> transcription.append(event.text)
+                    is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                     is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
                     is LlmEvent.Done -> {
                         if (transcription.isBlank()) {
@@ -170,14 +205,16 @@ class RealChatRepository(
         val target = profileRepository.getTarget()
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val user = promptBuilder.buildUserTranscription(transcription)
+        val history = buildHistory(sid, transcription)
 
         val client = resolveClient() ?: run {
             emit(StreamEvent.Error(noConfigError()))
             return@flow
         }
-        client.client.stream(ChatRequest(client.model, system, user)).collect { event ->
+        client.client.stream(ChatRequest(client.model, system, user, history = history)).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
+                is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -194,11 +231,80 @@ class RealChatRepository(
     override suspend fun deleteMessage(messageId: Long) =
         conversationRepository.deleteMessage(messageId)
 
+    override suspend fun switchSession(sessionId: Long) {
+        this.sessionId.value = sessionId
+    }
+
+    override suspend fun startNewSession() {
+        this.sessionId.value = null
+    }
+
+    override suspend fun deleteSession(sessionId: Long) {
+        conversationRepository.deleteSession(sessionId)
+        if (this.sessionId.value == sessionId) {
+            this.sessionId.value = null
+        }
+    }
+
     override fun cancel() {
         // 流取消由 collect 侧 job 取消触发；MVP 由 ViewModel.stop() 处理
     }
 
     // ===== 私有辅助 =====
+
+    /**
+     * 构建同会话全量历史消息（注入 LLM 请求的 messages 层）。
+     *
+     * - text → 原文；image → 占位文本；transcription → 带前缀全文；
+     *   analysis（assistant 结构化卡片 JSON）→ 提取 reply 字段作为 assistant 历史，解析失败跳过
+     * - 剔除末尾与当前消息重复的 USER 条目（当前消息已由 userText 单独传入）
+     * - 超长兜底：粗估 (system+user+history)/4 > [HISTORY_TOKEN_LIMIT] 时从最早轮次成对丢弃，
+     *   并在头部插入一条仅模型可见的省略提示
+     */
+    private suspend fun buildHistory(sid: Long, currentUserContent: String): List<ChatHistoryMessage> {
+        val entities = conversationRepository.listMessages(sid)
+        val mapped = entities.mapNotNull { e ->
+            when (e.type) {
+                "text" -> ChatHistoryMessage(e.role.lowercase(), e.content)
+                "image" -> ChatHistoryMessage(e.role.lowercase(), IMAGE_PLACEHOLDER)
+                "transcription" -> ChatHistoryMessage(e.role.lowercase(), "[截图转述] ${e.content}")
+                "analysis" -> runCatching { AnalysisParser.parse(e.content).reply }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { ChatHistoryMessage("assistant", it) }
+                else -> null
+            }
+        }
+
+        // 去掉末尾与当前消息重复的 USER 条目（发送前已写库）
+        val trimmed = if (mapped.isNotEmpty()
+            && mapped.last().role == "user"
+            && (mapped.last().content == currentUserContent
+                || mapped.last().content == "[截图转述] $currentUserContent"
+                || mapped.last().content == IMAGE_PLACEHOLDER)
+        ) {
+            mapped.dropLast(1)
+        } else {
+            mapped
+        }
+
+        // 超长兜底：从最早轮次成对丢弃
+        val result = trimmed.toMutableList()
+        var estimated = result.sumOf { it.content.length } / 4
+        var truncated = false
+        while (estimated > HISTORY_TOKEN_LIMIT && result.size > 2) {
+            result.removeAt(0)
+            // 尽量成对丢弃（user + assistant），保持轮次完整
+            if (result.size > 2) result.removeAt(0)
+            truncated = true
+            estimated = result.sumOf { it.content.length } / 4
+        }
+        if (truncated) {
+            Log.w("RealChatRepository", "history truncated to ${result.size} messages (~$estimated tokens)")
+            result.add(0, ChatHistoryMessage("user", "[注：更早的对话已因长度限制省略]"))
+        }
+        return result
+    }
 
     private suspend fun ensureSession(): Long {
         sessionId.value?.let { return it }
@@ -238,10 +344,12 @@ class RealChatRepository(
                 system = system,
                 userText = "以下是用户聊天截图，请按五步法分析。",
                 imageDataUrl = dataUrl,
+                history = buildHistory(sid, IMAGE_PLACEHOLDER),
             )
         ).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
+                is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -263,4 +371,11 @@ class RealChatRepository(
         LlmError("NO_CONFIG", "请先在设置中配置 API Key 与主模型", false)
 
     private data class ResolvedClient(val model: String, val client: LlmClient)
+
+    private companion object {
+        /** 历史消息 token 上限（粗估，字符数/4），超出从最早轮次成对丢弃 */
+        const val HISTORY_TOKEN_LIMIT = 24_000
+        /** 历史中的图片消息占位文本 */
+        const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
+    }
 }

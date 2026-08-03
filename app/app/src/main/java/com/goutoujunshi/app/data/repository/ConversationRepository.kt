@@ -4,6 +4,7 @@ import com.goutoujunshi.app.data.db.MessageDao
 import com.goutoujunshi.app.data.db.MessageEntity
 import com.goutoujunshi.app.data.db.SessionDao
 import com.goutoujunshi.app.data.db.SessionEntity
+import com.goutoujunshi.app.data.db.SessionFirstMessage
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -22,6 +23,12 @@ class ConversationRepository(
         )
 
     suspend fun getSession(id: Long): SessionEntity? = sessionDao.getById(id)
+
+    fun observeAllSessions(): Flow<List<SessionEntity>> = sessionDao.observeAll()
+
+    /** 每个会话的首条 USER 消息（抽屉列表标题用） */
+    fun observeFirstUserMessages(): Flow<List<SessionFirstMessage>> =
+        messageDao.observeFirstUserMessages()
 
     fun observeMessages(sessionId: Long): Flow<List<MessageEntity>> =
         messageDao.observeBySession(sessionId)

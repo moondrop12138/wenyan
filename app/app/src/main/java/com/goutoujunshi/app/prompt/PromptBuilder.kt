@@ -71,7 +71,7 @@ class PromptBuilder {
 
     // ===== user 消息模板（§3） =====
 
-    /** §3.1 文本粘贴 */
+    /** §3.1 文本粘贴（完整聊天记录，走五步法） */
     fun buildUserText(rawText: String): String = buildString {
         append("以下是用户粘贴的聊天记录，请按五步法分析：\n")
         append("【聊天记录开始】\n").append(rawText).append("\n【聊天记录结束】")
@@ -84,13 +84,30 @@ class PromptBuilder {
         append("请基于以上内容按五步法分析；无法确认的细节标注\"转述提示\"而非事实。")
     }
 
-    /** §3.3 "这句怎么回" */
+    /**
+     * §3.3 简短输入（轻量分支）：
+     * 适用于用户随口一句话——"你好"、"他说讨厌我"、"这句怎么回" 这种没粘贴聊天记录的场景。
+     * 让模型先接住情绪、再给一条可直接发送的成品话术；不要甩五步法套话。
+     */
     fun buildUserReply(quote: String, context: String?): String = buildString {
-        append("用户只问这一句怎么回，不要求完整分析。\n")
-        append("待回复消息：").append(quote)
+        append("用户发来的不是完整聊天记录，而是一句简短的输入（可能是心情倾诉、可能是想问\"这句怎么回\"、也可能只是打招呼）。\n")
+        append("用户输入：").append(quote)
         if (!context.isNullOrBlank()) {
             append("\n（可选）聊天上下文：").append(context)
         }
-        append("\n请先给一条可复制成品话术，再给发送时机、主要代价和积极/含糊/不回应的后续。")
+        append(
+            """
+
+请按以下方式回应（不要按完整五步法分析）：
+1. steps 数组只保留一项 key="emotion"：先用 1-2 句接住用户此刻的感受或处境，认可但不夸张。
+2. reply 字段：给一句用户可以直接复制发送给对方的成品话术——要贴合用户的输入和处境，不要甩"你好呀～你最近怎么样？"这种通用模板。
+   - 如果用户在倾诉（如"他说他讨厌我"），话术要帮用户接住对方、弄清楚状况，而不是反过来撒娇或质问。
+   - 如果用户只是打招呼（如"你好"），给一个温和的开场即可。
+   - 如果用户问"这句怎么回"，直接给那条待回消息的成品回复。
+3. reply_timing：一句发送时机或注意事项（10-30 字）。
+4. 其他 steps（facts/interests/advice/action）留空数组。
+5. citations 留空数组。safety_override=false。
+        """.trimIndent(),
+        )
     }
 }

@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>狗头军师 · App 高保真原型（真机效果）</title>
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#F7F8FA; --elevated:#FFFFFF;
+  --fg:#111827; --fg2:#374151; --muted:#6B7280; --meta:#9CA3AF;
+  --border:#E5E7EB; --borderSoft:#EEF0F3;
+  --accent:#4D6BFE; --accentOn:#FFFFFF; --accentSoft:#EEF1FF;
+  --success:#16A34A; --warn:#D97706; --danger:#DC2626;
+  --warmOn:#B45309; --warmSoft:#FCF1E7;
+  --ease:cubic-bezier(0.2,0,0,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:Roboto,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;background:#EDEFF3;color:var(--fg);display:flex;flex-direction:column;align-items:center;padding:24px 16px 48px;min-height:100vh}
+.deck-title{font-size:18px;font-weight:600;margin-bottom:4px}
+.deck-sub{font-size:12.5px;color:var(--muted);margin-bottom:16px;text-align:center;max-width:420px;line-height:1.6}
+.phone{width:375px;height:780px;background:var(--bg);border-radius:44px;border:10px solid #1B1D24;overflow:hidden;position:relative;flex-shrink:0;box-shadow:0 12px 40px rgba(20,24,40,.18)}
+.notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:26px;background:#1B1D24;border-radius:9999px;z-index:100}
+.screen{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column}
+.screen.active{display:flex}
+.statusbar{height:44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 4px;font-size:12px;font-weight:600;flex-shrink:0}
+.statusbar .dots{display:flex;gap:5px;align-items:center}
+.statusbar .dots i{display:block;width:14px;height:8px;border-radius:2px;background:var(--fg);opacity:.85}
+.statusbar .dots i:nth-child(2){width:10px}
+.statusbar .dots i:nth-child(3){width:16px;height:9px;border-radius:3px;background:transparent;border:1.5px solid var(--fg);position:relative}
+.statusbar .dots i:nth-child(3)::after{content:"";position:absolute;inset:1.5px;background:var(--fg);border-radius:1.5px}
+.body-scroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;position:relative}
+.body-scroll::-webkit-scrollbar{display:none}
+/* 顶栏 */
+.topbar{flex-shrink:0;display:flex;align-items:center;gap:2px;height:56px;padding:0 4px;background:var(--bg)}
+.topbar .tt{font-size:20px;font-weight:600;margin-left:2px}
+.icon-btn{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fg2);border:none;background:transparent;transition:transform .15s var(--ease);flex-shrink:0}
+.icon-btn:active{transform:scale(.96)}
+.model-pill{display:inline-flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;padding:8px 12px;font-size:13px;font-weight:500;cursor:pointer;max-width:148px;transition:transform .15s var(--ease)}
+.model-pill:active{transform:scale(.97)}
+.model-pill svg{color:var(--muted);flex-shrink:0}
+/* 消息 */
+.chat-flow{display:flex;flex-direction:column;gap:8px;padding:8px 16px 24px}
+.bubble{max-width:82%;padding:10px 14px;font-size:16px;line-height:24px;border-radius:16px;animation:fadeIn .15s var(--ease)}
+.bubble.user{align-self:flex-end;background:var(--accent);color:var(--accentOn);border-bottom-right-radius:5px;font-weight:500}
+.bubble.ai{align-self:flex-start;background:var(--surface);color:var(--fg);border:1px solid var(--borderSoft);border-bottom-left-radius:5px;max-width:92%}
+.bubble .cursor{display:inline-block;width:2px;height:16px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:blink .9s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.img-bubble{align-self:flex-end;max-width:64%;padding:4px;background:var(--accent);border-radius:16px;border-bottom-right-radius:5px}
+.img-mock{width:100%;height:150px;border-radius:12px;background:#454E6B;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:14px}
+.img-mock i{display:block;height:9px;border-radius:5px;background:rgba(255,255,255,.3)}
+.img-mock i:nth-child(1){width:82%}
+.img-mock i:nth-child(2){width:64%}
+.img-mock i:nth-child(3){width:48%;align-self:flex-end;background:rgba(255,255,255,.5)}
+.img-mock i:nth-child(4){width:70%}
+/* 卡片 */
+.card{background:var(--elevated);border:1px solid var(--border);border-radius:12px;padding:16px;align-self:stretch;animation:fadeIn .2s var(--ease)}
+.card-head{display:flex;align-items:center;gap:8px}
+.card-head .t{font-size:16px;font-weight:500;flex:1}
+.caption{font-size:12px;color:var(--muted);line-height:16px}
+.quote{background:var(--surface);border:1px solid var(--borderSoft);border-radius:8px;padding:12px 14px;font-size:14px;line-height:20px;color:var(--fg2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;border-radius:12px;min-height:48px;padding:0 16px;transition:transform .15s var(--ease)}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:var(--accentOn)}
+.btn-ghost{background:transparent;color:var(--muted)}
+.btn-secondary{background:transparent;color:var(--accent);border:1px solid var(--border)}
+/* 分析卡 */
+.analysis .conclusion{font-size:20px;font-weight:600;line-height:28px;margin-bottom:8px}
+.analysis .cite{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.reply-card{background:var(--accentSoft);border:1px solid rgba(77,107,254,.35);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.reply-card .txt{flex:1;font-size:14px;line-height:20px}
+.copy-chip{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;flex-shrink:0}
+.step{border-top:1px solid var(--borderSoft)}
+.step:first-of-type{border-top:none}
+.step-head{display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer;user-select:none}
+.step-head .num{font-size:12px;color:var(--meta);font-weight:500;width:18px}
+.step-head .ic{color:var(--fg2);display:flex}
+.step-head .st{flex:1;font-size:16px;font-weight:500}
+.step-head .chev{color:var(--muted);transition:transform .2s var(--ease)}
+.step.open .chev{transform:rotate(180deg)}
+.step-body{padding:0 0 14px 28px;font-size:14px;line-height:20px;color:var(--fg2);display:none}
+.step.open .step-body{display:block}
+.step-body .quote{margin:6px 0}
+.step-body .lbl{font-size:12px;color:var(--muted);margin:8px 0 4px}
+.tag-warm{display:inline-flex;align-items:center;background:var(--warmSoft);color:var(--warmOn);font-size:12px;font-weight:500;border-radius:9999px;padding:4px 10px;margin-bottom:8px}
+.token-row{text-align:right;margin-top:10px}
+/* 思考面板 */
+.thinking{background:var(--surface);border:1px solid var(--borderSoft);border-radius:8px;align-self:stretch}
+.thinking .th-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;user-select:none}
+.thinking .th-head .chev{margin-left:auto;transition:transform .2s var(--ease)}
+.thinking.open .th-head .chev{transform:rotate(180deg)}
+.thinking .th-body{display:none;padding:0 12px 12px;font-size:13px;line-height:20px;color:var(--muted);max-height:160px;overflow-y:auto}
+.thinking.open .th-body{display:block}
+.thinking .live{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 1.2s var(--ease) infinite}
+@keyframes pulse{50%{opacity:.3}}
+/* 危机卡 */
+.err-icon{color:var(--danger)}
+.crisis .crisis-title{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:500;margin-bottom:10px}
+.crisis .crisis-title svg{color:var(--muted)}
+.crisis p.lead{font-size:16px;line-height:24px;margin-bottom:12px}
+.crisis ol{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.crisis ol li{display:flex;gap:10px}
+.crisis ol .n{width:22px;height:22px;border-radius:50%;background:var(--surface);border:1px solid var(--border);color:var(--fg2);font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.crisis ol .quote{flex:1;padding:10px 12px}
+.crisis ol .quote b{display:block;font-size:13px;font-weight:500;margin-bottom:2px}
+.crisis ol .quote span{font-size:14px;color:var(--fg2);line-height:20px}
+/* 输入栏 */
+.inputbar{flex-shrink:0;background:var(--bg);padding:8px 12px 12px;display:flex;align-items:flex-end;gap:8px}
+.inputfield{flex:1;background:var(--surface);border-radius:9999px;min-height:48px;display:flex;align-items:center;padding:0 18px;font-size:14px;color:var(--meta)}
+.inputfield.filled{color:var(--fg)}
+.send-btn{width:48px;height:48px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;background:var(--accent);color:#fff;transition:transform .15s var(--ease)}
+.send-btn:active{transform:scale(.95)}
+.send-btn.stop{background:var(--elevated);border:1px solid var(--border);color:var(--fg2)}
+.send-btn:disabled{background:var(--borderSoft);color:var(--meta);cursor:default}
+/* 空状态 */
+.empty{display:flex;flex-direction:column;align-items:center;padding:56px 16px 0;text-align:center}
+.empty .sub{font-size:14px;color:var(--muted);line-height:20px;margin-bottom:22px;max-width:300px}
+.chips-row{display:flex;gap:8px;overflow-x:auto;max-width:100%;padding-bottom:4px;scrollbar-width:none;margin-bottom:22px}
+.chips-row::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:9999px;height:36px;padding:0 16px;display:inline-flex;align-items:center;font-size:13px;cursor:pointer;color:var(--fg);transition:transform .15s var(--ease)}
+.chip:active{transform:scale(.97);background:var(--accentSoft);border-color:var(--accent);color:var(--accent)}
+.entry-row{display:flex;gap:12px;width:100%}
+.entry-card{flex:1;background:var(--elevated);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:transform .15s var(--ease)}
+.entry-card:active{transform:scale(.97)}
+.entry-card svg{color:var(--fg2)}
+.entry-card span{font-size:13px;font-weight:500}
+/* 抽屉 */
+.drawer-scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s var(--ease);z-index:60}
+.drawer-scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:absolute;top:0;left:0;bottom:0;width:300px;background:var(--bg);z-index:61;transform:translateX(-100%);transition:transform .2s var(--ease);display:flex;flex-direction:column;padding:52px 0 14px}
+.drawer.open{transform:none}
+.drawer h3{font-size:20px;font-weight:600;padding:0 16px 12px}
+.new-session{margin:0 16px 12px;background:var(--accent);color:#fff;border:none;border-radius:12px;min-height:48px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:16px;font-weight:500;cursor:pointer;font-family:inherit}
+.session-list{flex:1;overflow-y:auto;padding:0 12px;display:flex;flex-direction:column;gap:4px;scrollbar-width:none}
+.session-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;background:var(--surface)}
+.session-item.current{background:var(--accentSoft);border:1px solid rgba(77,107,254,.4)}
+.session-item svg{color:var(--muted);flex-shrink:0}
+.session-item.current svg{color:var(--accent)}
+.session-item .s-name{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-item.current .s-name{color:var(--accent)}
+.session-item .s-time{font-size:12px;color:var(--muted);margin-top:2px}
+/* 弹层 */
+.sheet-scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .3s var(--ease);z-index:70}
+.sheet-scrim.open{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--elevated);border-radius:24px 24px 0 0;z-index:71;transform:translateY(100%);transition:transform .3s var(--ease);padding:8px 20px 26px}
+.sheet.open{transform:none}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--border);margin:8px auto 14px}
+.sheet h4{font-size:20px;font-weight:600;margin-bottom:4px}
+.sheet .cur{font-size:12px;color:var(--muted);margin-bottom:14px}
+.sheet .group-t{font-size:13px;font-weight:500;color:var(--muted);margin:10px 0 6px}
+.model-row{display:flex;align-items:center;gap:10px;min-height:48px;padding:8px 12px;border-radius:10px;cursor:pointer}
+.model-row .m-name{flex:1;font-size:16px}
+.model-row.sel{background:var(--accentSoft)}
+.model-row.sel .m-name{color:var(--accent);font-weight:500}
+.mtag{font-size:11px;border-radius:9999px;padding:3px 8px;background:var(--borderSoft);color:var(--muted);display:inline-flex;align-items:center;gap:3px}
+.mtag.vision{background:var(--accentSoft);color:var(--accent)}
+/* 设置页 */
+.set-group{font-size:13px;font-weight:500;color:var(--muted);padding:14px 16px 8px;letter-spacing:.3px}
+.set-row{display:flex;align-items:center;gap:12px;background:var(--surface);padding:14px 16px;cursor:pointer;transition:opacity .15s}
+.set-row:active{opacity:.7}
+.set-row .sr-main{flex:1;min-width:0}
+.set-row .sr-label{font-size:16px}
+.set-row .sr-cap{font-size:12px;color:var(--muted);margin-top:2px}
+.set-row .sr-val{font-size:14px;color:var(--fg2);max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.set-row svg.chev{color:var(--meta);flex-shrink:0}
+.thick{height:8px;background:var(--borderSoft)}
+.provider-card{display:flex;align-items:center;gap:10px;background:var(--elevated);border:1px solid var(--border);border-radius:12px;margin:4px 16px;padding:14px;cursor:pointer}
+.provider-card:active{opacity:.7}
+.provider-card .pv-main{flex:1;min-width:0}
+.provider-card .pv-name{font-size:16px}
+.provider-card .pv-url{font-size:12px;color:var(--muted);font-family:"Roboto Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.ptag{font-size:11px;border-radius:9999px;padding:3px 8px;background:var(--borderSoft);color:var(--muted);flex-shrink:0}
+.ptag.ok{background:#E8F6EE;color:var(--success)}
+.theme-row{display:flex;gap:8px;padding:4px 16px 8px}
+.theme-opt{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0;border:1px solid var(--border);border-radius:12px;cursor:pointer;font-size:13px;color:var(--fg2);background:var(--surface)}
+.theme-opt.on{border-color:var(--accent);background:var(--accentSoft);color:var(--accent);font-weight:500}
+.version{font-size:12px;color:var(--muted);padding:16px}
+/* 表单 */
+.form-field{margin:0 16px 12px}
+.form-field label{display:block;font-size:13px;font-weight:500;color:var(--fg2);margin-bottom:6px}
+.form-input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:16px;font-family:inherit;color:var(--fg)}
+.form-input.mono{font-family:"Roboto Mono",monospace;font-size:14px}
+.form-input:focus{outline:none;border-color:var(--accent)}
+.form-input::placeholder{color:var(--meta)}
+.field-wrap{position:relative}
+.field-wrap .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
+.model-manage{margin:4px 16px;background:var(--elevated);border:1px solid var(--border);border-radius:12px;padding:12px}
+.model-manage .mm-t{font-size:13px;font-weight:500;color:var(--muted);margin-bottom:8px}
+.mm-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borderSoft)}
+.mm-row:last-of-type{border-bottom:none}
+.mm-row .mm-name{flex:1;font-size:15px}
+.radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--meta);cursor:pointer;position:relative;flex-shrink:0}
+.radio.on{border-color:var(--accent)}
+.radio.on::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent)}
+.switch{width:40px;height:24px;border-radius:9999px;background:var(--borderSoft);cursor:pointer;position:relative;transition:background .15s;flex-shrink:0}
+.switch.on{background:var(--accent)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.switch.on::after{left:18px}
+.mm-cap{font-size:12px;color:var(--muted)}
+.test-ok{display:flex;align-items:center;gap:8px;margin:0 16px 12px;font-size:14px;color:var(--success)}
+/* 弹窗 */
+.dialog-scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:80;padding:32px}
+.dialog-scrim.open{display:flex}
+.dialog{background:var(--elevated);border-radius:16px;padding:20px;width:100%;animation:fadeIn .15s var(--ease)}
+.dialog h4{font-size:18px;font-weight:600;margin-bottom:8px}
+.dialog p{font-size:14px;color:var(--fg2);line-height:20px;margin-bottom:18px}
+.dialog .d-actions{display:flex;justify-content:flex-end;gap:4px}
+.dialog .d-actions button{border:none;background:transparent;font-family:inherit;font-size:14px;font-weight:500;padding:10px 14px;border-radius:10px;cursor:pointer;color:var(--accent)}
+.dialog .d-actions button.danger{color:var(--danger)}
+/* 长按菜单 / attach */
+.ctx-menu{position:absolute;background:var(--elevated);border:1px solid var(--border);border-radius:12px;padding:6px;z-index:65;display:none;min-width:120px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.ctx-menu.open{display:block}
+.ctx-menu div{padding:12px 16px;font-size:14px;border-radius:8px;cursor:pointer}
+.ctx-menu div:active{background:var(--surface)}
+.ctx-menu .del{color:var(--danger)}
+.attach-menu{position:absolute;bottom:76px;left:12px;background:var(--elevated);border:1px solid var(--border);border-radius:12px;padding:6px;z-index:65;display:none;min-width:150px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.attach-menu.open{display:block}
+.attach-menu div{display:flex;align-items:center;gap:10px;padding:12px 14px;font-size:14px;border-radius:8px;cursor:pointer}
+.attach-menu div:active{background:var(--surface)}
+.attach-menu svg{color:var(--fg2)}
+.toast{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);background:rgba(17,24,39,.92);color:#fff;font-size:13px;padding:9px 18px;border-radius:9999px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;z-index:90;max-width:88%;text-overflow:ellipsis;overflow:hidden}
+.toast.show{opacity:1}
+.screen-nav{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:18px;max-width:420px}
+.screen-nav span{font-size:12px;padding:6px 12px;border-radius:9999px;background:#fff;border:1px solid var(--border);color:var(--muted);cursor:pointer}
+.screen-nav span.on{background:var(--accentSoft);border-color:var(--accent);color:var(--accent);font-weight:500}
+</style>
+</head>
+<body>
+<p class="deck-title">狗头军师 · 真机效果原型</p>
+<p class="deck-sub">单手机壳呈现 · 顶栏齿轮进入设置 · 底部可快速切屏<br>设计与 ChatScreen.kt / SettingsScreen.kt / ProviderEditScreen.kt + design-tokens.json 一一对应</p>
+
+<div class="phone" id="phone">
+  <div class="notch"></div>
+
+  <!-- ========== 屏 1：空状态 ========== -->
+  <div class="screen active" id="scr-empty">
+    <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="topbar">
+      <button class="icon-btn" onclick="openOverlay('drawer','drawerScrim')" aria-label="打开历史会话">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <span style="flex:1"></span>
+      <span class="model-pill" onclick="openOverlay('modelSheet','sheetScrim')">deepseek-chat
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <button class="icon-btn" onclick="go('scr-settings')" aria-label="设置">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.6" stroke="currentColor" stroke-width="1.5"/><path d="M12 3.2v2.2M12 18.6v2.2M3.2 12h2.2M18.6 12h2.2M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="body-scroll">
+      <div class="empty">
+        <p class="sub">把聊天记录粘进来，或直接说你的处境。数据只发往你配置的模型服务。</p>
+        <div class="chips-row">
+          <span class="chip" onclick="fillExample(this)">他三天没回消息，怎么开口</span>
+          <span class="chip" onclick="fillExample(this)">这句话怎么回比较好</span>
+          <span class="chip" onclick="fillExample(this)">我们是不是该结束了</span>
+          <span class="chip" onclick="fillExample(this)">第一次约会聊什么不冷场</span>
+        </div>
+        <div class="entry-row">
+          <div class="entry-card" onclick="toast('已读取剪贴板并填入输入框')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="5" y="4" width="14" height="17" rx="2.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5V3.2A1.2 1.2 0 0 1 10.2 2h3.6A1.2 1.2 0 0 1 15 3.2v1.3M9 10h6M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>粘贴聊天记录</span>
+          </div>
+          <div class="entry-card" onclick="toast('打开相册选择截图')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="m4 17 4.5-4 3.5 3 3-2.5 5 4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span>选择截图分析</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inputbar">
+      <button class="icon-btn" style="width:44px" onclick="toggleAttach()" aria-label="添加聊天记录">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m15 7-6.8 6.8a3.2 3.2 0 0 0 4.5 4.6L19 12a4.8 4.8 0 0 0-6.8-6.8l-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="inputfield" id="inputField">说点什么，或粘贴聊天记录…</div>
+      <button class="send-btn" id="sendBtn" disabled aria-label="发送" onclick="toast('已发送')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.5 12 19 5.5 14 19.5l-2.5-6L4.5 12Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="attach-menu" id="attachMenu">
+      <div onclick="closeAttach();toast('已粘贴剪贴板文本')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="4" width="14" height="17" rx="2.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5V3.2A1.2 1.2 0 0 1 10.2 2h3.6A1.2 1.2 0 0 1 15 3.2v1.3" stroke="currentColor" stroke-width="1.6"/></svg>
+        粘贴文本
+      </div>
+      <div onclick="closeAttach();toast('打开相册选择截图')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="m4 17 4.5-4 3.5 3 3-2.5 5 4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        选择截图
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 屏 2：对话中（五步法） ========== -->
+  <div class="screen" id="scr-chat">
+    <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="topbar">
+      <button class="icon-btn" onclick="openOverlay('drawer','drawerScrim')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <span style="flex:1"></span>
+      <span class="model-pill" onclick="openOverlay('modelSheet','sheetScrim')">deepseek-reasoner
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <button class="icon-btn" onclick="go('scr-settings')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.6" stroke="currentColor" stroke-width="1.5"/><path d="M12 3.2v2.2M12 18.6v2.2M3.2 12h2.2M18.6 12h2.2M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="body-scroll">
+      <div class="chat-flow">
+        <div class="bubble user" onclick="openCtx(event)">我们认识两个月，一直聊得挺好。昨天她突然说想冷静一下，朋友圈今天还发了一首很丧的歌。我该怎么办？</div>
+        <div class="thinking open" id="think1">
+          <div class="th-head" onclick="document.getElementById('think1').classList.toggle('open')">
+            <span class="live"></span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3a5.5 5.5 0 0 0-3.4 9.8c.8.7 1.4 1.6 1.4 2.7v.5h4v-.5c0-1.1.6-2 1.4-2.7A5.5 5.5 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 19h4M10.5 21.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            思考过程
+            <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="th-body">用户情绪强度偏高，先接住不确定感。事实面：两个月持续联系、对方主动提出"冷静"而非消失——互惠信号仍在，但需要降压力。不能把发丧歌直接解读为针对用户（媒介误读风险）。策略：低成本陪伴表达，观察窗口 48h，避免追问原因…</div>
+        </div>
+        <div class="card analysis">
+          <p class="conclusion">先稳住自己，再发一条零压力的消息</p>
+          <div class="cite">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" stroke="#6B7280" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20" stroke="#6B7280" stroke-width="1.5"/></svg>
+            <span class="caption">参考：在线约会与数字关系 · 依恋理论与情绪调节</span>
+          </div>
+          <div class="reply-card">
+            <span class="txt">"好，那你先好好休息。我在，不着急。"</span>
+            <button class="copy-chip" onclick="copyText(this,'好，那你先好好休息。我在，不着急。')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.8"/></svg>
+              复制
+            </button>
+          </div>
+          <div class="step open">
+            <div class="step-head" onclick="this.parentElement.classList.toggle('open')">
+              <span class="num">01</span>
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8M9 9.6h.01M15 9.6h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+              <span class="st">情绪落地</span>
+              <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="step-body">你现在最难受的是不确定感——想联系又怕打扰。这个感受很正常，先别在这小时内做任何大动作。</div>
+          </div>
+          <div class="step open">
+            <div class="step-head" onclick="this.parentElement.classList.toggle('open')">
+              <span class="num">02</span>
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 11 2.5 2.5L15 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.6"/></svg></span>
+              <span class="st">事实拆分</span>
+              <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="step-body">
+              <p class="lbl">已知事实</p>
+              <div class="quote">认识两个月，聊得挺好；她主动说"想冷静"而不是直接消失。</div>
+              <p class="lbl">合理推测</p>
+              <div class="quote">她在处理自己的情绪，需要时间，但不等于在拒绝你。</div>
+              <p class="lbl">关键未知</p>
+              <div class="quote">"冷静"的具体原因；丧歌是否与你有关（无法证实，别对号入座）。</div>
+            </div>
+          </div>
+          <div class="step open">
+            <div class="step-head" onclick="this.parentElement.classList.toggle('open')">
+              <span class="num">03</span>
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 4v16M6 7l6-3 6 3M4 13l2-6 2 6a3.2 3.2 0 0 1-4 0ZM16 13l2-6 2 6a3.2 3.2 0 0 1-4 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="st">利益判断</span>
+              <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="step-body">两个月的持续投入说明互惠基础仍在。此刻追问原因会增加她的防御；零压力表达是成本最低、可逆性最高的动作。</div>
+          </div>
+          <div class="step">
+            <div class="step-head" onclick="this.parentElement.classList.toggle('open')">
+              <span class="num">04</span>
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3a5.5 5.5 0 0 0-3.4 9.8c.8.7 1.4 1.6 1.4 2.7v.5h4v-.5c0-1.1.6-2 1.4-2.7A5.5 5.5 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 19h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+              <span class="st">明确建议</span>
+              <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="step-body">
+              首选：发上面的稳健版。理由：① 不追问、不施压 ② 表明你在场 ③ 把节奏主动权留给她。
+              <p class="lbl">备选版本</p>
+              <div class="quote">会撩版："冷静可以，歌单分我一半。"</div>
+              <div class="quote">强势版："我尊重你需要空间，想聊时直接说。"</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-head" onclick="this.parentElement.classList.toggle('open')">
+              <span class="num">05</span>
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 21V4m0 1h11l-2.5 3.5L17 12H6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="st">行动收束</span>
+              <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="step-body">
+              <span class="tag-warm">今晚 21 点前发出</span>
+              <div>发完就放下手机。观察窗口 48 小时：她回了就按她的节奏聊；没回，回来找我，我们评估是否转入降级策略。停止条件：两次含糊回应。</div>
+            </div>
+          </div>
+          <p class="token-row caption">本次消耗估算：~2,140 token</p>
+        </div>
+      </div>
+    </div>
+    <div class="inputbar">
+      <button class="icon-btn" style="width:44px" onclick="toggleAttach()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m15 7-6.8 6.8a3.2 3.2 0 0 0 4.5 4.6L19 12a4.8 4.8 0 0 0-6.8-6.8l-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="inputfield">说点什么，或粘贴聊天记录…</div>
+      <button class="send-btn" onclick="toast('已发送')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.5 12 19 5.5 14 19.5l-2.5-6L4.5 12Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="ctx-menu" id="ctxMenu">
+      <div onclick="closeCtx();toast('已复制')">复制</div>
+      <div class="del" onclick="closeCtx();openOverlay('deleteDialog',null)">删除</div>
+    </div>
+  </div>
+
+  <!-- ========== 屏 3：通道 B + 流式 + 错误 + 危机 ========== -->
+  <div class="screen" id="scr-states">
+    <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="topbar">
+      <button class="icon-btn" onclick="openOverlay('drawer','drawerScrim')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <span style="flex:1"></span>
+      <span class="model-pill" onclick="openOverlay('modelSheet','sheetScrim')">deepseek-chat
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <button class="icon-btn" onclick="go('scr-settings')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.6" stroke="currentColor" stroke-width="1.5"/><path d="M12 3.2v2.2M12 18.6v2.2M3.2 12h2.2M18.6 12h2.2M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <div class="body-scroll">
+      <div class="chat-flow">
+        <div class="img-bubble"><div class="img-mock"><i></i><i></i><i></i><i></i></div></div>
+        <div class="bubble user">帮我看看这段聊天记录</div>
+        <div class="card">
+          <div class="card-head" style="margin-bottom:6px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="15" height="13" rx="2.5" stroke="#374151" stroke-width="1.6"/><circle cx="7.5" cy="9.5" r="1.4" fill="#374151"/><path d="m4 15.5 3.5-3 2.5 2.2 2-1.6 4 3.4" stroke="#374151" stroke-width="1.6" stroke-linejoin="round"/><circle cx="17.5" cy="17.5" r="3.4" stroke="#374151" stroke-width="1.6"/><path d="m20.2 20.2 1.8 1.8" stroke="#374151" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span class="t">AI 从截图中读出了这些内容</span>
+            <button class="icon-btn" style="width:36px;height:36px" onclick="toast('进入编辑态，可修正转述文字')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14.5 5.5 18.5 9.5M4 20l1-4.5L16.5 4a1.9 1.9 0 0 1 2.7 0l.8.8a1.9 1.9 0 0 1 0 2.7L8.5 19 4 20Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <p class="caption" style="margin-bottom:10px">当前模型不支持看图，已用视觉模型提取文字。可修正后再分析。</p>
+          <div class="quote" style="margin-bottom:12px">她：今天有点累，先睡了<br>你：好，晚安<br>她：嗯<br>（次日 14:02）她：昨天不是故意冷淡，是家里有点事</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button class="btn btn-ghost" onclick="toast('重新选择截图')">重新选图</button>
+            <button class="btn btn-primary" onclick="toast('已确认，开始五步法分析')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              确认分析
+            </button>
+          </div>
+        </div>
+        <div class="bubble ai">看完这段记录，有个细节值得注意：她第二天主动解释了冷淡的原因，这其实是个好信号<span class="cursor"></span></div>
+        <div class="card">
+          <div class="card-head" style="margin-bottom:6px">
+            <svg class="err-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span class="t">API Key 无效</span>
+          </div>
+          <p style="font-size:14px;color:var(--fg2);margin-bottom:12px">请到设置检查你的 API Key。你的消息已保留，修正后可直接重试。</p>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button class="btn btn-ghost" onclick="toast('已取消')">取消</button>
+            <button class="btn btn-secondary" onclick="go('scr-settings')">去设置</button>
+            <button class="btn btn-primary" onclick="toast('重试中…')">重试</button>
+          </div>
+        </div>
+        <div class="card crisis">
+          <p class="crisis-title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3 20 6.5v5c0 4.6-3.4 7.9-8 9.5-4.6-1.6-8-4.9-8-9.5v-5L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            先处理安全，再处理关系
+          </p>
+          <p class="lead">你不需要独自面对，也不需要马上做任何决定。先把当下安全放第一。</p>
+          <ol>
+            <li><span class="n">1</span><span class="quote"><b>确保当下安全</b><span>离开可能升级的现场，去人多或熟悉的地方。</span></span></li>
+            <li><span class="n">2</span><span class="quote"><b>联系可信的人</b><span>家人、朋友，或当地妇女维权/援助热线。</span></span></li>
+            <li><span class="n">3</span><span class="quote"><b>必要时联系紧急服务</b><span>110 / 120，并保存证据（截图、录音、就医记录）。</span></span></li>
+          </ol>
+          <p class="caption" style="margin-bottom:12px">以上为一般安全指引，不替代专业帮助。</p>
+          <div style="display:flex;justify-content:flex-end">
+            <button class="btn btn-ghost" onclick="toast('已收起，可继续非危机话题')">我知道了</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inputbar">
+      <button class="icon-btn" style="width:44px" onclick="toggleAttach()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m15 7-6.8 6.8a3.2 3.2 0 0 0 4.5 4.6L19 12a4.8 4.8 0 0 0-6.8-6.8l-7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="inputfield filled">她第二天主动解释是不是说明…</div>
+      <button class="send-btn stop" onclick="toast('已停止生成，保留已输出部分')" aria-label="停止生成">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="7" y="7" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 屏 4：设置 ========== -->
+  <div class="screen" id="scr-settings">
+    <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="topbar" style="padding:0 8px">
+      <button class="icon-btn" onclick="go('scr-chat')" aria-label="返回">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="tt">设置</span>
+    </div>
+    <div class="body-scroll" style="background:var(--bg)">
+      <p class="set-group">模型服务</p>
+      <div class="set-row" onclick="openOverlay('modelSheet','sheetScrim')">
+        <div class="sr-main"><div class="sr-label">主模型</div><div class="sr-cap">纯文本</div></div>
+        <span class="sr-val">deepseek-chat</span>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="set-row" onclick="openOverlay('modelSheet','sheetScrim')">
+        <div class="sr-main"><div class="sr-label">视觉模型</div><div class="sr-cap">用于非多模态主模型的截图分析</div></div>
+        <span class="sr-val">gpt-4o</span>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="display:flex;align-items:center;padding:12px 16px 4px">
+        <span style="flex:1;font-size:13px;font-weight:500;color:var(--muted)">提供商</span>
+        <button class="icon-btn" style="width:36px;height:36px;color:var(--accent)" onclick="go('scr-provider')" aria-label="添加提供商">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="provider-card" onclick="go('scr-provider')">
+        <div class="pv-main"><div class="pv-name">DeepSeek</div><div class="pv-url">api.deepseek.com</div></div>
+        <span class="ptag ok">已配置</span>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--meta)"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="provider-card" onclick="go('scr-provider')">
+        <div class="pv-main"><div class="pv-name">OpenAI 兼容（自定义）</div><div class="pv-url">api.openai.com</div></div>
+        <span class="ptag">自定义</span>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--meta)"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="thick" style="margin-top:16px"></div>
+      <p class="set-group">外观</p>
+      <div class="theme-row">
+        <div class="theme-opt on" onclick="pickTheme(this)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          浅色
+        </div>
+        <div class="theme-opt" onclick="pickTheme(this)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 13.5A8 8 0 0 1 10.5 4 8 8 0 1 0 20 13.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          深色
+        </div>
+        <div class="theme-opt" onclick="pickTheme(this)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 12a8 8 0 0 1 8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          跟随系统
+        </div>
+      </div>
+      <div class="thick" style="margin-top:8px"></div>
+      <p class="set-group">隐私与安全</p>
+      <div class="set-row" onclick="openOverlay('privacyDialog',null)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--fg2)"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <div class="sr-main"><div class="sr-label">隐私声明</div><div class="sr-cap">数据将发送至你配置的第三方模型服务</div></div>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="set-row" onclick="openOverlay('wipeDialog',null)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--fg2)"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6"/></svg>
+        <div class="sr-main"><div class="sr-label" style="color:var(--danger)">清除全部档案</div></div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--danger)"><path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M8 7l.7 12a1.6 1.6 0 0 0 1.6 1.5h3.4a1.6 1.6 0 0 0 1.6-1.5L16 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <p class="version">狗头军师 v1.0.0</p>
+    </div>
+  </div>
+
+  <!-- ========== 屏 5：提供商编辑 ========== -->
+  <div class="screen" id="scr-provider">
+    <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="topbar" style="padding:0 8px">
+      <button class="icon-btn" onclick="go('scr-settings')" aria-label="返回">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="tt">编辑提供商</span>
+    </div>
+    <div class="body-scroll" style="padding-top:8px">
+      <div class="form-field">
+        <label>名称</label>
+        <input class="form-input" value="DeepSeek">
+      </div>
+      <div class="form-field">
+        <label>Base URL / Host</label>
+        <input class="form-input mono" value="https://api.deepseek.com">
+      </div>
+      <div class="form-field">
+        <label>API Key</label>
+        <div class="field-wrap">
+          <input class="form-input mono" id="keyInput" type="password" value="sk-9f27ac4e1b8d40e2">
+          <button class="icon-btn eye" style="width:40px;height:40px;color:var(--muted)" onclick="toggleKey()" aria-label="显示/隐藏 API Key">
+            <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="margin:0 16px 12px">
+        <button class="btn btn-secondary" onclick="testConn(this)">测试连接</button>
+      </div>
+      <div class="test-ok hidden" id="testOk">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        连接正常，模型可用
+      </div>
+      <div class="model-manage">
+        <p class="mm-t">模型管理</p>
+        <div class="mm-row">
+          <span class="radio on" onclick="pickRadio(this)"></span>
+          <span class="mm-name">deepseek-chat</span>
+          <span class="mm-cap">看图</span>
+          <span class="switch" onclick="this.classList.toggle('on')"></span>
+          <button class="icon-btn" style="width:36px;height:36px;color:var(--muted)" onclick="toast('删除模型（需确认）')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M8 7l.7 12a1.6 1.6 0 0 0 1.6 1.5h3.4a1.6 1.6 0 0 0 1.6-1.5L16 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="mm-row">
+          <span class="radio" onclick="pickRadio(this)"></span>
+          <span class="mm-name">deepseek-reasoner</span>
+          <span class="mm-cap">看图</span>
+          <span class="switch" onclick="this.classList.toggle('on')"></span>
+          <button class="icon-btn" style="width:36px;height:36px;color:var(--muted)" onclick="toast('删除模型（需确认）')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M8 7l.7 12a1.6 1.6 0 0 0 1.6 1.5h3.4a1.6 1.6 0 0 0 1.6-1.5L16 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <input class="form-input mono" style="flex:1;padding:9px 12px;font-size:13px" placeholder="添加模型名">
+          <span class="switch" onclick="this.classList.toggle('on')"></span>
+          <button class="icon-btn" style="width:36px;height:36px;color:var(--accent)" onclick="toast('已添加模型')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="margin:14px 16px 10px">
+        <button class="btn btn-secondary" style="width:100%;color:var(--danger)" onclick="openOverlay('delProviderDialog',null)">删除此提供商</button>
+      </div>
+      <div style="margin:0 16px 24px">
+        <button class="btn btn-primary" style="width:100%" onclick="toast('已保存');go('scr-settings')">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 覆盖层（全局） ========== -->
+  <div class="drawer-scrim" id="drawerScrim" onclick="closeOverlay('drawer','drawerScrim')"></div>
+  <div class="drawer" id="drawer">
+    <h3>聊天记录</h3>
+    <button class="new-session" onclick="closeOverlay('drawer','drawerScrim');go('scr-empty');toast('已新建会话')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      新建会话
+    </button>
+    <div class="session-list">
+      <div class="session-item current">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <div style="min-width:0"><div class="s-name">他三天没回消息，怎么开口</div><div class="s-time">刚刚</div></div>
+      </div>
+      <div class="session-item" onclick="closeOverlay('drawer','drawerScrim');go('scr-chat')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <div style="min-width:0"><div class="s-name">她说要冷静一下是什么意思</div><div class="s-time">2 小时前</div></div>
+      </div>
+      <div class="session-item" onclick="closeOverlay('drawer','drawerScrim');openOverlay('delSessionDialog',null)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <div style="min-width:0"><div class="s-name">异地半年，要不要继续（长按删除演示）</div><div class="s-time">3 天前</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet-scrim" id="sheetScrim" onclick="closeOverlay('modelSheet','sheetScrim')"></div>
+  <div class="sheet" id="modelSheet">
+    <div class="grab"></div>
+    <h4>选择模型</h4>
+    <p class="cur">当前：deepseek-chat · 切换后立即生效，不中断会话</p>
+    <p class="group-t">DeepSeek</p>
+    <div class="model-row sel" onclick="closeOverlay('modelSheet','sheetScrim');toast('已切换：deepseek-chat')">
+      <span class="m-name">deepseek-chat</span><span class="mtag">默认</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="#4D6BFE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="model-row" onclick="closeOverlay('modelSheet','sheetScrim');toast('已切换：deepseek-reasoner')">
+      <span class="m-name">deepseek-reasoner</span><span class="mtag">深度思考</span>
+    </div>
+    <p class="group-t">自定义（OpenAI 兼容）</p>
+    <div class="model-row" onclick="closeOverlay('modelSheet','sheetScrim');toast('已切换：gpt-4o（支持看图）')">
+      <span class="m-name">gpt-4o</span>
+      <span class="mtag vision"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="2"/></svg>看图</span>
+    </div>
+    <div style="margin-top:14px;text-align:center">
+      <button class="btn btn-ghost" onclick="closeOverlay('modelSheet','sheetScrim');go('scr-settings')">管理模型服务</button>
+    </div>
+  </div>
+
+  <div class="dialog-scrim" id="privacyDialog">
+    <div class="dialog">
+      <h4>隐私声明</h4>
+      <p>你的聊天内容、截图和档案数据仅存储在本机，仅在你发送消息时传输至你自己配置的第三方模型服务（如 DeepSeek）。狗头军师不经过任何中间服务器，也无法访问你的数据。API Key 使用系统级加密存储。</p>
+      <div class="d-actions">
+        <button onclick="closeDialog('privacyDialog')">我知道了</button>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-scrim" id="wipeDialog">
+    <div class="dialog">
+      <h4>清除全部档案？</h4>
+      <p>将删除所有会话、消息、档案与提供商配置（含 API Key）。此操作不可恢复。</p>
+      <div class="d-actions">
+        <button onclick="closeDialog('wipeDialog')">取消</button>
+        <button class="danger" onclick="closeDialog('wipeDialog');go('scr-empty');toast('已清除全部数据')">清除</button>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-scrim" id="deleteDialog">
+    <div class="dialog">
+      <h4>删除这条消息？</h4>
+      <p>这条消息将被删除，无法恢复。</p>
+      <div class="d-actions">
+        <button onclick="closeDialog('deleteDialog')">取消</button>
+        <button class="danger" onclick="closeDialog('deleteDialog');toast('消息已删除')">删除</button>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-scrim" id="delSessionDialog">
+    <div class="dialog">
+      <h4>删除这个会话？</h4>
+      <p>「异地半年，要不要继续」将被删除，无法恢复。</p>
+      <div class="d-actions">
+        <button onclick="closeDialog('delSessionDialog')">取消</button>
+        <button class="danger" onclick="closeDialog('delSessionDialog');toast('会话已删除')">删除</button>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-scrim" id="delProviderDialog">
+    <div class="dialog">
+      <h4>删除此提供商？</h4>
+      <p>将同时删除其下所有模型。此操作不可恢复。</p>
+      <div class="d-actions">
+        <button onclick="closeDialog('delProviderDialog')">取消</button>
+        <button class="danger" onclick="closeDialog('delProviderDialog');go('scr-settings');toast('提供商已删除')">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<div class="screen-nav">
+  <span class="on" data-s="scr-empty" onclick="go('scr-empty')">空状态</span>
+  <span data-s="scr-chat" onclick="go('scr-chat')">五步法对话</span>
+  <span data-s="scr-states" onclick="go('scr-states')">转述/错误/危机</span>
+  <span data-s="scr-settings" onclick="go('scr-settings')">设置</span>
+  <span data-s="scr-provider" onclick="go('scr-provider')">提供商编辑</span>
+</div>
+
+<script>
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.screen-nav span').forEach(n=>n.classList.toggle('on',n.dataset.s===id));
+}
+function openOverlay(id,scrimId){
+  document.getElementById(id).classList.add('open');
+  if(scrimId)document.getElementById(scrimId).classList.add('open');
+}
+function closeOverlay(id,scrimId){
+  document.getElementById(id).classList.remove('open');
+  if(scrimId)document.getElementById(scrimId).classList.remove('open');
+}
+function closeDialog(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.dialog-scrim').forEach(d=>{
+  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('open')});
+});
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800);
+}
+function copyText(btn,text){
+  if(navigator.clipboard)navigator.clipboard.writeText(text).catch(()=>{});
+  const old=btn.innerHTML;btn.innerHTML='已复制';
+  setTimeout(()=>btn.innerHTML=old,1500);
+}
+function toggleAttach(){document.getElementById('attachMenu').classList.toggle('open')}
+function closeAttach(){document.getElementById('attachMenu').classList.remove('open')}
+function openCtx(e){
+  const m=document.getElementById('ctxMenu');
+  m.classList.add('open');
+  m.style.right='24px';
+  m.style.top='150px';
+}
+function closeCtx(){document.getElementById('ctxMenu').classList.remove('open')}
+document.addEventListener('click',e=>{
+  const m=document.getElementById('ctxMenu');
+  if(m.classList.contains('open')&&!m.contains(e.target))m.classList.remove('open');
+  const a=document.getElementById('attachMenu');
+  if(a.classList.contains('open')&&!a.contains(e.target)&&!e.target.closest('.icon-btn'))a.classList.remove('open');
+});
+function fillExample(chip){
+  const field=document.getElementById('inputField');
+  field.textContent=chip.textContent;field.classList.add('filled');
+  document.getElementById('sendBtn').disabled=false;
+  toast('已填入输入框，可编辑后发送');
+}
+function toggleKey(){
+  const i=document.getElementById('keyInput');
+  i.type=i.type==='password'?'text':'password';
+}
+function pickTheme(el){
+  document.querySelectorAll('.theme-opt').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  toast('主题已切换：'+el.textContent.trim());
+}
+function pickRadio(el){
+  el.closest('.model-manage').querySelectorAll('.radio').forEach(r=>r.classList.remove('on'));
+  el.classList.add('on');
+  toast('已设为默认模型');
+}
+function testConn(btn){
+  btn.textContent='测试中…';btn.disabled=true;
+  setTimeout(()=>{
+    btn.textContent='测试连接';btn.disabled=false;
+    document.getElementById('testOk').classList.remove('hidden');
+  },900);
+}
+</script>
+</body>
+</html>
