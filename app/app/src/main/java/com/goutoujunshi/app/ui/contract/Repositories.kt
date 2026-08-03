@@ -23,6 +23,9 @@ interface ChatRepository {
     /** 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析 */
     fun confirmTranscription(transcription: String): Flow<StreamEvent>
 
+    /** 删除单条消息（长按菜单删除；Room Flow 自动刷新列表） */
+    suspend fun deleteMessage(messageId: Long)
+
     /** 停止当前流 */
     fun cancel()
 

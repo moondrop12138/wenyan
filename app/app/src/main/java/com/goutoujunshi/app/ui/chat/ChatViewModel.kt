@@ -86,6 +86,11 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         startStream { repo.sendText(last.first, last.second) }
     }
 
+    /** 长按菜单删除单条消息；Room Flow 自动刷新 messages，无需手动改 state */
+    fun deleteMessage(messageId: Long) {
+        viewModelScope.launch { repo.deleteMessage(messageId) }
+    }
+
     fun stop() {
         repo.cancel()
         streamJob?.cancel()
