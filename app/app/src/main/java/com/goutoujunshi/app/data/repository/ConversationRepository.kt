@@ -43,6 +43,8 @@ class ConversationRepository(
         )
     )
 
+    suspend fun deleteMessage(id: Long) = messageDao.deleteById(id)
+
     suspend fun deleteSession(id: Long) {
         messageDao.deleteBySession(id)
         sessionDao.deleteById(id)

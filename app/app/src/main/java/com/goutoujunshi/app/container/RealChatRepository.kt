@@ -191,6 +191,9 @@ class RealChatRepository(
         }
     }
 
+    override suspend fun deleteMessage(messageId: Long) =
+        conversationRepository.deleteMessage(messageId)
+
     override fun cancel() {
         // 流取消由 collect 侧 job 取消触发；MVP 由 ViewModel.stop() 处理
     }
