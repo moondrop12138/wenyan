@@ -100,6 +100,9 @@ class LlmClient(
                         deltaCount++
                         trySend(Delta(event.text))
                     }
+                    is SingleResult.Thinking -> {
+                        trySend(LlmEvent.Thinking(event.text))
+                    }
                 }
             }
             coroutineContext[Job]?.invokeOnCompletion {
@@ -158,6 +161,9 @@ class LlmClient(
                     eventSource.cancel()
                     return
                 }
+                chunk.reasoningDelta?.let {
+                    onResult(SingleResult.Thinking(it))
+                }
                 chunk.contentDelta?.let {
                     accumulator.append(it)
                     onResult(SingleResult.Delta(it))
@@ -209,6 +215,7 @@ class LlmClient(
     private sealed class SingleResult {
         data class Success(val text: String) : SingleResult()
         data class Delta(val text: String) : SingleResult()
+        data class Thinking(val text: String) : SingleResult()
         data class Retryable(
             val error: LlmErrorCode,
             val detail: String = "",

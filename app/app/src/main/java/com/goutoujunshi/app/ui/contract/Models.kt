@@ -28,6 +28,13 @@ enum class ChatRole { USER, ASSISTANT }
 
 enum class MessageType { TEXT, IMAGE, ANALYSIS, TRANSCRIPTION }
 
+/** 抽屉里的会话列表条目（首条 USER 消息前 30 字当标题） */
+data class SessionSummaryUi(
+    val id: Long,
+    val title: String,
+    val createdAt: Long,
+)
+
 data class ChatMessageUi(
     val id: Long,
     val role: ChatRole,

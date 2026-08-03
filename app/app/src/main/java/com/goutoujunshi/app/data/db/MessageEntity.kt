@@ -31,3 +31,10 @@ data class MessageEntity(
     val content: String,
     val createdAt: Long = System.currentTimeMillis(),
 )
+
+/** MessageDao.observeFirstUserMessages 投影结果（抽屉列表标题） */
+data class SessionFirstMessage(
+    val sessionId: Long,
+    val firstUserText: String,
+    val lastMessageAt: Long,
+)

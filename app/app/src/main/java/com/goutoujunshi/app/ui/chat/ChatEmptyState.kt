@@ -59,14 +59,8 @@ fun ChatEmptyState(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(40.dp))
-        Text(
-            "先接住情绪，再分清事实，最后给能执行的选择",
-            style = GtjType.Headline,
-            color = p.fg,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(56.dp))
+        // UI 定稿：去掉顶部大标题 slogan，只保留一行说明 + 示例 chips + 入口卡
         Text(
             "把聊天记录粘进来，或直接说你的处境。数据只发往你配置的模型服务。",
             style = GtjType.BodySm,

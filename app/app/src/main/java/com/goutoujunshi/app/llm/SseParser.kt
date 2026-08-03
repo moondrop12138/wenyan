@@ -12,6 +12,8 @@ object SseParser {
         val contentDelta: String?,
         val finishReason: String?,
         val streamError: StreamError?,
+        /** 深度思考模型的推理增量（reasoning_content），与正文分开上报；UI 折叠展示，不拼入正文 */
+        val reasoningDelta: String? = null,
         /** 非法 JSON chunk → 按 llm-contract §4 PARSE_ERROR 处理（不可重试） */
         val parseError: Boolean = false,
     )
@@ -59,20 +61,19 @@ object SseParser {
         val content = if (delta != null && delta.has("content") && !delta.isNull("content")) {
             delta.getString("content")
         } else null
-        // reasoning_content（深度思考模型）忽略，不拼入正文（llm-contract §3.2）
-        if (delta != null && delta.has("reasoning_content") && !delta.isNull("reasoning_content")) {
-            // 显式消费，仅占位提示用；不参与 content 拼接
+        // reasoning_content（深度思考模型）单独抽出：拼入推理通道，不进正文（llm-contract §3.2）
+        val reasoning = if (delta != null && delta.has("reasoning_content") && !delta.isNull("reasoning_content")) {
             delta.getString("reasoning_content")
-        }
+        } else null
         val finishReason = if (first.has("finish_reason") && !first.isNull("finish_reason")) {
             first.getString("finish_reason")
         } else null
 
-        // reasoning_content 忽略，不拼入正文（llm-contract §3.2）
         return Chunk(
             contentDelta = content,
             finishReason = finishReason,
             streamError = null,
+            reasoningDelta = reasoning,
         )
     }
 }

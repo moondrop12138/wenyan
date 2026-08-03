@@ -84,7 +84,7 @@ OpenAI 兼容流式响应为 SSE：每行 `data: {json}`，事件间空行分隔
 解析规则：
 - 首个 chunk 的 delta.role 用于初始化（App 固定 assistant 气泡，可忽略）。
 - 累加 `choices[0].delta.content`；delta.content 为 null 或缺失时跳过（部分模型第一帧只有 role）。
-- 若存在 `choices[0].delta.reasoning_content`（深度思考模型），App 忽略或仅作占位提示，不拼入正文。
+- 若存在 `choices[0].delta.reasoning_content`（深度思考模型），App 单独走 Thinking 通道上报 UI，**不拼入正文**；UI 用折叠面板展示（默认收起，DeepSeek 客户端风格），用户可展开查看完整推理过程。
 - 每收到 delta 立即经 MutableStateFlow 推送 UI（callbackFlow + Dispatchers.Main.immediate），禁止在 okhttp 回调线程直接改 UI（已知坑：SSE 回调在后台线程）。
 
 ### 3.3 done 判定（三条件满足其一）

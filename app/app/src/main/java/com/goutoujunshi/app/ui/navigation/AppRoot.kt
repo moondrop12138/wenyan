@@ -1,5 +1,6 @@
 package com.goutoujunshi.app.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +31,11 @@ fun AppRoot(
         if (onboardingCompleted && navigator.current == Route.Onboarding) {
             navigator.replaceAll(Route.Chat)
         }
+    }
+    // 拦截系统返回键/手势：栈内还有页面时回退到上一页，而不是直接退出应用。
+    // 仅当栈底（Chat / Onboarding）时才放行系统默认行为（退出）。
+    BackHandler(enabled = navigator.stack.size > 1) {
+        navigator.pop()
     }
     Crossfade(targetState = navigator.current, label = "nav") { route ->
         when (route) {

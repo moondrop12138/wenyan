@@ -27,8 +27,8 @@ android {
         applicationId = "com.goutoujunshi.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -81,6 +81,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    // 强制 toolchain 用 JDK17：本机 PATH 上的 JRE21（无 javac）会被误探测导致 release 编译失败
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
     }
     buildFeatures {
         compose = true
