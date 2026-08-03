@@ -1,0 +1,270 @@
+package com.goutoujunshi.app.ui.settings
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.goutoujunshi.app.ui.components.GtjIconButton
+import com.goutoujunshi.app.ui.components.ModelSheet
+import com.goutoujunshi.app.ui.components.Tag
+import com.goutoujunshi.app.ui.components.TagKind
+import com.goutoujunshi.app.ui.components.ThickDivider
+import com.goutoujunshi.app.ui.contract.AppContainer
+import com.goutoujunshi.app.ui.contract.ProviderInfo
+import com.goutoujunshi.app.ui.navigation.rememberViewModel
+import com.goutoujunshi.app.ui.theme.GtjType
+import com.goutoujunshi.app.ui.theme.LocalGtjColors
+
+private enum class PickerTarget { MAIN, VISION }
+
+/**
+ * 设置页（/settings，SPEC §7 页面3）：模型服务 / 外观 / 隐私与安全 三分组。
+ */
+@Composable
+fun SettingsScreen(
+    container: AppContainer,
+    onBack: () -> Unit,
+    onEditProvider: (Long) -> Unit,
+) {
+    val vm: SettingsViewModel = rememberViewModel("SettingsViewModel") {
+        SettingsViewModel(container.settingsRepository)
+    }
+    val providers by vm.providers.collectAsState()
+    val models by vm.models.collectAsState()
+    val currentId by vm.currentModelId.collectAsState()
+    val visionId by vm.visionModelId.collectAsState()
+    val themeMode by vm.themeMode.collectAsState()
+    val showPrivacy by vm.showPrivacyDialog.collectAsState()
+    val showWipe by vm.showWipeDialog.collectAsState()
+    val p = LocalGtjColors.current
+    var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Surface(color = p.bg) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+                ) {
+                    GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
+                    Text("设置", style = GtjType.Title, color = p.fg)
+                }
+            }
+        },
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.padding(padding).fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
+        ) {
+            item { SettingsSectionHeader("模型服务") }
+            item {
+                SettingsRow(
+                    label = "主模型",
+                    value = models.firstOrNull { it.id == currentId }?.name ?: "未选择",
+                    caption = models.firstOrNull { it.id == currentId }?.let { if (it.supportsVision) "支持看图" else "纯文本" },
+                    onClick = { pickerTarget = PickerTarget.MAIN },
+                )
+            }
+            item {
+                SettingsRow(
+                    label = "视觉模型",
+                    value = models.firstOrNull { it.id == visionId }?.name ?: "未选择",
+                    caption = "用于非多模态主模型的截图分析",
+                    onClick = { pickerTarget = PickerTarget.VISION },
+                )
+            }
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text("提供商", style = GtjType.Label, color = p.muted, modifier = Modifier.weight(1f))
+                    GtjIconButton(icon = Icons.Outlined.Add, contentDescription = "添加提供商", onClick = { onEditProvider(-1L) }, tint = p.accent, iconSize = 20.dp)
+                }
+            }
+            if (providers.isEmpty()) {
+                item {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("还没有模型服务，添加一个开始使用", style = GtjType.BodySm, color = p.muted)
+                    }
+                }
+            } else {
+                items(providers, key = { it.id }) { provider ->
+                    ProviderRow(provider = provider, onClick = { onEditProvider(provider.id) })
+                }
+            }
+            item { ThickDivider() }
+            item { SettingsSectionHeader("外观") }
+            item {
+                ThemePicker(current = themeMode, onSelect = vm::setTheme, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+            item { ThickDivider() }
+            item { SettingsSectionHeader("隐私与安全") }
+            item {
+                SettingsRow(
+                    label = "隐私声明",
+                    value = "数据将发送至你配置的第三方模型服务",
+                    icon = Icons.Outlined.Info,
+                    onClick = vm::requestPrivacy,
+                )
+            }
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.fgSecondary)
+                    Spacer(Modifier.width(12.dp))
+                    Text("清除全部档案", style = GtjType.Body, color = p.danger, modifier = Modifier.weight(1f))
+                    GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "清除全部档案", onClick = vm::requestWipe, tint = p.danger, iconSize = 20.dp)
+                }
+            }
+            item {
+                Text(
+                    "狗头军师 v1.0.0",
+                    style = GtjType.Caption,
+                    // 对比度：版本号升到 muted 4.8:1
+                    color = p.muted,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
+        }
+    }
+
+    pickerTarget?.let { target ->
+        val list = if (target == PickerTarget.VISION) models.filter { it.supportsVision } else models
+        ModelSheet(
+            models = list,
+            currentModelId = if (target == PickerTarget.MAIN) currentId else visionId,
+            onSelect = { id ->
+                if (target == PickerTarget.MAIN) vm.setMainModel(id) else vm.setVisionModel(id)
+                pickerTarget = null
+            },
+            onDismiss = { pickerTarget = null },
+            onManageProviders = { pickerTarget = null },
+        )
+    }
+
+    if (showPrivacy) {
+        PrivacyDialog(onDismiss = vm::dismissPrivacy, onAccept = vm::acceptPrivacy)
+    }
+    if (showWipe) {
+        WipeDialog(onDismiss = vm::dismissWipe, onConfirm = { vm.confirmWipe(onBack) })
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(text: String) {
+    val p = LocalGtjColors.current
+    Text(
+        text,
+        style = GtjType.Label,
+        color = p.muted,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+    )
+}
+
+@Composable
+private fun SettingsRow(
+    label: String,
+    value: String,
+    caption: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    val p = LocalGtjColors.current
+    Surface(
+        onClick = onClick ?: {},
+        enabled = onClick != null,
+        modifier = Modifier.fillMaxWidth(),
+        color = p.surface,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.fgSecondary)
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, style = GtjType.Body, color = p.fg)
+                if (caption != null) {
+                    // 对比度：说明 caption 升到 muted（surface 底 4.5:1 达标）
+                    Text(caption, style = GtjType.Caption, color = p.muted)
+                }
+            }
+            // 对比度：值文字在 surface(#F7F8FA) 底上 muted 仅 4.48:1，升到 fgSecondary 9.7:1
+            Text(value, style = GtjType.BodySm, color = p.fgSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (onClick != null) {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.meta)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProviderRow(
+    provider: ProviderInfo,
+    onClick: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = com.goutoujunshi.app.ui.theme.GtjShape.md,
+        color = p.surfaceElevated,
+        border = BorderStroke(1.dp, p.border),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(provider.name, style = GtjType.Body, color = p.fg)
+                // 对比度：baseUrl 升到 muted 4.8:1
+                Text(provider.baseUrl, style = GtjType.Caption, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val status = when {
+                provider.isPreset -> "预设"
+                provider.apiKeyConfigured -> "已配置"
+                else -> "未配置"
+            }
+            Tag(text = status, kind = TagKind.NEUTRAL)
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.meta)
+        }
+    }
+}

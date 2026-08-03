@@ -1,0 +1,117 @@
+/* ============================================================
+   狗头军师 Design Tokens — CSS 参考版
+   来源：docs/design-tokens.json（唯一 Token 源）
+   用途：供 Web/参考预览；Compose 端以 JSON 生成 Color/Type 常量。
+   规则：组件中禁止硬编码色值，一律 var(--token)。
+   ============================================================ */
+
+:root,
+:root[data-theme="light"] {
+  /* ---- A1: 品牌/结构核心（SPEC 第 8 节锁定） ---- */
+  --bg: #FFFFFF;
+  --surface: #F7F8FA;
+  --surface-elevated: #FFFFFF;
+  --fg: #111827;
+  --fg-secondary: #374151;
+  --muted: #6B7280;
+  --meta: #9CA3AF;
+  --border: #E5E7EB;
+  --border-soft: #EEF0F3;
+
+  /* 强调色：纯色，非渐变 */
+  --accent: #4D6BFE;
+  --accent-on: #FFFFFF;
+  --accent-hover: #3D5AF5;
+  --accent-pressed: #2E47E0;
+  --accent-soft: #EEF1FF;
+
+  /* 语义色 */
+  --success: #16A34A;
+  --warn: #D97706;
+  --danger: #DC2626;
+  --danger-soft: #FDECEC;
+  --warm: #E8873E;        /* 仅"行动收束"标签，每屏 <=1 处 */
+  --warm-soft: #FCF1E7;
+  --warm-on: #B45309;     /* warm 标签文字（浅色，对比度 4.52:1） */
+  --scrim: rgba(0,0,0,0.45);
+
+  /* ---- A2: 圆角/间距/图标/层级 ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+  --space-xxxl: 32px;
+  --space-xl4: 40px;
+  --space-xl5: 48px;
+
+  --icon-sm: 16px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+
+  --elev-flat: none;
+  --elev-raised: 0 2px 8px rgba(0,0,0,0.06);
+
+  /* ---- 字体（安卓系统栈，零性能开销） ---- */
+  --font-display: "Roboto", "Noto Sans SC", sans-serif;
+  --font-body: "Roboto", "Noto Sans SC", sans-serif;
+  --font-mono: "Roboto Mono", monospace;
+
+  --text-display: 32px/40px 600 var(--font-display);
+  --text-headline: 24px/32px 600 var(--font-display);
+  --text-title: 20px/28px 600 var(--font-display);
+  --text-subtitle: 16px/24px 500 var(--font-body);
+  --text-body: 16px/24px 400 var(--font-body);
+  --text-body-sm: 14px/20px 400 var(--font-body);
+  --text-label: 13px/18px 500 var(--font-body);
+  --text-caption: 12px/16px 400 var(--font-body);
+  --text-mono: 14px/20px 400 var(--font-mono);
+
+  /* ---- 动效 ---- */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 300ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0F1117;
+  --surface: #161B22;
+  --surface-elevated: #1C222C;
+  --fg: #F2F4F8;
+  --fg-secondary: #C9D1DB;
+  --muted: #8B949E;
+  --meta: #62666D;
+  --border: #262B36;
+  --border-soft: #20262F;
+
+  --accent: #4D6BFE;
+  --accent-on: #FFFFFF;
+  --accent-hover: #5D77FF;
+  --accent-pressed: #3A52E8;
+  --accent-soft: #1E2440;
+
+  --success: #16A34A;
+  --warn: #D97706;
+  --danger: #DC2626;
+  --danger-soft: #2A1717;
+  --warm: #E8873E;
+  --warm-soft: #2B1F14;
+  --warm-on: #E8873E;
+  --scrim: rgba(0,0,0,0.60);
+
+  --elev-flat: none;
+  --elev-raised: 0 4px 16px rgba(0,0,0,0.40);
+}
+
+/* 跟随系统 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
