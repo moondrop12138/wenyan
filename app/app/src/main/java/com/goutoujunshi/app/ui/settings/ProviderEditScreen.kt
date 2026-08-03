@@ -199,6 +199,7 @@ fun ProviderEditScreen(
     if (vm.showDeleteDialog) {
         AlertDialog(
             onDismissRequest = vm::dismissDelete,
+            shape = GtjShape.lg,
             containerColor = p.surfaceElevated,
             titleContentColor = p.fg,
             textContentColor = p.fgSecondary,

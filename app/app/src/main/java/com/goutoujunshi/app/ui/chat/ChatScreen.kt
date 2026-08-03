@@ -21,12 +21,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,6 +55,7 @@ import com.goutoujunshi.app.ui.components.ModelSheet
 import com.goutoujunshi.app.ui.components.TranscriptionCard
 import com.goutoujunshi.app.ui.components.TypingIndicator
 import com.goutoujunshi.app.ui.contract.AppContainer
+import com.goutoujunshi.app.ui.contract.ChatMessageUi
 import com.goutoujunshi.app.ui.contract.MessageType
 import com.goutoujunshi.app.ui.navigation.rememberViewModel
 import com.goutoujunshi.app.ui.theme.GtjShape
@@ -82,6 +87,9 @@ fun ChatScreen(
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
     var showModelSheet by remember { mutableStateOf(false) }
+    // 长按消息菜单 / 删除确认（局部 UI 态，与 showModelSheet 同模式）
+    var menuFor by remember { mutableStateOf<ChatMessageUi?>(null) }
+    var confirmDeleteFor by remember { mutableStateOf<ChatMessageUi?>(null) }
     val scope = rememberCoroutineScope()
     val models by container.settingsRepository.models.collectAsState(initial = emptyList())
     val currentId by container.settingsRepository.currentModelId.collectAsState(initial = null)
@@ -139,11 +147,12 @@ fun ChatScreen(
                                         safetyMessage = card.safetyMessage,
                                     )
                                     card != null -> AnalysisCard(card = card, onCopy = ::copy)
-                                    else -> MessageBubble(msg)
+                                    else -> MessageBubble(msg, onLongClick = { menuFor = msg })
                                 }
                             }
-                            MessageType.TRANSCRIPTION -> MessageBubble(msg)
-                            MessageType.TEXT, MessageType.IMAGE -> MessageBubble(msg)
+                            MessageType.IMAGE -> ImageMessageBubble(msg, onLongClick = { menuFor = msg })
+                            MessageType.TEXT, MessageType.TRANSCRIPTION ->
+                                MessageBubble(msg, onLongClick = { menuFor = msg })
                         }
                     }
                     transcription?.let { t ->
@@ -183,6 +192,52 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    // 长按消息操作菜单：文本类可复制/删除，图片仅删除
+    menuFor?.let { msg ->
+        DropdownMenu(
+            expanded = true,
+            onDismissRequest = { menuFor = null },
+        ) {
+            if (msg.type != MessageType.IMAGE) {
+                DropdownMenuItem(
+                    text = { Text("复制") },
+                    onClick = {
+                        copy(msg.content)
+                        menuFor = null
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("删除") },
+                onClick = {
+                    confirmDeleteFor = msg
+                    menuFor = null
+                },
+            )
+        }
+    }
+
+    // 删除二次确认
+    confirmDeleteFor?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteFor = null },
+            shape = GtjShape.lg,
+            title = { Text("删除这条消息？") },
+            text = { Text(if (msg.type == MessageType.IMAGE) "这张图片消息将被删除，无法恢复。" else "这条消息将被删除，无法恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.deleteMessage(msg.id)
+                        confirmDeleteFor = null
+                    },
+                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteFor = null }) { Text("取消") }
+            },
+        )
     }
 
     if (showModelSheet) {

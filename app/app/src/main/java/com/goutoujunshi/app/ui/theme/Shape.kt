@@ -26,11 +26,13 @@ object GtjShape {
     val bubbleTailSm = RoundedCornerShape(bubbleTailSmRadius)
 }
 
-/** Material3 Shapes 映射。 */
+/** Material3 Shapes 映射。注意：extraLarge 不可用 pill（CircleShape）——
+ *  ModalBottomSheet 等 M3 组件默认取 extraLarge，圆形会把弹窗渲染成半圆拱形。
+ *  pill 仅限组件级显式引用（输入栏、chip、dragHandle 等）。 */
 val GtjShapes = Shapes(
     extraSmall = GtjShape.sm,
     small = GtjShape.md,
     medium = GtjShape.lg,
     large = GtjShape.xl,
-    extraLarge = GtjShape.pill,
+    extraLarge = GtjShape.xl,
 )
