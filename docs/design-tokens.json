@@ -1,0 +1,144 @@
+{
+  "meta": {
+    "schema": "1.0",
+    "product": "狗头军师",
+    "register": "product",
+    "platform": "android-compose",
+    "axes": { "variance": 5, "motion": 4, "density": 3 },
+    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。"
+  },
+
+  "color": {
+    "light": {
+      "bg": "#FFFFFF",
+      "surface": "#F7F8FA",
+      "surfaceElevated": "#FFFFFF",
+      "fg": "#111827",
+      "fgSecondary": "#374151",
+      "muted": "#6B7280",
+      "meta": "#9CA3AF",
+      "border": "#E5E7EB",
+      "borderSoft": "#EEF0F3",
+      "accent": "#4D6BFE",
+      "accentOn": "#FFFFFF",
+      "accentHover": "#3D5AF5",
+      "accentPressed": "#2E47E0",
+      "accentSoft": "#EEF1FF",
+      "success": "#16A34A",
+      "warn": "#D97706",
+      "danger": "#DC2626",
+      "dangerSoft": "#FDECEC",
+      "warm": "#E8873E",
+      "warmSoft": "#FCF1E7",
+      "warmOn": "#B45309",
+      "scrim": "rgba(0,0,0,0.45)"
+    },
+    "dark": {
+      "bg": "#0F1117",
+      "surface": "#161B22",
+      "surfaceElevated": "#1C222C",
+      "fg": "#F2F4F8",
+      "fgSecondary": "#C9D1DB",
+      "muted": "#8B949E",
+      "meta": "#62666D",
+      "border": "#262B36",
+      "borderSoft": "#20262F",
+      "accent": "#4D6BFE",
+      "accentOn": "#FFFFFF",
+      "accentHover": "#5D77FF",
+      "accentPressed": "#3A52E8",
+      "accentSoft": "#1E2440",
+      "success": "#16A34A",
+      "warn": "#D97706",
+      "danger": "#DC2626",
+      "dangerSoft": "#2A1717",
+      "warm": "#E8873E",
+      "warmSoft": "#2B1F14",
+      "warmOn": "#E8873E",
+      "scrim": "rgba(0,0,0,0.60)"
+    }
+  },
+
+  "typography": {
+    "font": {
+      "display": "Roboto, Noto Sans SC, sans-serif",
+      "body": "Roboto, Noto Sans SC, sans-serif",
+      "mono": "Roboto Mono, monospace"
+    },
+    "typeScale": {
+      "display":  { "size": 32, "weight": 600, "lineHeight": 40, "letterSpacing": -0.5, "unit": "sp" },
+      "headline": { "size": 24, "weight": 600, "lineHeight": 32, "letterSpacing": 0,    "unit": "sp" },
+      "title":    { "size": 20, "weight": 600, "lineHeight": 28, "letterSpacing": 0,    "unit": "sp" },
+      "subtitle": { "size": 16, "weight": 500, "lineHeight": 24, "letterSpacing": 0,    "unit": "sp" },
+      "body":     { "size": 16, "weight": 400, "lineHeight": 24, "letterSpacing": 0,    "unit": "sp" },
+      "bodySm":   { "size": 14, "weight": 400, "lineHeight": 20, "letterSpacing": 0,    "unit": "sp" },
+      "label":    { "size": 13, "weight": 500, "lineHeight": 18, "letterSpacing": 0.3,  "unit": "sp" },
+      "caption":  { "size": 12, "weight": 400, "lineHeight": 16, "letterSpacing": 0.2,  "unit": "sp" },
+      "mono":     { "size": 14, "weight": 400, "lineHeight": 20, "letterSpacing": 0,    "unit": "sp", "font": "mono" }
+    },
+    "usage": {
+      "headline": "页面主标题/分析结论",
+      "title": "卡片标题/问卷题面",
+      "subtitle": "分节标题/字段名",
+      "body": "正文/消息气泡",
+      "bodySm": "辅助说明/转述内容",
+      "label": "按钮文字/标签/徽标",
+      "caption": "时间戳/元信息/引用",
+      "mono": "API Key/Base URL/Host"
+    }
+  },
+
+  "spacing": {
+    "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 20,
+    "xxl": 24, "xxxl": 32, "xl4": 40, "xl5": 48,
+    "unit": "dp"
+  },
+
+  "radius": {
+    "sm": 8, "md": 12, "lg": 16, "xl": 24, "pill": 9999,
+    "unit": "dp"
+  },
+
+  "iconSize": {
+    "sm": 16, "md": 20, "lg": 24,
+    "unit": "dp",
+    "library": "Material Symbols (Outlined)",
+    "rule": "全项目仅此一套图标库，禁 emoji 字符，禁多库混用"
+  },
+
+  "elevation": {
+    "flat":   { "light": "none", "dark": "none" },
+    "raised": { "light": "0 2px 8px rgba(0,0,0,0.06)", "dark": "0 4px 16px rgba(0,0,0,0.40)" },
+    "overlay": "scrim"
+  },
+
+  "motion": {
+    "fast": 150,
+    "base": 200,
+    "slow": 300,
+    "typingCursor": 900,
+    "typingDot": 150,
+    "ease": "cubic-bezier(0.2, 0, 0, 1)",
+    "reducedMotion": "prefers-reduced-motion 下所有动效降为 0ms 或静态"
+  },
+
+  "component": {
+    "bubbleUser":      { "bg": "accent", "fg": "accentOn", "radius": "lg", "maxWidthPercent": 82, "padding": "md/lg" },
+    "bubbleAi":        { "bg": "surface", "fg": "fg", "radius": "lg", "maxWidthPercent": 92, "border": "borderSoft", "padding": "lg" },
+    "inputBar":        { "bg": "surface", "radius": "pill", "border": "border", "height": 48, "paddingH": "lg" },
+    "primaryButton":   { "bg": "accent", "fg": "accentOn", "radius": "md", "height": 48, "paddingH": "lg", "minTouch": 48 },
+    "secondaryButton": { "bg": "transparent", "fg": "accent", "radius": "md", "border": "border", "height": 48, "minTouch": 48 },
+    "ghostButton":     { "bg": "transparent", "fg": "muted", "radius": "md", "height": 48, "minTouch": 48 },
+    "chip":            { "bg": "surface", "fg": "fg", "border": "border", "radius": "pill", "height": 36, "paddingH": "lg", "selectedBg": "accentSoft", "selectedFg": "accent", "selectedBorder": "accent", "minTouch": 36 },
+    "card":            { "bg": "surfaceElevated", "fg": "fg", "radius": "md", "border": "border", "elevation": "flat" },
+    "sheet":           { "bg": "surfaceElevated", "radiusTop": "xl", "elevation": "raised", "dragHandle": true },
+    "dialog":          { "bg": "surfaceElevated", "radius": "lg", "scrim": "scrim" },
+    "divider":         { "color": "borderSoft", "thickness": 1 },
+    "progressTrack":   { "bg": "borderSoft", "indicator": "accent", "height": 4, "radius": "pill" },
+    "textField":       { "bg": "surface", "border": "border", "focusBorder": "accent", "radius": "sm", "height": 48 },
+    "tag":             { "neutral": { "bg": "borderSoft", "fg": "muted" }, "warm": { "bg": "warmSoft", "fg": "warmOn" }, "danger": { "bg": "dangerSoft", "fg": "danger" } },
+    "analysisCard":    { "bg": "surfaceElevated", "radius": "md", "border": "border", "sectionGap": "xxl" },
+    "quoteBlock":      { "bg": "surface", "border": "borderSoft", "radius": "sm", "padding": "lg" },
+    "dividerThick":    { "color": "border", "thickness": 8, "note": "设置页分组间隔" }
+  }
+}

@@ -1,0 +1,279 @@
+package com.goutoujunshi.app.ui.settings
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import com.goutoujunshi.app.ui.components.GtjIconButton
+import com.goutoujunshi.app.ui.components.PrimaryButton
+import com.goutoujunshi.app.ui.components.SecondaryButton
+import com.goutoujunshi.app.ui.contract.AppContainer
+import com.goutoujunshi.app.ui.contract.ModelInfo
+import com.goutoujunshi.app.ui.navigation.rememberViewModel
+import com.goutoujunshi.app.ui.theme.GtjShape
+import com.goutoujunshi.app.ui.theme.GtjType
+import com.goutoujunshi.app.ui.theme.LocalGtjColors
+
+/**
+ * 提供商编辑（/settings/provider/:id，AC-09/11，design-pages 页面3）：
+ * 名称/Host/Key 密文显隐 + 模型管理 + 测试连接三态 + 删除二次确认。
+ */
+@Composable
+fun ProviderEditScreen(
+    container: AppContainer,
+    providerId: Long,
+    onBack: () -> Unit,
+) {
+    val vm: ProviderEditViewModel = rememberViewModel("ProviderEdit_$providerId") {
+        ProviderEditViewModel(container.settingsRepository, providerId)
+    }
+    val p = LocalGtjColors.current
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Surface(color = p.bg) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+                ) {
+                    GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
+                    Text(if (vm.isNew) "添加提供商" else "编辑提供商", style = GtjType.Title, color = p.fg)
+                }
+            }
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier.padding(padding).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                EditField(label = "名称", value = vm.name, onChange = { vm.name = it }, mono = false)
+                EditField(label = "Base URL / Host", value = vm.baseUrl, onChange = { vm.baseUrl = it }, mono = true, placeholder = "https://api.example.com")
+                EditField(
+                    label = "API Key",
+                    value = vm.apiKey,
+                    onChange = { vm.apiKey = it },
+                    mono = true,
+                    placeholder = "sk-…",
+                    isSecret = !vm.showKey,
+                    trailing = {
+                        IconButton(onClick = vm::toggleKeyVisibility) {
+                            Icon(
+                                if (vm.showKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = "显示/隐藏 API Key",
+                                tint = p.muted,
+                            )
+                        }
+                    },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton(text = "测试连接", onClick = vm::testConnection, loading = vm.testing)
+                }
+                vm.testResult?.let { result ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (result.ok) Icons.Outlined.Check else Icons.Outlined.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (result.ok) p.success else if (result.warn) p.warn else p.danger,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        // 对比度：warn 浅色白底仅 3.2:1，正文用 warmOn 5.0:1（图标保留 warn，非文字 3:1 达标）
+                        Text(
+                            result.message,
+                            style = GtjType.BodySm,
+                            color = if (result.ok) p.success else if (result.warn) p.warmOn else p.danger,
+                        )
+                    }
+                }
+            }
+
+            // 模型管理
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                shape = GtjShape.md,
+                color = p.surfaceElevated,
+                border = BorderStroke(1.dp, p.border),
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("模型管理", style = GtjType.Label, color = p.muted)
+                    vm.models.forEach { model ->
+                        ModelManageRow(model = model, onVisionChange = { vm.setVision(model.id, it) }, onDefault = { vm.setDefault(model.id) }, onDelete = { vm.deleteModel(model.id) })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = vm.newModelName,
+                            onValueChange = { vm.newModelName = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("添加模型名", style = GtjType.BodySm, color = p.meta) },
+                            textStyle = GtjType.Mono,
+                            singleLine = true,
+                            shape = GtjShape.sm,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = p.accent,
+                                unfocusedBorderColor = p.border,
+                                focusedContainerColor = p.surface,
+                                unfocusedContainerColor = p.surface,
+                            ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Switch(
+                            checked = vm.newModelVision,
+                            onCheckedChange = { vm.newModelVision = it },
+                            // 无障碍：Switch 显式关联 label
+                            modifier = Modifier.semantics { contentDescription = "新模型支持看图" },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = p.accentOn,
+                                checkedTrackColor = p.accent,
+                                uncheckedTrackColor = p.borderSoft,
+                            ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        GtjIconButton(icon = Icons.Outlined.Add, contentDescription = "添加模型", onClick = vm::addModel, tint = p.accent, iconSize = 20.dp)
+                    }
+                }
+            }
+
+            if (!vm.isNew) {
+                Row(Modifier.padding(horizontal = 16.dp)) {
+                    SecondaryButton(text = "删除此提供商", onClick = vm::requestDelete, modifier = Modifier.weight(1f))
+                }
+            }
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                PrimaryButton(text = "保存", onClick = { vm.save(onBack) }, loading = vm.saving, modifier = Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+
+    if (vm.showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = vm::dismissDelete,
+            containerColor = p.surfaceElevated,
+            titleContentColor = p.fg,
+            textContentColor = p.fgSecondary,
+            title = { Text("删除此提供商？", style = GtjType.Title) },
+            text = { Text("将同时删除其下所有模型。此操作不可恢复。", style = GtjType.BodySm) },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteProvider(onBack) }) {
+                    Text("删除", style = GtjType.Label, color = p.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = vm::dismissDelete) {
+                    Text("取消", style = GtjType.Label, color = p.muted)
+                }
+            },
+        )
+    }
+
+    // AC-18：首次保存/测试 API Key 前强制隐私声明确认
+    if (vm.showPrivacyDialog) {
+        PrivacyDialog(onDismiss = vm::dismissPrivacy, onAccept = vm::acceptPrivacy)
+    }
+}
+
+@Composable
+private fun EditField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    mono: Boolean,
+    placeholder: String = "",
+    isSecret: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val p = LocalGtjColors.current
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(label, style = GtjType.Label) },
+        placeholder = { Text(placeholder, style = GtjType.BodySm, color = p.meta) },
+        textStyle = if (mono) GtjType.Mono else GtjType.Body,
+        singleLine = true,
+        visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
+        trailingIcon = { trailing?.invoke() },
+        shape = GtjShape.sm,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = p.accent,
+            unfocusedBorderColor = p.border,
+            focusedContainerColor = p.surface,
+            unfocusedContainerColor = p.surface,
+            cursorColor = p.accent,
+        ),
+    )
+}
+
+@Composable
+private fun ModelManageRow(
+    model: ModelInfo,
+    onVisionChange: (Boolean) -> Unit,
+    onDefault: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        RadioButton(
+            selected = model.isDefault,
+            onClick = onDefault,
+            // 无障碍：RadioButton 无相邻文本语义，显式关联模型名
+            modifier = Modifier.semantics { contentDescription = "设为默认模型：${model.name}" },
+            colors = RadioButtonDefaults.colors(selectedColor = p.accent, unselectedColor = p.meta),
+        )
+        Text(model.name, style = GtjType.Body, color = p.fg, modifier = Modifier.weight(1f))
+        Text("看图", style = GtjType.Caption, color = p.muted)
+        Switch(
+            checked = model.supportsVision,
+            onCheckedChange = onVisionChange,
+            // 无障碍：Switch 显式关联 label
+            modifier = Modifier.semantics { contentDescription = "${model.name} 支持看图" },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = p.accentOn,
+                checkedTrackColor = p.accent,
+                uncheckedTrackColor = p.borderSoft,
+            ),
+        )
+        GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除模型", onClick = onDelete, tint = p.muted, iconSize = 20.dp)
+    }
+}

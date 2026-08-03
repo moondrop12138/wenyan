@@ -1,0 +1,63 @@
+# ===== Gradle / Android 构建产物 =====
+.gradle/
+build/
+build.*/
+.gdh*/
+gthome/
+pch/
+gt2/
+app/build/
+app/build.*/
+app/release/
+*.apk
+*.aab
+*.jks
+*.keystore
+*.lock
+
+# ===== 本地配置（含机器特定路径）=====
+local.properties
+keystore.properties
+*.properties.local
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# ===== Kotlin / Java =====
+*.class
+*.log
+.kotlin/
+
+# ===== 项目运行时 =====
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ===== 工作区记忆与决策（隐私）=====
+.workbuddy/
+
+# ===== 构建缓存/归档目录（补全）=====
+app/gt*/
+app/gh*/
+app/build-old/
+app/app/build*/
+
+# ===== 调试/缓存残留（开发过程产生）=====
+app/.proj-cache*/
+app/build-lock*/
+app/build-old*/
+app/build-old-root/
+app/_*.txt
+app/gt*/
+app/gh*/
+
+# ===== 残留缓存（补全）=====
+app/c/
+app/pc*/
+app/pch/
+app/gt*/
+app/gh*/
+app/gt/

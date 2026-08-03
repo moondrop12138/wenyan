@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动图标背景：主色 #4D6BFE（design-tokens accent）。正式品牌图标由设计补充。 -->
+    <color name="ic_launcher_background">#4D6BFE</color>
+</resources>
