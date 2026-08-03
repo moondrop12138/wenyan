@@ -39,12 +39,15 @@ android {
     }
 
     signingConfigs {
-        // 项目内 debug keystore：绕开 ~/.android（safe-delete 环境会锁 debug.keystore.lock）
-        getByName("debug") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        // 项目内 debug keystore：绕开 ~/.android（safe-delete 环境会锁 debug.keystore.lock）。
+        // 仅当文件存在时覆盖 debug 签名；CI / 无密钥 clone 自动回退 AGP 默认 debug 签名（首次构建自动生成）
+        if (file("debug.keystore").exists()) {
+            getByName("debug") {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
         // release 签名：仅本地 keystore.properties 存在时注册，避免空配置报错
         if (hasReleaseKeystore) {
