@@ -1,0 +1,62 @@
+# CI 流水线（v1.1 发布安全补齐）
+# 触发：push / PR 到 main
+# 职责：JDK17 + Android SDK 下跑单元测试与 debug 构建；
+#       知识库完整性门禁（scripts/gen_routes.py）由 Gradle preBuild -> knowledgeCheck 自动执行。
+# 说明：本仓库不提交任何 keystore（release 签名仅本地/发布时手动配置），CI 不构建 release。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # git 仓库根为上级目录；Android 工程根（含 settings.gradle.kts / gradlew）在 app/ 下
+    working-directory: app
+
+jobs:
+  build:
+    name: Build + Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        # 设置 ANDROID_HOME / ANDROID_SDK_ROOT；AGP 按需自动下载缺失 platform/build-tools
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Python
+        # knowledgeCheck 通过 `python` 命令调用 gen_routes.py；setup-python 同时提供 python/python3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # 无 keystore 时不构建 release（release 仅本地 assembleRelease / 发布时手动执行）
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --no-daemon
