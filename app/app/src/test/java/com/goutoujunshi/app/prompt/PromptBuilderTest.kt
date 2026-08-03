@@ -61,10 +61,14 @@ class PromptBuilderTest {
 
     @Test
     fun `user reply asks for copyable reply first`() {
+        // v1.1.3: REPLY 模式重构为结构化格式（emotion 单步 + 可复制成品话术 + 时机）
         val user = builder.buildUserReply("周末有空吗", null)
-        assertTrue(user.contains("待回复消息：周末有空吗"))
-        assertTrue(user.contains("请先给一条可复制成品话术"))
-        assertTrue(user.contains("发送时机、主要代价和积极/含糊/不回应的后续"))
+        assertTrue(user.contains("用户输入：周末有空吗"))
+        assertTrue(user.contains("可以直接复制发送给对方的成品话术"))
+        assertTrue(user.contains("reply_timing"))
+        assertTrue(user.contains("发送时机"))
+        // 仍保留"这句怎么回"的场景识别
+        assertTrue(user.contains("这句怎么回"))
     }
 
     @Test
