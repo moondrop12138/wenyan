@@ -3,6 +3,7 @@ package com.goutoujunshi.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import com.goutoujunshi.app.ui.navigation.AppRoot
@@ -19,6 +20,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Android 15+（targetSdk 36）强制 edge-to-edge：统一进入后由各 Scaffold/顶栏/底栏
+        // 用 WindowInsets 自适应状态栏/导航栏，禁止写死高度（insets 自适应，不写死值）。
+        enableEdgeToEdge()
         setContent {
             val appViewModel: AppViewModel = rememberViewModel("AppViewModel") {
                 AppViewModel(container)

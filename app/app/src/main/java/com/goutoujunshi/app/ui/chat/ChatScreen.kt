@@ -6,12 +6,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -207,28 +210,35 @@ private fun ChatTopBar(
 ) {
     val p = LocalGtjColors.current
     Surface(color = p.bg) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp),
+        // edge-to-edge：顶栏整体下移状态栏高度（insets 自适应，不同机型高度不同）
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars),
         ) {
-            Text("狗头军师", style = GtjType.Title, color = p.fg)
-            Spacer(Modifier.weight(1f))
-            Surface(
-                onClick = onModelClick,
-                shape = GtjShape.pill,
-                color = p.surface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, p.border),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                Text("狗头军师", style = GtjType.Title, color = p.fg)
+                Spacer(Modifier.weight(1f))
+                Surface(
+                    onClick = onModelClick,
+                    shape = GtjShape.pill,
+                    color = p.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, p.border),
                 ) {
-                    Text(modelName, style = GtjType.Label, color = p.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Icon(Icons.Outlined.ExpandMore, contentDescription = "切换模型", modifier = Modifier.size(16.dp), tint = p.muted)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(modelName, style = GtjType.Label, color = p.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Outlined.ExpandMore, contentDescription = "切换模型", modifier = Modifier.size(16.dp), tint = p.muted)
+                    }
                 }
+                Spacer(Modifier.width(4.dp))
+                GtjIconButton(icon = Icons.Outlined.Settings, contentDescription = "设置", onClick = onSettings, tint = p.fgSecondary)
             }
-            Spacer(Modifier.width(4.dp))
-            GtjIconButton(icon = Icons.Outlined.Settings, contentDescription = "设置", onClick = onSettings, tint = p.fgSecondary)
         }
     }
 }

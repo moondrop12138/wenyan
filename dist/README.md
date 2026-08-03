@@ -1,6 +1,13 @@
 # 狗头军师（恋爱决策支持 App）— 交付说明
 
-> 版本：v1.0.0（MVP）｜构建日期：2026-08-03｜包名：com.goutoujunshi.app
+> 版本：v1.1.0（MVP + 无障碍/可观测/发布安全升级）｜构建日期：2026-08-03｜包名：com.goutoujunshi.app
+
+## APK 文件（dist/ 目录）
+
+| 文件 | 版本 | 签名 | 体积 | 用途 |
+|------|------|------|------|------|
+| `app-release-v1.1.apk` | v1.1 | **release 签名 + R8 混淆** | 2.1MB | 正式分发（推荐） |
+| `app-debug-v1.1.apk` | v1.1 | debug 签名 | 18MB | 开发调试 |
 
 ## 这是什么
 
@@ -14,7 +21,7 @@
 
 ## 安装
 
-1. 下载 `app-debug.apk`（18MB）到手机
+1. 下载 `app-release-v1.1.apk`（2.1MB，推荐）或 `app-debug-v1.1.apk`（18MB）
 2. 允许"安装未知来源应用"（设置 → 安全 → 未知来源）
 3. 点击 APK 安装（Android 8.0+ / minSdk 26）
 
