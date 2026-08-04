@@ -1,6 +1,7 @@
 package com.wenyan.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,8 +16,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -26,16 +35,34 @@ import com.wenyan.app.ui.theme.LocalGtjColors
  * 危机转介卡（AC-13，design-pages 页面8）。
  * 设计原则：克制冷静明确——无红闪/无大面积警示色/无恋爱话术；shield 图标 muted；
  * 卡片 300ms 淡入（无脉冲/闪烁/抖动），"我知道了"后收起不再主动推送。
+ *
+ * v1.2.1：新增 onLongClick（挂卡根，上报触点窗口坐标），危机卡也可长按删除。
  */
 @Composable
 fun CrisisCard(
     onAcknowledge: () -> Unit,
     modifier: Modifier = Modifier,
     safetyMessage: String = "",
+    onLongClick: ((Offset) -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
+    var windowPos by remember { mutableStateOf(Offset.Zero) }
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { windowPos = it.positionInWindow() }
+            .then(
+                if (onLongClick != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {},
+                            onLongPress = { offset -> onLongClick(windowPos + offset) },
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            ),
         shape = GtjShape.md,
         color = p.surfaceElevated,
         border = BorderStroke(1.dp, p.border),

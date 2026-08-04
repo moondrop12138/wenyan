@@ -1,6 +1,7 @@
 package com.wenyan.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,10 +20,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.contract.AnalysisCard
@@ -34,16 +40,36 @@ import com.wenyan.app.ui.theme.LocalGtjColors
  * 五步法结果卡片（design-pages 页面6）：
  * 结论置顶 headline + 引用行（知识透明 AC-06）+ 五段折叠 + 复制按钮 + token 消耗估算。
  * safety_override=true 时由外层改渲染 CrisisCard，本卡不渲染危机内容。
+ *
+ * v1.2.1：新增 onLongClick（挂卡根，上报触点窗口坐标，供长按菜单跟随）。
+ * 已知局限：内部可点击区域（折叠段标题、复制按钮）会消费按下事件，该处长按不触发；
+ * 卡身主体（结论/引用/空白）长按正常。
  */
 @Composable
 fun AnalysisCard(
     card: AnalysisCard,
     onCopy: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: ((Offset) -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
+    var windowPos by remember { mutableStateOf(Offset.Zero) }
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { windowPos = it.positionInWindow() }
+            .then(
+                if (onLongClick != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {},
+                            onLongPress = { offset -> onLongClick(windowPos + offset) },
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            ),
         shape = GtjShape.lg,
         color = p.surfaceElevated,
         border = BorderStroke(1.dp, p.borderSoft),

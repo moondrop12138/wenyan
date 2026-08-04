@@ -5,9 +5,8 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.LruCache
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,13 +18,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.contract.ChatMessageUi
@@ -41,13 +50,13 @@ import kotlinx.coroutines.withContext
  * 用户右对齐 accent 底 + accentOn 字（右下小圆角，maxWidth 82%）；
  * AI 左对齐 surface 底 + fg 字（左下小圆角，maxWidth 92%，borderSoft 边）。
  * 长按气泡触发操作菜单（复制/删除），由上层 ChatScreen 处理。
+ * v1.2.1：onLongClick 上报触点窗口坐标（气泡窗口位置 + 局部偏移），菜单跟随点按处弹出。
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: ChatMessageUi,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null,
+    onLongClick: ((Offset) -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
     val isUser = message.role == ChatRole.USER
@@ -55,13 +64,26 @@ fun MessageBubble(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
+        var windowPos by remember { mutableStateOf(Offset.Zero) }
         Surface(
             modifier = Modifier
                 .widthIn(max = if (isUser) 300.dp else 340.dp)
-                .combinedClickable(
-                    onClick = {},
-                    onLongClick = onLongClick,
-                ),
+                .onGloballyPositioned { windowPos = it.positionInWindow() }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {},
+                        onLongPress = { offset -> onLongClick?.invoke(windowPos + offset) },
+                    )
+                }
+                // v1.2.1 无障碍补偿：原 combinedClickable 提供 click/longClick 语义动作，
+                // 换 pointerInput 后补齐（读屏双击长按触发菜单）；内容播报由下方 Text 承担
+                .semantics {
+                    onClick(label = "查看消息") { true }
+                    onLongClick(label = "打开消息操作菜单") {
+                        onLongClick?.invoke(Offset.Zero)
+                        true
+                    }
+                },
             shape = bubbleShape(isUser),
             color = if (isUser) p.accent else p.surfaceElevated,
             contentColor = if (isUser) p.accentOn else p.fg,
@@ -84,12 +106,11 @@ fun MessageBubble(
 }
 
 /** 图片消息气泡：content 为 data:image/...;base64,...，解码后按缩略图渲染，长按删除 */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ImageMessageBubble(
     message: ChatMessageUi,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null,
+    onLongClick: ((Offset) -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
     val isUser = message.role == ChatRole.USER
@@ -98,13 +119,24 @@ fun ImageMessageBubble(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
+        var windowPos by remember { mutableStateOf(Offset.Zero) }
         Surface(
             modifier = Modifier
                 .widthIn(max = if (isUser) 300.dp else 340.dp)
-                .combinedClickable(
-                    onClick = {},
-                    onLongClick = onLongClick,
-                )
+                .onGloballyPositioned { windowPos = it.positionInWindow() }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {},
+                        onLongPress = { offset -> onLongClick?.invoke(windowPos + offset) },
+                    )
+                }
+                .semantics {
+                    onClick(label = "查看图片") { true }
+                    onLongClick(label = "打开消息操作菜单") {
+                        onLongClick?.invoke(Offset.Zero)
+                        true
+                    }
+                }
                 // 无障碍：整卡合并播报"你说：图片"，避免读屏念整段 base64
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (isUser) "你说：图片" else "图片"
