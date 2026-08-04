@@ -103,7 +103,7 @@ fun SettingsScreen(
                 SettingsRow(
                     label = "主模型",
                     value = models.firstOrNull { it.id == currentId }?.name ?: "未选择",
-                    caption = models.firstOrNull { it.id == currentId }?.let { if (it.supportsVision) "支持看图" else "纯文本" },
+                    caption = models.firstOrNull { it.id == currentId }?.let { if (it.supportsVision) "支持视觉" else "纯文本" },
                     onClick = { pickerTarget = PickerTarget.MAIN },
                 )
             }

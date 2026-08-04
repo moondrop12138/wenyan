@@ -140,7 +140,7 @@ private fun ModelRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (model.supportsVision) {
-                Tag(text = "看图", kind = TagKind.NEUTRAL, icon = Icons.Outlined.Image)
+                Tag(text = "视觉", kind = TagKind.NEUTRAL, icon = Icons.Outlined.Image)
             }
             if (model.isDefault) {
                 Spacer(Modifier.width(6.dp))

@@ -81,7 +81,7 @@ fun TranscriptionCard(
                     GhostButton(text = "重试", onClick = onRetry, minHeight = 48.dp)
                 }
             } else {
-                Text("当前模型不支持看图，已用视觉模型提取文字。可修正后再分析。", style = GtjType.Caption, color = p.muted)
+                Text("当前模型不支持视觉，已用视觉模型提取文字。可修正后再分析。", style = GtjType.Caption, color = p.muted)
                 QuoteBlock(
                     text = transcription,
                     editable = isEditing,

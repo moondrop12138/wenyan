@@ -8,6 +8,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -105,7 +106,10 @@ fun MessageBubble(
     }
 }
 
-/** 图片消息气泡：content 为 data:image/...;base64,...，解码后按缩略图渲染，长按删除 */
+/**
+ * 图片消息气泡：content 为 data:image/...;base64,...，解码后按缩略图渲染，长按删除。
+ * v1.3.1 去框融合：不再套 Surface 边框/底色，图片直接用气泡圆角裁剪浮在聊天背景上（微信风格）。
+ */
 @Composable
 fun ImageMessageBubble(
     message: ChatMessageUi,
@@ -120,7 +124,7 @@ fun ImageMessageBubble(
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
         var windowPos by remember { mutableStateOf(Offset.Zero) }
-        Surface(
+        Box(
             modifier = Modifier
                 .widthIn(max = if (isUser) 300.dp else 340.dp)
                 .onGloballyPositioned { windowPos = it.positionInWindow() }
@@ -141,10 +145,6 @@ fun ImageMessageBubble(
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (isUser) "你说：图片" else "图片"
                 },
-            shape = bubbleShape(isUser),
-            color = if (isUser) p.accent else p.surfaceElevated,
-            contentColor = if (isUser) p.accentOn else p.fg,
-            border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
         ) {
             val bmp = bitmap.value
             if (bmp != null) {
@@ -153,16 +153,18 @@ fun ImageMessageBubble(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .padding(4.dp)
                         .widthIn(max = 240.dp)
                         .heightIn(max = 240.dp)
-                        .clip(RoundedCornerShape(CornerSize(GtjShape.lgRadius))),
+                        .clip(bubbleShape(isUser)),
                 )
             } else {
                 Text(
                     text = "图片加载失败",
                     style = GtjType.Body,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    color = p.muted,
+                    modifier = Modifier
+                        .clip(bubbleShape(isUser))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }
         }

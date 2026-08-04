@@ -148,7 +148,7 @@ fun ProviderEditScreen(
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("模型管理", style = GtjType.Label, color = p.muted)
                     vm.models.forEach { model ->
-                        ModelManageRow(model = model, onVisionChange = { vm.setVision(model.id, it) }, onDefault = { vm.setDefault(model.id) }, onDelete = { vm.deleteModel(model.id) })
+                        ModelManageRow(model = model, onVisionChange = { vm.setVision(model.id, it) }, onToggleDefault = { vm.toggleDefault(model.id) }, onDelete = { vm.deleteModel(model.id) })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -171,7 +171,7 @@ fun ProviderEditScreen(
                             checked = vm.newModelVision,
                             onCheckedChange = { vm.newModelVision = it },
                             // 无障碍：Switch 显式关联 label
-                            modifier = Modifier.semantics { contentDescription = "新模型支持看图" },
+                            modifier = Modifier.semantics { contentDescription = "新模型支持视觉" },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = p.accentOn,
                                 checkedTrackColor = p.accent,
@@ -260,25 +260,25 @@ private fun EditField(
 private fun ModelManageRow(
     model: ModelInfo,
     onVisionChange: (Boolean) -> Unit,
-    onDefault: () -> Unit,
+    onToggleDefault: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val p = LocalGtjColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         RadioButton(
             selected = model.isDefault,
-            onClick = onDefault,
-            // 无障碍：RadioButton 无相邻文本语义，显式关联模型名
-            modifier = Modifier.semantics { contentDescription = "设为默认模型：${model.name}" },
+            onClick = onToggleDefault,
+            // 无障碍：RadioButton 无相邻文本语义，显式关联模型名；再点可取消默认（v1.3.1）
+            modifier = Modifier.semantics { contentDescription = "默认模型：${model.name}，点击切换" },
             colors = RadioButtonDefaults.colors(selectedColor = p.accent, unselectedColor = p.meta),
         )
         Text(model.name, style = GtjType.Body, color = p.fg, modifier = Modifier.weight(1f))
-        Text("看图", style = GtjType.Caption, color = p.muted)
+        Text("视觉", style = GtjType.Caption, color = p.muted)
         Switch(
             checked = model.supportsVision,
             onCheckedChange = onVisionChange,
             // 无障碍：Switch 显式关联 label
-            modifier = Modifier.semantics { contentDescription = "${model.name} 支持看图" },
+            modifier = Modifier.semantics { contentDescription = "${model.name} 支持视觉" },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = p.accentOn,
                 checkedTrackColor = p.accent,

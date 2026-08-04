@@ -188,8 +188,9 @@ class ProviderEditViewModel(
         viewModelScope.launch { repo.setVisionFlag(id, supportsVision) }
     }
 
-    fun setDefault(id: Long) {
-        viewModelScope.launch { repo.setDefaultModel(id) }
+    /** 切换默认模型（再点已选中的可取消，v1.3.1） */
+    fun toggleDefault(id: Long) {
+        viewModelScope.launch { repo.toggleDefaultModel(id) }
     }
 
     fun requestDelete() {
