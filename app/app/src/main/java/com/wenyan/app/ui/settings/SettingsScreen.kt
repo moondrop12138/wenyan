@@ -100,10 +100,10 @@ fun SettingsScreen(
         ) {
             item { SettingsSectionHeader("模型服务") }
             item {
+                // v1.3.1 主模型条目去掉类型标签（"纯文本"/"支持视觉"），label 垂直居中与右侧模型名对齐
                 SettingsRow(
                     label = "主模型",
                     value = models.firstOrNull { it.id == currentId }?.name ?: "未选择",
-                    caption = models.firstOrNull { it.id == currentId }?.let { if (it.supportsVision) "支持视觉" else "纯文本" },
                     onClick = { pickerTarget = PickerTarget.MAIN },
                 )
             }

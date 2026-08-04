@@ -91,6 +91,7 @@ fun ChatScreen(
     val streamingText by vm.streamingText.collectAsState()
     val streamingThinking by vm.streamingThinking.collectAsState()
     val input by vm.input.collectAsState()
+    val pendingImage by vm.pendingImage.collectAsState()
     val lastError by vm.lastError.collectAsState()
     val transcription by vm.transcription.collectAsState()
     val modelName by vm.currentModelName.collectAsState()
@@ -103,6 +104,8 @@ fun ChatScreen(
     var showModelSheet by remember { mutableStateOf(false) }
     // 长按消息菜单 / 删除确认（局部 UI 态，与 showModelSheet 同模式）
     var menuFor by remember { mutableStateOf<ChatMessageUi?>(null) }
+    // v1.3.1 全屏图片预览目标（点击图片气泡打开，点按/关闭键退出）
+    var previewFor by remember { mutableStateOf<ChatMessageUi?>(null) }
     // v1.2.1 长按触点窗口坐标（Offset.Zero = 无障碍触发无坐标，用默认落点）→ DropdownMenu offset
     var menuOffset by remember { mutableStateOf(Offset.Zero) }
     var confirmDeleteFor by remember { mutableStateOf<ChatMessageUi?>(null) }
@@ -160,11 +163,14 @@ fun ChatScreen(
             ChatInputBar(
                 input = input,
                 streaming = streaming,
+                pendingImage = pendingImage,
                 onInputChange = vm::onInputChange,
-                onSend = { vm.sendText() },
+                // v1.3.1 统一发送入口：有图 → 图文同发/纯图，无图 → 纯文本
+                onSend = vm::sendPending,
                 onStop = vm::stop,
                 onPasteText = { vm.onInputChange(it) },
-                onImagePicked = vm::analyzeImage,
+                onPendingImagePicked = vm::setPendingImage,
+                onRemovePendingImage = vm::dismissPendingImage,
             )
         },
     ) { padding ->
@@ -173,7 +179,8 @@ fun ChatScreen(
                 ChatEmptyState(
                     onExampleClick = vm::onInputChange,
                     onPasteText = vm::onInputChange,
-                    onImagePicked = vm::analyzeImage,
+                    // v1.3.1 统一走待发送预览流程（选完照片停到输入框上方，不直接发）
+                    onImagePicked = vm::setPendingImage,
                 )
             } else {
                 LazyColumn(
@@ -203,8 +210,28 @@ fun ChatScreen(
                                 }
                             }
                             MessageType.IMAGE ->
-                                ImageMessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
-                            MessageType.TEXT, MessageType.TRANSCRIPTION, MessageType.FREETEXT ->
+                                // v1.3.1 点击图片气泡 → 全屏预览
+                                ImageMessageBubble(
+                                    msg,
+                                    onClick = { previewFor = msg },
+                                    onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                )
+                            MessageType.FREETEXT -> {
+                                // v1.3.1 freetext 融合：话术段提升为上方可复制话术卡，下方正文气泡；
+                                // 无话术段退化为纯文本气泡
+                                val split = remember(msg.id) { FreetextSplitter.split(msg.content) }
+                                if (split.reply.isBlank()) {
+                                    MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                } else {
+                                    FreetextBubble(
+                                        msg,
+                                        split,
+                                        onCopyReply = ::copy,
+                                        onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                    )
+                                }
+                            }
+                            MessageType.TEXT, MessageType.TRANSCRIPTION ->
                                 MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
                         }
                     }
@@ -294,8 +321,21 @@ fun ChatScreen(
             },
         ) {
             if (msg.type != MessageType.IMAGE) {
+                // v1.3.1 freetext 融合：话术与正文分开复制（有话术段时提供两项）
+                if (msg.type == MessageType.FREETEXT) {
+                    val freetextReply = remember(msg.id) { FreetextSplitter.split(msg.content).reply }
+                    if (freetextReply.isNotBlank()) {
+                        DropdownMenuItem(
+                            text = { Text("复制话术") },
+                            onClick = {
+                                copy(freetextReply)
+                                menuFor = null
+                            },
+                        )
+                    }
+                }
                 DropdownMenuItem(
-                    text = { Text("复制") },
+                    text = { Text(if (msg.type == MessageType.FREETEXT) "复制全文" else "复制") },
                     onClick = {
                         // v1.2.1：分析卡复制成品话术（reply）而非原始 JSON
                         val copyText = when (msg.type) {
@@ -373,6 +413,14 @@ fun ChatScreen(
                 showModelSheet = false
                 onOpenSettings()
             },
+        )
+    }
+
+    // v1.3.1 全屏图片预览（点击图片气泡打开；复用 data URL 解码缓存）
+    previewFor?.let { msg ->
+        ImagePreviewOverlay(
+            message = msg,
+            onDismiss = { previewFor = null },
         )
     }
 }

@@ -121,7 +121,7 @@ class ProviderEditViewModelTest {
             addedModels.add(Triple(providerId, name, supportsVision))
         }
         override suspend fun deleteModel(id: Long) = Unit
-        override suspend fun setDefaultModel(id: Long) = Unit
+        override suspend fun toggleDefaultModel(id: Long) = Unit
         override suspend fun setVisionFlag(id: Long, supportsVision: Boolean) = Unit
         override suspend fun wipeAll() = Unit
         override suspend fun setPrivacyAck(ack: Boolean) {
