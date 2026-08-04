@@ -9,8 +9,6 @@ import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.ChatRepository
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.SessionSummaryUi
-import com.wenyan.app.ui.contract.StreamEvent
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,8 +57,6 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _pendingImage = MutableStateFlow<Uri?>(null)
     val pendingImage: StateFlow<Uri?> = _pendingImage.asStateFlow()
 
-    private var streamJob: Job? = null
-
     /** 最近一次发送（v1.3.1 携带可选图片 uri，供 retry 复用图文重试） */
     private var lastSend: LastSend? = null
 
@@ -76,6 +72,26 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         }
         viewModelScope.launch {
             repo.currentSessionId.collect { _currentSessionId.value = it }
+        }
+        // v1.3.1 流式状态中枢订阅：repo 在应用级 scope 收集（息屏/退后台不中断），
+        // Activity 重建后新 VM 订阅即恢复进行中的流式状态
+        viewModelScope.launch {
+            repo.streamingState.collect { st ->
+                _streaming.value = st.streaming
+                _streamingText.value = st.text
+                _streamingThinking.value = st.thinking
+                _transcription.value = st.transcription
+                _transcribing.value = st.transcribing
+                _lastError.value = st.error
+                // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
+                if (!st.streaming && st.error != null) {
+                    val last = lastSend
+                    if (last?.uri != null && st.error.code in RESTORE_PENDING_CODES) {
+                        _pendingImage.value = last.uri
+                        _input.value = last.text
+                    }
+                }
+            }
         }
     }
 
@@ -94,7 +110,7 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         val resolved = mode ?: routeByInputShape(text)
         lastSend = LastSend(null, text, resolved)
         _input.value = ""
-        startStream { repo.sendText(text, resolved) }
+        repo.sendTextAsync(text, resolved)
     }
 
     /**
@@ -181,27 +197,22 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         lastSend = LastSend(uri, text, resolved)
         _input.value = ""
         _pendingImage.value = null
-        startStream(restorePending = uri to text) {
-            repo.analyzeImage(uri, text, resolved)
-        }
+        repo.analyzeImageAsync(uri, text, resolved)
     }
 
     fun confirmTranscription(text: String) {
         val t = text.trim()
         if (t.isEmpty() || _streaming.value) return
-        _transcription.value = null
-        startStream { repo.confirmTranscription(t) }
+        repo.confirmTranscriptionAsync(t)
     }
 
     fun retry() {
         val last = lastSend ?: return
+        // v1.3.1 失败重试：persistUser=false——用户消息首次发送已落库，重试不再重复发一遍
         if (last.uri != null) {
-            // v1.3.1 图文重试：复用原 uri + 配文
-            startStream(restorePending = last.uri to last.text) {
-                repo.analyzeImage(last.uri, last.text, last.mode)
-            }
+            repo.analyzeImageAsync(last.uri, last.text, last.mode, persistUser = false)
         } else {
-            startStream { repo.sendText(last.text, last.mode) }
+            repo.sendTextAsync(last.text, last.mode, persistUser = false)
         }
     }
 
@@ -223,61 +234,7 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     }
 
     fun stop() {
+        // v1.3.1 停止 = 取消 repo 应用级收集 job（流式状态中枢随之复位）
         repo.cancel()
-        streamJob?.cancel()
-        streamJob = null
-        _streaming.value = false
-    }
-
-    private fun startStream(
-        restorePending: Pair<Uri, String>? = null,
-        producer: () -> kotlinx.coroutines.flow.Flow<StreamEvent>,
-    ) {
-        _streaming.value = true
-        _streamingText.value = ""
-        _streamingThinking.value = ""
-        _lastError.value = null
-        streamJob = viewModelScope.launch {
-            producer().collect { event ->
-                when (event) {
-                    is StreamEvent.Delta -> _streamingText.value += event.text
-                    is StreamEvent.Thinking -> _streamingThinking.value += event.text
-                    is StreamEvent.Analysis -> {
-                        // 完整结果由后端持久化为 analysis 消息；UI 流式文本清空
-                        _streamingText.value = ""
-                        _streamingThinking.value = ""
-                        _streaming.value = false
-                    }
-                    is StreamEvent.Transcription -> {
-                        _transcription.value = event.text
-                        _streamingText.value = ""
-                        _streamingThinking.value = ""
-                        _streaming.value = false
-                        _transcribing.value = false
-                    }
-                    is StreamEvent.Error -> {
-                        _lastError.value = event.error
-                        _streaming.value = false
-                        // v1.3.1 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
-                        if (restorePending != null && event.error.code in RESTORE_PENDING_CODES) {
-                            _pendingImage.value = restorePending.first
-                            _input.value = restorePending.second
-                        }
-                    }
-                    StreamEvent.Done -> {
-                        _streamingText.value = ""
-                        _streamingThinking.value = ""
-                        _streaming.value = false
-                    }
-                    StreamEvent.FreeTextDone -> {
-                        // v1.3 freetext：完整文本已由 repo 持久化为 freetext 消息，
-                        // Room Flow 自动刷新列表；这里只需清流式态
-                        _streamingText.value = ""
-                        _streamingThinking.value = ""
-                        _streaming.value = false
-                    }
-                }
-            }
-        }
     }
 }

@@ -2,10 +2,13 @@ package com.wenyan.app.ui.contract
 
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Repository 接口层编译占位（联调约定：后端在 data/repository 包提供实现，本文件为 UI 侧所需形状）。
  * 流式契约：sendText 返回 Flow<StreamEvent>，增量文本经 Delta 推送（callbackFlow + Main 线程，见 llm-contract.md §3）。
+ * v1.3.1：新增 async 发送族（应用级 scope 收集，后台/息屏不中断）+ streamingState 状态中枢；
+ * persistUser=false 用于失败重试——用户消息首次发送已落库，重试不再重复落库。
  */
 interface ChatRepository {
     /** 会话消息流（响应式刷新） */
@@ -16,6 +19,12 @@ interface ChatRepository {
 
     /** 当前选中的会话 id（顶部高亮 / 消息流来源）；null = 尚未创建 */
     val currentSessionId: Flow<Long?>
+
+    /**
+     * v1.3.1 流式状态中枢：async 发送族在应用级 scope 收集（Activity 销毁/息屏不中断），
+     * 增量文本/思考/转述/错误经此推送；ViewModel 订阅后映射到 UI 态。
+     */
+    val streamingState: StateFlow<StreamingState>
 
     /** 发送文本分析（"这句怎么回"用 mode=REPLY，其余 FIVE_STEP） */
     fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent>
@@ -35,6 +44,18 @@ interface ChatRepository {
     /** 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析 */
     fun confirmTranscription(transcription: String): Flow<StreamEvent>
 
+    /** v1.3.1 后台续跑发送族：应用级 scope 内收集流式事件并推送 streamingState，返回即不阻塞 */
+    fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true)
+
+    fun analyzeImageAsync(
+        uri: Uri,
+        text: String = "",
+        mode: AnalysisMode = AnalysisMode.FIVE_STEP,
+        persistUser: Boolean = true,
+    )
+
+    fun confirmTranscriptionAsync(transcription: String)
+
     /** 删除单条消息（长按菜单删除；Room Flow 自动刷新列表） */
     suspend fun deleteMessage(messageId: Long)
 
@@ -47,12 +68,25 @@ interface ChatRepository {
     /** 删除整个会话（长按抽屉条目） */
     suspend fun deleteSession(sessionId: Long)
 
-    /** 停止当前流 */
+    /** 停止当前流（取消应用级收集 job；用户消息已落库的不受影响） */
     fun cancel()
 
     /** 当前主模型名（顶部切换器显示） */
     val currentModelName: Flow<String>
 }
+
+/**
+ * v1.3.1 流式状态（repo 层状态中枢，ViewModel 订阅映射）：
+ * 与 ChatViewModel 原有的 streaming/streamingText/streamingThinking/transcription/transcribing/lastError 一一对应。
+ */
+data class StreamingState(
+    val streaming: Boolean = false,
+    val text: String = "",
+    val thinking: String = "",
+    val transcription: String? = null,
+    val transcribing: Boolean = false,
+    val error: LlmError? = null,
+)
 
 /**
  * 分析模式（v1.2 四分，prompt-architecture.md §3 + SPEC §5）：

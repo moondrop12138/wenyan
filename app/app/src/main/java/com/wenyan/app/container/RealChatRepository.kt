@@ -25,11 +25,15 @@ import com.wenyan.app.ui.contract.ChatRepository
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.contract.StreamEvent
+import com.wenyan.app.ui.contract.StreamingState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -38,6 +42,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -46,6 +51,8 @@ import kotlinx.coroutines.withTimeout
  *
  * sendText 编排：危机预检 → 知识路由 → prompt 三层拼装 → LLM 流 → 持久化 → 五步法解析。
  * analyzeImage 双通道：主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述。
+ * v1.3.1：async 发送族在应用级 appScope 收集（Activity 销毁/息屏不中断），
+ * 流式增量经 streamingState 推送；persistUser=false 供失败重试（用户消息不重复落库）。
  */
 class RealChatRepository(
     private val context: Context,
@@ -65,6 +72,19 @@ class RealChatRepository(
 
     /** v1.2.1 会话标题生成 scope：独立于发送流，发射即返回不阻塞 UI；失败静默 */
     private val titleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * v1.3.1 应用级发送 scope：不随 Activity/ViewModel 销毁，息屏/退后台回答继续完成并落库。
+     * 进程被杀则无法续跑（系统回收，除非前台服务——MVP 不做）。
+     */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** v1.3.1 流式状态中枢：async 发送族在 appScope 收集后推送，ViewModel 订阅映射 */
+    private val _streamingState = MutableStateFlow(StreamingState())
+    override val streamingState: StateFlow<StreamingState> = _streamingState.asStateFlow()
+
+    /** v1.3.1 当前流式收集 job（stop 取消用；appScope 生命周期不受 UI 影响） */
+    private var streamJob: Job? = null
 
     private val currentModelId = dataStore.currentModelId
     private val visionModelId = dataStore.visionModelId
@@ -102,7 +122,11 @@ class RealChatRepository(
             models.firstOrNull { it.id == id }?.name ?: "未配置"
         }
 
-    override fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent> = flow {
+    override fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent> =
+        sendTextFlow(text, mode, persistUser = true)
+
+    /** v1.3.1 persistUser=false 供失败重试：用户消息首次已落库，重试不重复落库、不重复更新状态机 */
+    private fun sendTextFlow(text: String, mode: AnalysisMode, persistUser: Boolean): Flow<StreamEvent> = flow {
         // AC-13：危机关键词本地预检，命中即转介，不调 LLM
         val crisis = CrisisDetector.detect(text)
         if (crisis.isNotEmpty()) {
@@ -112,7 +136,9 @@ class RealChatRepository(
         }
 
         val sid = ensureSession()
-        conversationRepository.addMessage(sid, "USER", "text", text)
+        if (persistUser) {
+            conversationRepository.addMessage(sid, "USER", "text", text)
+        }
 
         // v1.3 混合渲染：粘贴聊天记录走五步法 JSON 卡片；
         // 简短输入（提问/转述/打招呼）走 freetext 自由文本，直出自然中文，skill 体感。
@@ -131,7 +157,8 @@ class RealChatRepository(
         // 新话题信号：本地判定与进行中话题不延续（如粘贴完整聊天记录换题）
         val wasNewTopic = trackerEnabled && previousState.hasActiveTopic &&
             !stateTracker.isSameTopic(previousState, text)
-        val state = if (trackerEnabled) {
+        // v1.3.1 重试（persistUser=false）不重复推进状态机，state 保持当前值，prompt 注入一致
+        val state = if (trackerEnabled && persistUser) {
             stateTracker.onUserInput(previousState, text).also {
                 conversationRepository.updateSessionState(sid, it.toJson())
             }
@@ -212,6 +239,14 @@ class RealChatRepository(
         uri: Uri,
         text: String,
         mode: AnalysisMode,
+    ): Flow<StreamEvent> = analyzeImageFlow(uri, text, mode, persistUser = true)
+
+    /** v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库 */
+    private fun analyzeImageFlow(
+        uri: Uri,
+        text: String,
+        mode: AnalysisMode,
+        persistUser: Boolean,
     ): Flow<StreamEvent> = flow {
         // v1.3.1 图文同发：配文先过危机预检（命中即转介，不落库、不发 LLM）
         val caption = text.trim()
@@ -240,10 +275,12 @@ class RealChatRepository(
         }
 
         val sid = ensureSession()
-        // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻两条用户气泡）
-        conversationRepository.addMessage(sid, "USER", "image", dataUrl)
-        if (caption.isNotEmpty()) {
-            conversationRepository.addMessage(sid, "USER", "text", caption)
+        // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻两条用户气泡）；重试跳过
+        if (persistUser) {
+            conversationRepository.addMessage(sid, "USER", "image", dataUrl)
+            if (caption.isNotEmpty()) {
+                conversationRepository.addMessage(sid, "USER", "text", caption)
+            }
         }
 
         // 主模型是否支持视觉 → 通道 A 直读
@@ -333,7 +370,62 @@ class RealChatRepository(
     }
 
     override fun cancel() {
-        // 流取消由 collect 侧 job 取消触发；MVP 由 ViewModel.stop() 处理
+        // v1.3.1 取消应用级流式收集 job；用户消息已落库（persistUser=true）的不受影响
+        streamJob?.cancel()
+        streamJob = null
+        _streamingState.update { it.copy(streaming = false) }
+    }
+
+    // ===== v1.3.1 后台续跑 async 发送族 =====
+
+    override fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean) {
+        if (_streamingState.value.streaming) return
+        _streamingState.value = StreamingState(streaming = true)
+        streamJob = appScope.launch {
+            sendTextFlow(text, mode, persistUser).collect { event ->
+                applyStreamEvent(event)
+            }
+        }
+    }
+
+    override fun analyzeImageAsync(
+        uri: Uri,
+        text: String,
+        mode: AnalysisMode,
+        persistUser: Boolean,
+    ) {
+        if (_streamingState.value.streaming) return
+        _streamingState.value = StreamingState(streaming = true)
+        streamJob = appScope.launch {
+            analyzeImageFlow(uri, text, mode, persistUser).collect { event ->
+                applyStreamEvent(event)
+            }
+        }
+    }
+
+    override fun confirmTranscriptionAsync(transcription: String) {
+        if (_streamingState.value.streaming) return
+        _streamingState.value = StreamingState(streaming = true)
+        streamJob = appScope.launch {
+            confirmTranscription(transcription).collect { event ->
+                applyStreamEvent(event)
+            }
+        }
+    }
+
+    /** 流式事件 → streamingState 中枢（与 ChatViewModel 原 collect 分支一一对应） */
+    private fun applyStreamEvent(event: StreamEvent) {
+        when (event) {
+            is StreamEvent.Delta -> _streamingState.update { it.copy(text = it.text + event.text) }
+            is StreamEvent.Thinking -> _streamingState.update { it.copy(thinking = it.thinking + event.text) }
+            is StreamEvent.Analysis -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+            is StreamEvent.Transcription -> _streamingState.update {
+                it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false)
+            }
+            is StreamEvent.Error -> _streamingState.update { it.copy(streaming = false, error = event.error) }
+            StreamEvent.Done -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+            StreamEvent.FreeTextDone -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+        }
     }
 
     // ===== 私有辅助 =====
