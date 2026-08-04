@@ -24,7 +24,8 @@ interface SettingsRepository {
     suspend fun deleteProvider(id: Long)
     suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean)
     suspend fun deleteModel(id: Long)
-    suspend fun setDefaultModel(id: Long)
+    /** 切换默认模型：已默认则取消，未默认则置为该提供商唯一默认 */
+    suspend fun toggleDefaultModel(id: Long)
     suspend fun setVisionFlag(id: Long, supportsVision: Boolean)
 
     /** 一键清除全部档案（Key/档案/会话，AC-12） */

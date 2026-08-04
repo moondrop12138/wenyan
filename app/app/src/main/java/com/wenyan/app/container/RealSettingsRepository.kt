@@ -108,9 +108,21 @@ class RealSettingsRepository(
         providerRepository.deleteModel(id)
     }
 
-    override suspend fun setDefaultModel(id: Long) {
+    /**
+     * 切换默认模型（v1.3.1 可取消）：
+     * - 目标模型已是默认 → 取消默认（该提供商可暂时无默认模型）
+     * - 目标模型非默认 → 同提供商下先清默认，再置目标为默认
+     */
+    override suspend fun toggleDefaultModel(id: Long) {
         val model = providerRepository.getModel(id) ?: return
-        providerRepository.updateModel(model.copy(isDefault = true))
+        if (model.isDefault) {
+            providerRepository.updateModel(model.copy(isDefault = false))
+        } else {
+            providerRepository.listModels(model.providerId)
+                .filter { it.isDefault }
+                .forEach { providerRepository.updateModel(it.copy(isDefault = false)) }
+            providerRepository.updateModel(model.copy(isDefault = true))
+        }
     }
 
     override suspend fun setVisionFlag(id: Long, supportsVision: Boolean) {
