@@ -8,6 +8,8 @@ import com.goutoujunshi.app.data.image.ImageCompressor
 import com.goutoujunshi.app.data.repository.ConversationRepository
 import com.goutoujunshi.app.data.repository.ProfileRepository
 import com.goutoujunshi.app.data.repository.ProviderRepository
+import com.goutoujunshi.app.domain.ConversationState
+import com.goutoujunshi.app.domain.ConversationStateTracker
 import com.goutoujunshi.app.knowledge.CrisisDetector
 import com.goutoujunshi.app.knowledge.KnowledgeEngine
 import com.goutoujunshi.app.llm.AnalysisParser
@@ -15,6 +17,7 @@ import com.goutoujunshi.app.llm.ChatHistoryMessage
 import com.goutoujunshi.app.llm.ChatRequest
 import com.goutoujunshi.app.llm.LlmClient
 import com.goutoujunshi.app.llm.LlmEvent
+import com.goutoujunshi.app.llm.ResponseMode
 import com.goutoujunshi.app.prompt.PromptBuilder
 import com.goutoujunshi.app.ui.contract.AnalysisMode
 import com.goutoujunshi.app.ui.contract.ChatMessageUi
@@ -49,6 +52,9 @@ class RealChatRepository(
 ) : ChatRepository {
 
     private val sessionId = MutableStateFlow<Long?>(null)
+
+    /** v1.3 对话状态机：本地结构化跟踪，驱动同题追问不复读 */
+    private val stateTracker = ConversationStateTracker()
 
     private val currentModelId = dataStore.currentModelId
     private val visionModelId = dataStore.visionModelId
@@ -102,20 +108,49 @@ class RealChatRepository(
         val sid = ensureSession()
         conversationRepository.addMessage(sid, "USER", "text", text)
 
+        // v1.3 混合渲染：粘贴聊天记录走五步法 JSON 卡片；
+        // 简短输入（提问/转述/打招呼）走 freetext 自由文本，直出自然中文，skill 体感。
+        val responseMode = when (mode) {
+            AnalysisMode.FIVE_STEP -> ResponseMode.STRUCTURED
+            AnalysisMode.REPLY, AnalysisMode.RELAYED, AnalysisMode.GREETING -> ResponseMode.FREETEXT
+        }
+
+        // v1.3 对话状态机：简短输入时驱动同题判定与状态前缀注入
+        val trackerEnabled = responseMode == ResponseMode.FREETEXT
+        val previousState = if (trackerEnabled) {
+            ConversationState.fromJson(conversationRepository.getSessionState(sid))
+        } else {
+            ConversationState.EMPTY
+        }
+        // 新话题信号：本地判定与进行中话题不延续（如粘贴完整聊天记录换题）
+        val wasNewTopic = trackerEnabled && previousState.hasActiveTopic &&
+            !stateTracker.isSameTopic(previousState, text)
+        val state = if (trackerEnabled) {
+            stateTracker.onUserInput(previousState, text).also {
+                conversationRepository.updateSessionState(sid, it.toJson())
+            }
+        } else {
+            previousState
+        }
+        val statePrefix = if (trackerEnabled) stateTracker.buildStatePrefix(state) else ""
+
         val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
         val profile = profileRepository.getProfile()
         val target = profileRepository.getTarget()
-        val system = promptBuilder.buildSystem(profile, target, knowledge)
+        val system = promptBuilder.buildSystem(profile, target, knowledge, responseMode)
         val history = buildHistory(sid, text)
-        val user = if (mode == AnalysisMode.REPLY) {
-            // REPLY 轻量分支：messages 层已带全量历史，这里再把最近几轮拼成简短上下文
-            // 写进 prompt，帮助模型在单条 user 消息里也能抓住对话走向
-            val recentContext = history.takeLast(6)
-                .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
-                .takeIf { it.isNotBlank() }
-            promptBuilder.buildUserReply(text, recentContext)
-        } else {
-            promptBuilder.buildUserText(text)
+        val user = when (mode) {
+            AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
+            // REPLY/RELAYED/GREETING 共用简短输入模板（§3.3）：
+            // 模型在 prompt 内做最终语境判断，拿不准时反问兜底。
+            // messages 层已带全量历史，这里再把最近几轮拼成简短上下文，
+            // 帮助模型在单条 user 消息里也能抓住对话走向。
+            AnalysisMode.REPLY, AnalysisMode.RELAYED, AnalysisMode.GREETING -> {
+                val recentContext = history.takeLast(6)
+                    .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
+                    .takeIf { it.isNotBlank() }
+                promptBuilder.buildUserReply(text, recentContext, responseMode, statePrefix)
+            }
         }
 
         val client = resolveClient() ?: run {
@@ -123,18 +158,40 @@ class RealChatRepository(
             return@flow
         }
 
-        client.client.stream(ChatRequest(client.model, system, user, history = history)).collect { event ->
+        client.client.stream(
+            ChatRequest(client.model, system, user, history = history, responseMode = responseMode),
+        ).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
-                    val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
-                    if (analysis != null) {
-                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        val card = UiMappers.toAnalysisCard(analysis)
-                        emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
+                    if (responseMode == ResponseMode.FREETEXT) {
+                        // freetext：原文直存直渲，不走 JSON 解析
+                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                        // 状态落地：记录本轮结论摘要与话术痕迹，供下轮查重
+                        if (trackerEnabled) {
+                            val newState = stateTracker.onModelReply(
+                                state = state,
+                                topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
+                                    summarizeTopic(text, event.fullText)
+                                } else {
+                                    state.topicSummary
+                                },
+                                conclusion = summarizeConclusion(event.fullText),
+                                reply = extractReplySection(event.fullText),
+                            )
+                            conversationRepository.updateSessionState(sid, newState.toJson())
+                        }
+                        emit(StreamEvent.FreeTextDone)
+                    } else {
+                        val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
+                        if (analysis != null) {
+                            conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                            val card = UiMappers.toAnalysisCard(analysis)
+                            emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
+                        }
+                        emit(StreamEvent.Done)
                     }
-                    emit(StreamEvent.Done)
                 }
                 is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
             }
@@ -256,6 +313,7 @@ class RealChatRepository(
      * 构建同会话全量历史消息（注入 LLM 请求的 messages 层）。
      *
      * - text → 原文；image → 占位文本；transcription → 带前缀全文；
+     *   freetext（assistant 自由文本）→ 原文截断；
      *   analysis（assistant 结构化卡片 JSON）→ 提取 reply 字段作为 assistant 历史，解析失败跳过
      * - 剔除末尾与当前消息重复的 USER 条目（当前消息已由 userText 单独传入）
      * - 超长兜底：粗估 (system+user+history)/4 > [HISTORY_TOKEN_LIMIT] 时从最早轮次成对丢弃，
@@ -268,6 +326,7 @@ class RealChatRepository(
                 "text" -> ChatHistoryMessage(e.role.lowercase(), e.content)
                 "image" -> ChatHistoryMessage(e.role.lowercase(), IMAGE_PLACEHOLDER)
                 "transcription" -> ChatHistoryMessage(e.role.lowercase(), "[截图转述] ${e.content}")
+                "freetext" -> ChatHistoryMessage(e.role.lowercase(), e.content.take(600))
                 "analysis" -> runCatching { AnalysisParser.parse(e.content).reply }
                     .getOrNull()
                     ?.takeIf { it.isNotBlank() }
@@ -370,6 +429,49 @@ class RealChatRepository(
     private fun noConfigError(): LlmError =
         LlmError("NO_CONFIG", "请先在设置中配置 API Key 与主模型", false)
 
+    // ===== v1.3 freetext 状态摘要辅助 =====
+
+    /**
+     * 新话题时提炼话题摘要：取用户输入的前 24 字（足够模型对齐"在聊什么"）。
+     * 模型输出仅作补充——首句关键词追加在后面，总长控制在 40 字内。
+     */
+    private fun summarizeTopic(userInput: String, modelOutput: String): String {
+        val base = userInput.replace(Regex("\\s+"), " ").take(24)
+        val firstSentence = modelOutput
+            .replace(Regex("[#*>`\\-]"), "")
+            .split(Regex("[。！？\n]"))
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            ?.take(16)
+            .orEmpty()
+        return if (firstSentence.isBlank()) base else "$base｜$firstSentence".take(40)
+    }
+
+    /**
+     * 提炼本轮结论摘要：取模型输出的首个完整句（至多 40 字），作为"已给结论"记入状态。
+     */
+    private fun summarizeConclusion(modelOutput: String): String =
+        modelOutput
+            .replace(Regex("[#*>`\\-]"), "")
+            .split(Regex("[。！？\n]"))
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            ?.take(40)
+            .orEmpty()
+
+    /**
+     * 从 freetext 输出中探测"可发送话术"段落（reply-on-demand 约定：
+     * 模型给话术时会单独成段，常以「可以发」「直接回」等引导）。
+     * 未探测到 → 空串，状态记为本轮未给话术。
+     */
+    private fun extractReplySection(modelOutput: String): String {
+        val marker = REPLY_SECTION_PATTERN.find(modelOutput) ?: return ""
+        val after = modelOutput.substring(marker.range.last + 1).trimStart('：', ':', ' ', '\n')
+        // 取引导词之后的引号内文本或首行，作为话术原文
+        val quoted = Regex("[\"「『](.{4,120}?)[\"」』]").find(after)?.groupValues?.get(1)
+        return (quoted ?: after.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()).take(120)
+    }
+
     private data class ResolvedClient(val model: String, val client: LlmClient)
 
     private companion object {
@@ -377,5 +479,8 @@ class RealChatRepository(
         const val HISTORY_TOKEN_LIMIT = 24_000
         /** 历史中的图片消息占位文本 */
         const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
+
+        /** freetext 输出中"可发送话术"段落的引导词（reply-on-demand 约定） */
+        val REPLY_SECTION_PATTERN = Regex("(可以发|可以直接发|可以回|直接回|这样回|发这句|回这句|发这段话)")
     }
 }

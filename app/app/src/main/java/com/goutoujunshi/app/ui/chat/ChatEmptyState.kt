@@ -82,7 +82,7 @@ fun ChatEmptyState(
                 modifier = Modifier.weight(1f),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.ContentPaste, contentDescription = null, modifier = Modifier.size(24.dp), tint = p.fgSecondary)
+                    Icon(Icons.Outlined.ContentPaste, contentDescription = null, modifier = Modifier.size(24.dp), tint = p.accent)
                     Spacer(Modifier.height(8.dp))
                     Text("粘贴聊天记录", style = GtjType.Label, color = p.fg, textAlign = TextAlign.Center)
                 }
@@ -94,7 +94,7 @@ fun ChatEmptyState(
                 modifier = Modifier.weight(1f),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(24.dp), tint = p.fgSecondary)
+                    Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(24.dp), tint = p.accent)
                     Spacer(Modifier.height(8.dp))
                     Text("选择截图分析", style = GtjType.Label, color = p.fg, textAlign = TextAlign.Center)
                 }

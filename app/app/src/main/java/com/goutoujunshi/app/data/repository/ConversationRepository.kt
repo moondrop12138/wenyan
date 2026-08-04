@@ -52,6 +52,11 @@ class ConversationRepository(
 
     suspend fun deleteMessage(id: Long) = messageDao.deleteById(id)
 
+    /** v1.3：读取/更新会话的对话状态（ConversationState JSON） */
+    suspend fun getSessionState(id: Long): String = sessionDao.getById(id)?.stateJson ?: ""
+
+    suspend fun updateSessionState(id: Long, stateJson: String) = sessionDao.updateState(id, stateJson)
+
     suspend fun deleteSession(id: Long) {
         messageDao.deleteBySession(id)
         sessionDao.deleteById(id)

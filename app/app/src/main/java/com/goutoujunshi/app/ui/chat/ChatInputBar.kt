@@ -112,8 +112,8 @@ fun ChatInputBar(
                 textStyle = GtjType.Body,
                 shape = GtjShape.pill,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = p.surface,
-                    unfocusedContainerColor = p.surface,
+                    focusedContainerColor = p.surfaceElevated,
+                    unfocusedContainerColor = p.surfaceElevated,
                     focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     cursorColor = p.accent,

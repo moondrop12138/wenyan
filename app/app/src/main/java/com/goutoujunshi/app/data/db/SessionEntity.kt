@@ -14,4 +14,6 @@ data class SessionEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val scenarioTag: String? = null,
     val refDocs: String = "[]",
+    /** v1.3 对话状态（ConversationState JSON），连续话题跟踪/话术查重；DB v2 新增 */
+    val stateJson: String = "",
 )

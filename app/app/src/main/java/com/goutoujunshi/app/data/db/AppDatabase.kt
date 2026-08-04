@@ -5,9 +5,12 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room 数据库（v1 基线，6 表 + 索引 + 外键）
+ * Room 数据库（v2，6 表 + 索引 + 外键）
+ * v1→v2：session 表加 stateJson（v1.3 对话状态跟踪）
  * exportSchema=true，schema JSON 提交入库（app/schemas/）
  */
 @Database(
@@ -19,7 +22,7 @@ import androidx.room.TypeConverters
         ProviderEntity::class,
         ModelEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -34,6 +37,13 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val DB_NAME = "goutoujunshi.db"
 
+        /** v1→v2：session 加 stateJson 列（默认空串，老数据不丢） */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE session ADD COLUMN stateJson TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -43,7 +53,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DB_NAME,
-                ).build().also { instance = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { instance = it }
             }
     }
 }

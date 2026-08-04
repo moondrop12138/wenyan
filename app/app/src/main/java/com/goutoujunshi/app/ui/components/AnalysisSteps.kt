@@ -32,29 +32,27 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Mood
 
-/** 五步法单段元数据（design-pages 页面6，图标锁定 Material Symbols Outlined） */
+/** 五步法单段元数据（design-pages 页面6，图标锁定 Material Symbols Outlined；v1.2 去掉编号） */
 data class StepMeta(
-    val index: String,
     val icon: ImageVector,
     val title: String,
     val isAction: Boolean,
 )
 
 val STEP_META_BY_KEY: Map<String, StepMeta> = mapOf(
-    "emotion" to StepMeta("01", Icons.Outlined.Mood, "情绪落地", false),
-    "facts" to StepMeta("02", Icons.AutoMirrored.Outlined.FactCheck, "事实拆分", false),
-    "interests" to StepMeta("03", Icons.Outlined.Balance, "利益判断", false),
-    "advice" to StepMeta("04", Icons.Outlined.Lightbulb, "明确建议", false),
-    "action" to StepMeta("05", Icons.Outlined.Flag, "行动收束", true),
+    "emotion" to StepMeta(Icons.Outlined.Mood, "情绪落地", false),
+    "facts" to StepMeta(Icons.AutoMirrored.Outlined.FactCheck, "事实拆分", false),
+    "interests" to StepMeta(Icons.Outlined.Balance, "利益判断", false),
+    "advice" to StepMeta(Icons.Outlined.Lightbulb, "明确建议", false),
+    "action" to StepMeta(Icons.Outlined.Flag, "行动收束", true),
 )
 
 /**
  * 五步法单段（可折叠，默认 01-03 展开、04/05 折叠，design-pages 页面6）。
- * 头：图标+编号+标题（行动收束带 warm 标签，全屏 <=1 处）+ chevron。
+ * 头：图标+标题（行动收束带 warm 标签，全屏 <=1 处）+ chevron；v1.2 去掉 01/02 编号。
  */
 @Composable
 fun AnalysisStepItem(
-    index: String,
     icon: ImageVector,
     title: String,
     content: String,
@@ -75,12 +73,10 @@ fun AnalysisStepItem(
                 .clickable(role = Role.Button, onClick = onToggle)
                 .padding(vertical = 10.dp),
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.fgSecondary)
+            // P1 风格：步骤图标 + 标题统一暖橙，白卡上视觉锚点（v1.2 去掉 01/02 编号）
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.accent)
             Spacer(Modifier.width(10.dp))
-            // 对比度：编号 caption 升到 muted（浅色白底 4.8:1）
-            Text(index, style = GtjType.Caption, color = p.muted)
-            Spacer(Modifier.width(8.dp))
-            Text(title, style = GtjType.Subtitle, color = p.fg)
+            Text(title, style = GtjType.Subtitle, color = p.accent)
             if (isAction) {
                 Spacer(Modifier.width(8.dp))
                 Tag(text = "行动收束", kind = TagKind.WARM)

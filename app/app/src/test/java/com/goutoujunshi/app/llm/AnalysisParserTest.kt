@@ -76,4 +76,30 @@ class AnalysisParserTest {
         assertEquals("", analysis.safetyMessage)
         assertNull(analysis.tokenEstimate)
     }
+
+    // ===== v1.2 input_kind =====
+
+    @Test
+    fun `input_kind relayed_quote parsed`() {
+        val json = """{"steps":[],"reply":"尊重她的边界","citations":[],"input_kind":"relayed_quote"}"""
+        assertEquals(FiveStepAnalysis.InputKind.RELAYED_QUOTE, AnalysisParser.parse(json).inputKind)
+    }
+
+    @Test
+    fun `input_kind uncertain parsed`() {
+        val json = """{"steps":[],"reply":"我先确认下——这是她对你说的，对吧？","citations":[],"input_kind":"uncertain"}"""
+        assertEquals(FiveStepAnalysis.InputKind.UNCERTAIN, AnalysisParser.parse(json).inputKind)
+    }
+
+    @Test
+    fun `input_kind missing falls back to UNKNOWN`() {
+        // 旧模型无此字段 → UNKNOWN，不崩
+        assertEquals(FiveStepAnalysis.InputKind.UNKNOWN, AnalysisParser.parse(validJson).inputKind)
+    }
+
+    @Test
+    fun `input_kind invalid value falls back to UNKNOWN`() {
+        val json = """{"steps":[],"reply":"","citations":[],"input_kind":"bogus"}"""
+        assertEquals(FiveStepAnalysis.InputKind.UNKNOWN, AnalysisParser.parse(json).inputKind)
+    }
 }

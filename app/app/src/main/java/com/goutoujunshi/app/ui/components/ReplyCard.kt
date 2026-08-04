@@ -36,7 +36,10 @@ import com.goutoujunshi.app.ui.theme.LocalGtjColors
 
 /**
  * "这句怎么回"模式（AC-05，design-pages 页面6）：
- * 第一屏成品话术卡（primaryButton 底 + content_copy），第二屏时机/代价/后续分支（collapsible）。
+ * 第一屏成品话术卡（accent 实底 + content_copy），第二屏时机/代价/后续分支（collapsible）。
+ *
+ * v1.2：isClarification=true（模型 input_kind=uncertain）时，reply 是反问句而非成品话术，
+ * 改渲染浅桃橙反问卡、无复制按钮——方向拿不准时先跟用户确认，不给可发送话术。
  */
 @Composable
 fun ReplyCard(
@@ -44,32 +47,49 @@ fun ReplyCard(
     timing: String,
     onCopy: (String) -> Unit,
     modifier: Modifier = Modifier,
+    isClarification: Boolean = false,
 ) {
     val p = LocalGtjColors.current
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 成品卡
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = GtjShape.md,
-            color = p.accent,
-        ) {
-            Column(Modifier.padding(14.dp)) {
-                Text("可以直接发", style = GtjType.Caption, color = p.accentOn.copy(alpha = 0.8f))
-                Spacer(Modifier.height(4.dp))
-                Text(reply, style = GtjType.Body, color = p.accentOn, maxLines = 10, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(10.dp))
-                Surface(
-                    onClick = { onCopy(reply) },
-                    shape = GtjShape.sm,
-                    color = p.accentOn,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        if (isClarification) {
+            // 反问确认卡：浅桃橙底 + 暖棕标签，无复制按钮
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = GtjShape.lg,
+                color = p.accentSoft,
+                border = BorderStroke(1.dp, p.accent.copy(alpha = 0.3f)),
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("先确认一下", style = GtjType.Caption, color = p.warmOn)
+                    Spacer(Modifier.height(4.dp))
+                    Text(reply, style = GtjType.Body, color = p.fg, maxLines = 10, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        } else {
+            // 成品卡：accent 实底 + 白字 + 白色复制按钮
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = GtjShape.lg,
+                color = p.accent,
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("可以直接发", style = GtjType.Caption, color = p.accentOn.copy(alpha = 0.8f))
+                    Spacer(Modifier.height(4.dp))
+                    Text(reply, style = GtjType.Body, color = p.accentOn, maxLines = 10, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        onClick = { onCopy(reply) },
+                        shape = GtjShape.sm,
+                        color = p.accentOn,
                     ) {
-                        Icon(Icons.Outlined.ContentCopy, contentDescription = "复制话术成品", modifier = Modifier.size(16.dp), tint = p.accent)
-                        Spacer(Modifier.width(6.dp))
-                        Text("复制话术", style = GtjType.Label, color = p.accent)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            Icon(Icons.Outlined.ContentCopy, contentDescription = "复制话术成品", modifier = Modifier.size(16.dp), tint = p.accent)
+                            Spacer(Modifier.width(6.dp))
+                            Text("复制话术", style = GtjType.Label, color = p.accent)
+                        }
                     }
                 }
             }
