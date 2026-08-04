@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 启动图标背景：主色 #4D6BFE（design-tokens accent）。正式品牌图标由设计补充。 -->
-    <color name="ic_launcher_background">#4D6BFE</color>
+    <!-- 启动图标背景兜底色（API < 26 与不支持 drawable 背景的场景用）：
+         取 C3 深夜暖棕径向渐变的中间调，与 drawable/ic_launcher_background.xml 视觉一致 -->
+    <color name="ic_launcher_background">#211510</color>
 </resources>

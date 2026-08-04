@@ -19,6 +19,8 @@ app/release/
 local.properties
 keystore.properties
 *.properties.local
+# keystore 加密备份（含密钥本体，绝不入库）
+*keystore-backup*.zip
 
 # ===== IDE =====
 .idea/
