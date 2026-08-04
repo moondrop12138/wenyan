@@ -2,6 +2,7 @@ package com.goutoujunshi.app.prompt
 
 import com.goutoujunshi.app.data.db.ProfileEntity
 import com.goutoujunshi.app.data.db.TargetEntity
+import com.goutoujunshi.app.llm.ResponseMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,15 +61,45 @@ class PromptBuilderTest {
     }
 
     @Test
-    fun `user reply asks for copyable reply first`() {
-        // v1.1.3: REPLY 模式重构为结构化格式（emotion 单步 + 可复制成品话术 + 时机）
-        val user = builder.buildUserReply("周末有空吗", null)
+    fun `user reply structured variant keeps json contract`() {
+        // structured 变体（v1.2 契约保留）：emotion 单步 + reply-on-demand + reply_timing
+        val user = builder.buildUserReply("周末有空吗", null, ResponseMode.STRUCTURED)
         assertTrue(user.contains("用户输入：周末有空吗"))
-        assertTrue(user.contains("可以直接复制发送给对方的成品话术"))
+        assertTrue(user.contains("input_kind"))
         assertTrue(user.contains("reply_timing"))
         assertTrue(user.contains("发送时机"))
         // 仍保留"这句怎么回"的场景识别
         assertTrue(user.contains("这句怎么回"))
+    }
+
+    @Test
+    fun `user reply freetext variant is natural language first`() {
+        // v1.3 freetext 变体：自由文本直出，不提 JSON Schema，带禁复读规则
+        val user = builder.buildUserReply("周末有空吗", null, ResponseMode.FREETEXT)
+        assertTrue(user.contains("用户输入：周末有空吗"))
+        assertTrue(user.contains("自由文本，不输出 JSON"))
+        assertTrue(user.contains("严格不重复"))
+        // freetext 不应出现 structured 契约字段
+        assertTrue(!user.contains("input_kind"))
+        assertTrue(!user.contains("reply_timing"))
+    }
+
+    @Test
+    fun `user reply state prefix injected when provided`() {
+        val prefix = "【对话状态】当前话题：她划清朋友边界；已给话术：无；这是同一话题的第 2 轮。\n规则：禁止重复。"
+        val user = builder.buildUserReply("那我还该追她吗", null, ResponseMode.FREETEXT, prefix)
+        assertTrue(user.startsWith("【对话状态】"))
+        assertTrue(user.contains("她划清朋友边界"))
+        assertTrue(user.contains("那我还该追她吗"))
+    }
+
+    @Test
+    fun `buildSystem appends mode specific output block`() {
+        val freetext = builder.buildSystem(null, null, "", ResponseMode.FREETEXT)
+        val structured = builder.buildSystem(null, null, "", ResponseMode.STRUCTURED)
+        // 两种模式三层骨架一致，输出要求段不同
+        assertTrue(freetext.contains("【system-核心】") && structured.contains("【system-核心】"))
+        assertTrue(freetext != structured)
     }
 
     @Test

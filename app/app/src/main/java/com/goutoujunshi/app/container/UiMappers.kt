@@ -10,6 +10,7 @@ import com.goutoujunshi.app.ui.contract.AnalysisCard
 import com.goutoujunshi.app.ui.contract.AnalysisStep
 import com.goutoujunshi.app.ui.contract.ChatMessageUi
 import com.goutoujunshi.app.ui.contract.ChatRole
+import com.goutoujunshi.app.ui.contract.InputKindUi
 import com.goutoujunshi.app.ui.contract.LlmError
 import com.goutoujunshi.app.ui.contract.MessageType
 import com.goutoujunshi.app.ui.contract.ModelInfo
@@ -46,6 +47,7 @@ object UiMappers {
             "image" -> MessageType.IMAGE
             "analysis" -> MessageType.ANALYSIS
             "transcription" -> MessageType.TRANSCRIPTION
+            "freetext" -> MessageType.FREETEXT
             else -> MessageType.TEXT
         },
         content = e.content,
@@ -68,7 +70,17 @@ object UiMappers {
         safetyOverride = a.safetyOverride,
         safetyMessage = a.safetyMessage,
         tokenEstimate = a.tokenEstimate ?: 0,
+        inputKind = toInputKindUi(a.inputKind),
     )
+
+    private fun toInputKindUi(k: FiveStepAnalysis.InputKind): InputKindUi = when (k) {
+        FiveStepAnalysis.InputKind.USER_QUESTION -> InputKindUi.USER_QUESTION
+        FiveStepAnalysis.InputKind.RELAYED_QUOTE -> InputKindUi.RELAYED_QUOTE
+        FiveStepAnalysis.InputKind.PASTED_CHAT -> InputKindUi.PASTED_CHAT
+        FiveStepAnalysis.InputKind.GREETING -> InputKindUi.GREETING
+        FiveStepAnalysis.InputKind.UNCERTAIN -> InputKindUi.UNCERTAIN
+        FiveStepAnalysis.InputKind.UNKNOWN -> InputKindUi.UNKNOWN
+    }
 
     /**
      * 防御性解析模型输出为 AnalysisCard（prompt-architecture §6）：

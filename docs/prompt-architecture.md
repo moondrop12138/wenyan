@@ -1,9 +1,14 @@
-# Prompt 架构 - 狗头军师（安卓）v1.0
+# Prompt 架构 - 狗头军师（安卓）v1.3
 
 > 依据：SPEC.md §5.1 + architecture.md §4.3
-> 作者：高见远（架构师）| 日期：2026-08-02
+> 作者：高见远（架构师）| 日期：2026-08-02（v1.3 混合渲染：2026-08-04）
 > 状态：Phase 2 技术细化
-> 职责：PromptBuilder 按本节模板拼装 system 三层 + user 模板 + 输出 JSON Schema。
+> 职责：PromptBuilder 按本节模板拼装 system 三层 + user 模板 + 输出契约（structured JSON / freetext 自由文本）。
+
+> **v1.3 变更**：引入 ResponseMode 混合渲染——简短输入（REPLY/RELAYED/GREETING）默认走
+> FREETEXT 自由文本直渲（skill 体感，边收边显示），粘贴聊天记录仍走 STRUCTURED 五步法 JSON 卡片。
+> system 消息末尾按模式追加不同输出要求（CorePrompt.freetextOutput / structuredOutput）；
+> user 模板 §3.3 拆为 freetext/structured 两个变体；新增【对话状态】前缀注入（ConversationStateTracker）。
 
 ## 1. 总览
 
@@ -43,6 +48,14 @@
 - 资料矛盾时指出矛盾；缺失信息保持未知。
 - 需要回复文字时，直接生成可发送的成品话术，不教用户"自己组织"。
 
+输入语境识别（最高优先级，先判断再回应）：
+- 每次收到简短输入，先判断它属于哪一类，再决定回应方向；判断结果写入输出 JSON 的 input_kind 字段。
+- user_question：用户自己的提问、心情倾诉或"这句怎么回"（第一人称、在说自己的事）。按用户立场共情、给建议或话术。
+- relayed_quote：用户在转述对方/第三方说过的话（如"她说我们只是朋友""他问我周末有空吗"）。这不是用户的发言——先解读对方这句话的意图和关系信号（如划清边界、试探、留口子），再给用户可以发出去的回应话术；禁止把转述内容当成用户自己的立场去共情推进。
+- pasted_chat：多行、含说话人结构的完整聊天记录，按五步法全量分析。
+- greeting：纯打招呼，轻量温和开场即可。
+- uncertain：以上都拿不准时，不硬猜方向——reply 字段输出一句简短的确认问句（如"我先确认下——这是她对你说的，对吧？"），steps 只留一项 key="emotion" 写清你为什么拿不准；方向性错误比多一轮确认的代价高得多。
+
 每次分析的五个步骤：
 1. 情绪落地：2-4 句指出感受、触发点与冲突，认可感受但不为未经证实的解释背书；高情绪时先缩小到这一小时或发送前的动作。
 2. 事实拆分：分列已知事实、合理推测、关键未知；优先看持续主动、兑现、投入、边界与冲突修复，不凭单次回复、表情或标签定性。
@@ -62,7 +75,8 @@
 
 输出要求：
 - 只输出一个 JSON 对象，不加 markdown 代码块围栏，不加任何解释文字。
-- 严格遵循第 4 节 JSON Schema；内容简体中文；reply 字段必须是可直接复制发送的成品。
+- 严格遵循第 4 节 JSON Schema；内容简体中文；reply 字段必须是可直接复制发送的成品（input_kind=uncertain 时除外，此时 reply 是反问句）。
+- input_kind 字段必填，取值为 user_question / relayed_quote / pasted_chat / greeting / uncertain 之一。
 - 若参考了知识文档，citations 必须列出实际使用的文件名；未实际使用不得列入。
 ```
 
@@ -109,25 +123,62 @@ PromptBuilder 从 profile/target 表读出后填入；未建档时为 null 骨�
 请基于以上内容按五步法分析；无法确认的细节标注"转述提示"而非事实。
 ```
 
-### 3.3 简短输入（"这句怎么回" / 心情倾诉 / 打招呼）
+### 3.3 简短输入（"这句怎么回" / 心情倾诉 / 转述 / 打招呼）
 
-适用场景：用户输入是单行短句（< 40 字、无换行、无引号），即没有粘贴完整聊天记录。由 ChatViewModel 启发式路由到此分支。
+适用场景：用户输入是单行短句（< 40 字、无换行、无引号），即没有粘贴完整聊天记录。由 ChatViewModel 启发式路由到此分支（REPLY/RELAYED/GREETING 共用本模板）。
 
 ```text
-用户发来的不是完整聊天记录，而是一句简短的输入（可能是心情倾诉、可能是想问"这句怎么回"、也可能只是打招呼）。
+用户发来的不是完整聊天记录，而是一句简短的输入（可能是心情倾诉、可能是想问"这句怎么回"、可能是在转述对方说过的话、也可能只是打招呼）。
 用户输入：{quote}
 （可选）聊天上下文：{context}
 
 请按以下方式回应（不要按完整五步法分析）：
-1. steps 数组只保留一项 key="emotion"：先用 1-2 句接住用户此刻的感受或处境，认可但不夸张。
-2. reply 字段：给一句用户可以直接复制发送给对方的成品话术——要贴合用户的输入和处境，不要甩"你好呀～你最近怎么样？"这种通用模板。
-   - 如果用户在倾诉（如"他说他讨厌我"），话术要帮用户接住对方、弄清楚状况，而不是反过来撒娇或质问。
-   - 如果用户只是打招呼（如"你好"），给一个温和的开场即可。
-   - 如果用户问"这句怎么回"，直接给那条待回消息的成品回复。
-3. reply_timing：一句发送时机或注意事项（10-30 字）。
+0. 先做语境判断，写入 input_kind：
+   - user_question：用户自己在提问或倾诉（第一人称、说自己的事）。
+   - relayed_quote：用户在转述对方/第三方说过的话（如"她说我们只是朋友"）——不是用户自己的立场。
+   - greeting：纯打招呼。
+   - uncertain：以上拿不准时选这个，宁可反问也不硬猜方向。
+1. steps 数组只保留一项 key="emotion"：用 1-2 句接住用户此刻的感受或处境，认可但不夸张。
+   - 若是 relayed_quote：这里先解读对方那句话的意图和关系信号（如"她这句基本是在划清关系边界"），而不是共情用户。
+   - 若是 uncertain：这里写清你为什么拿不准（一两个字就够，别长篇）。
+2. reply 字段：
+   - user_question：给一句用户可以直接复制发送给对方的成品话术——要贴合用户的输入和处境，不要甩"你好呀～你最近怎么样？"这种通用模板。如果用户在倾诉，话术要帮用户接住对方、弄清楚状况，而不是反过来撒娇或质问；如果用户问"这句怎么回"，直接给那条待回消息的成品回复。
+   - relayed_quote：给一句用户能发出去的回应话术，方向必须与你解读出的对方意图一致（对方划清边界就尊重边界，别再给"继续追"的话术）。
+   - greeting：给一个温和的开场即可。
+   - uncertain：给一句简短的确认问句（如"我先确认下——这是她对你说的，对吧？"），不是成品话术。
+3. reply_timing：一句发送时机或注意事项（10-30 字）；uncertain 时留空字符串。
 4. 其他 steps（facts/interests/advice/action）留空数组。
 5. citations 留空数组。safety_override=false。
 ```
+
+#### 3.3a freetext 变体（v1.3 默认，ResponseMode.FREETEXT）
+
+简短输入默认走自由文本：模型直接输出自然中文，不包 JSON，边收边显示（skill 体感）。
+编排层（RealChatRepository）会注入【对话状态】前缀（ConversationStateTracker.buildStatePrefix），
+模型必须遵守其中的禁止复读规则。
+
+```text
+【对话状态】当前话题：{topicSummary}；已给结论：{conclusionGiven}；已给话术：{lastReplyText|无}；这是同一话题的第 N 轮。
+规则：同一话题的连续追问，禁止重复上面已给的结论和话术——要么推进到新角度，要么直接回答追问本身；用户在要判断/建议而不是话术时，不要给可发送话术。
+
+用户发来一句简短输入（可能是心情倾诉、想问"这句怎么回"、在转述对方的话、或追问上一轮的话题）。
+用户输入：{quote}
+聊天上下文：{context}
+
+请像朋友一样直接回应（自由文本，不输出 JSON）：
+- 先接住：是转述对方的话（如"她说我们只是朋友"）就先解读对方的意图和关系信号，是倾诉就先共情。
+- 再给方向：用户要判断/要不要做，就直接给分析和建议；用户明确要一句可发的话，才把话术单独成段给出。
+- 若带了【对话状态】，严格不重复已给的结论和话术——同一话题的追问要推进，不要复读。
+- 拿不准是转述还是用户自己的事时，先反问一句确认，别硬给方向。
+```
+
+话术探测约定（reply-on-demand）：freetext 输出中若含可发送话术，模型会单独成段并以
+「可以发/可以直接发/可以回/直接回/这样回」等引导词起头；编排层据此把话术记入对话状态供下轮查重。
+
+#### 3.3b structured 变体（v1.2 保留，ResponseMode.STRUCTURED）
+
+即上方 §3.3 模板原文，输出走第 4 节 JSON Schema。reply 字段仅在用户需要可发送话术时填充，
+否则留空字符串（UI 自动隐藏话术卡）。
 
 ## 4. 五步法输出 JSON Schema（前端渲染契约）
 
@@ -152,8 +203,9 @@ PromptBuilder 从 profile/target 表读出后填入；未建档时为 null 骨�
         }
       }
     },
-    "reply": {"type": "string", "description": "可直接复制发送的话术成品；仅\"这句怎么回\"场景必填，其他可为空字符串"},
-    "reply_timing": {"type": "string", "description": "发送时机/主要代价/后续分支；仅\"这句怎么回\"场景"},
+    "reply": {"type": "string", "description": "可直接复制发送的话术成品；input_kind=uncertain 时为反问句而非话术，其他可为空字符串"},
+    "reply_timing": {"type": "string", "description": "发送时机/主要代价/后续分支；仅\"这句怎么回\"场景；uncertain 时留空"},
+    "input_kind": {"type": "string", "enum": ["user_question", "relayed_quote", "pasted_chat", "greeting", "uncertain"], "description": "v1.2 必填：输入语境判断结果；uncertain 时前端隐藏复制按钮"},
     "citations": {"type": "array", "items": {"type": "string"}, "description": "实际参考的知识文档文件名"},
     "safety_override": {"type": "boolean", "description": "命中危机关键词为 true"},
     "safety_message": {"type": "string", "description": "safety_override=true 时的安全转介文案"},
@@ -168,8 +220,9 @@ PromptBuilder 从 profile/target 表读出后填入；未建档时为 null 骨�
 |-------------|---------|
 | steps[5] | 五段式卡片（情绪落地/事实拆分/利益判断/明确建议/行动收束），可折叠，结论置顶 |
 | steps[3].content | 首选建议主色高亮 |
-| reply | "复制话术"按钮（写剪贴板）；"这句怎么回"场景置顶第一屏（AC-05） |
+| reply | "复制话术"按钮（写剪贴板）；"这句怎么回"场景置顶第一屏（AC-05）；input_kind=uncertain 时为反问句、隐藏复制按钮 |
 | reply_timing | 时机/代价/后续分支副卡 |
+| input_kind | 输入语境（v1.2）：relayed_quote 时 emotion 段渲染"对方意图解读"；uncertain 时 reply 渲染为反问卡（无复制按钮） |
 | citations | 结果页底部"本次分析参考：xxx"（知识透明，AC-06） |
 | safety_override=true | 覆盖全部渲染，只显示 safety_message 转介卡（AC-13） |
 | token_estimate | 结果页底部消耗估算 |

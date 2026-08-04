@@ -15,6 +15,9 @@ data class ChatHistoryMessage(
     val content: String,
 )
 
+/** 回复形态（v1.3 混合渲染）：freetext=自由文本直渲（skill 体感），structured=五步法 JSON 卡片 */
+enum class ResponseMode { FREETEXT, STRUCTURED }
+
 data class ChatRequest(
     val model: String,
     val system: String,
@@ -23,6 +26,8 @@ data class ChatRequest(
     val temperature: Double = 0.7,
     /** 同会话历史消息，注入在 system 之后、当前 user 之前 */
     val history: List<ChatHistoryMessage> = emptyList(),
+    /** 本轮回复形态：FREETEXT 时模型直接输出自然中文（不包 JSON），边收边显示 */
+    val responseMode: ResponseMode = ResponseMode.STRUCTURED,
 )
 
 /**

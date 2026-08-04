@@ -26,7 +26,7 @@ data class ModelInfo(
 
 enum class ChatRole { USER, ASSISTANT }
 
-enum class MessageType { TEXT, IMAGE, ANALYSIS, TRANSCRIPTION }
+enum class MessageType { TEXT, IMAGE, ANALYSIS, TRANSCRIPTION, FREETEXT }
 
 /** 抽屉里的会话列表条目（首条 USER 消息前 30 字当标题） */
 data class SessionSummaryUi(
@@ -51,6 +51,9 @@ data class AnalysisStep(
     val items: List<String> = emptyList(),
 )
 
+/** 输入语境（v1.2，与 llm FiveStepAnalysis.InputKind 对齐） */
+enum class InputKindUi { USER_QUESTION, RELAYED_QUOTE, PASTED_CHAT, GREETING, UNCERTAIN, UNKNOWN }
+
 /** 五步法结果卡片（UI 渲染契约） */
 data class AnalysisCard(
     val steps: List<AnalysisStep> = emptyList(),
@@ -60,8 +63,12 @@ data class AnalysisCard(
     val safetyOverride: Boolean = false,
     val safetyMessage: String = "",
     val tokenEstimate: Int = 0,
+    val inputKind: InputKindUi = InputKindUi.UNKNOWN,
 ) {
     val conclusion: String get() = steps.firstOrNull { it.key == "advice" }?.content.orEmpty()
+
+    /** UNCERTAIN 时 reply 是反问句而非成品话术：前端据此隐藏"复制话术"按钮 */
+    val isClarification: Boolean get() = inputKind == InputKindUi.UNCERTAIN
 }
 
 /** 问卷建档草稿（onboarding 四屏收集，提交到后端入库） */

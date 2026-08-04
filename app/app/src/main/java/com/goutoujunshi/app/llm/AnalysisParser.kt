@@ -19,6 +19,8 @@ data class FiveStepAnalysis(
     val safetyOverride: Boolean,
     val safetyMessage: String,
     val tokenEstimate: Int?,
+    /** 输入语境判断（v1.2，prompt-architecture §4）；旧模型无此字段时回落 UNKNOWN，不崩 */
+    val inputKind: InputKind = InputKind.UNKNOWN,
 ) {
     data class Step(
         val key: String,
@@ -26,6 +28,22 @@ data class FiveStepAnalysis(
         val content: String,
         val items: List<String>,
     )
+
+    /** 输入语境（v1.2）。UNCERTAIN 时 reply 是反问句而非成品话术，前端据此隐藏复制按钮。 */
+    enum class InputKind {
+        USER_QUESTION, RELAYED_QUOTE, PASTED_CHAT, GREETING, UNCERTAIN, UNKNOWN;
+
+        companion object {
+            fun fromRaw(raw: String): InputKind = when (raw.trim().lowercase()) {
+                "user_question" -> USER_QUESTION
+                "relayed_quote" -> RELAYED_QUOTE
+                "pasted_chat" -> PASTED_CHAT
+                "greeting" -> GREETING
+                "uncertain" -> UNCERTAIN
+                else -> UNKNOWN
+            }
+        }
+    }
 
     companion object {
         val STEP_KEYS = listOf("emotion", "facts", "interests", "advice", "action")
@@ -57,6 +75,7 @@ object AnalysisParser {
             safetyOverride = json.optBoolean("safety_override", false),
             safetyMessage = json.optString("safety_message", ""),
             tokenEstimate = if (json.has("token_estimate")) json.optInt("token_estimate") else null,
+            inputKind = FiveStepAnalysis.InputKind.fromRaw(json.optString("input_kind", "")),
         )
     }
 

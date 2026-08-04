@@ -63,7 +63,7 @@ fun MessageBubble(
                     onLongClick = onLongClick,
                 ),
             shape = bubbleShape(isUser),
-            color = if (isUser) p.accent else p.surface,
+            color = if (isUser) p.accent else p.surfaceElevated,
             contentColor = if (isUser) p.accentOn else p.fg,
             border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
         ) {
@@ -110,7 +110,7 @@ fun ImageMessageBubble(
                     contentDescription = if (isUser) "你说：图片" else "图片"
                 },
             shape = bubbleShape(isUser),
-            color = if (isUser) p.accent else p.surface,
+            color = if (isUser) p.accent else p.surfaceElevated,
             contentColor = if (isUser) p.accentOn else p.fg,
             border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
         ) {
@@ -153,7 +153,7 @@ fun StreamingBubble(
                 bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
                 bottomEnd = CornerSize(GtjShape.lgRadius),
             ),
-            color = p.surface,
+            color = p.surfaceElevated,
             contentColor = p.fg,
             border = BorderStroke(1.dp, p.borderSoft),
         ) {
@@ -184,7 +184,7 @@ fun StreamingPlaceholderBubble(
                 bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
                 bottomEnd = CornerSize(GtjShape.lgRadius),
             ),
-            color = p.surface,
+            color = p.surfaceElevated,
             contentColor = p.muted,
             border = BorderStroke(1.dp, p.borderSoft),
         ) {

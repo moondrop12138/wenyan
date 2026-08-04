@@ -7,33 +7,33 @@
 
 :root,
 :root[data-theme="light"] {
-  /* ---- A1: 品牌/结构核心（SPEC 第 8 节锁定） ---- */
-  --bg: #FFFFFF;
-  --surface: #F7F8FA;
+  /* ---- A1: 品牌/结构核心（P1 暖橙系，v1.2） ---- */
+  --bg: #FAF5EF;            /* 暖米白底 */
+  --surface: #F4EDE4;
   --surface-elevated: #FFFFFF;
-  --fg: #111827;
-  --fg-secondary: #374151;
-  --muted: #6B7280;
-  --meta: #9CA3AF;
-  --border: #E5E7EB;
-  --border-soft: #EEF0F3;
+  --fg: #2B2118;
+  --fg-secondary: #4A3D30;
+  --muted: #6E5F4C;         /* WCAG AA：bg/surface 上 ≥4.5:1 */
+  --meta: #B3A48F;
+  --border: #E8DFD2;
+  --border-soft: #F1E9DC;
 
-  /* 强调色：纯色，非渐变 */
-  --accent: #4D6BFE;
+  /* 强调色：暖珊瑚橙，纯色，非渐变；白字 ≥3:1（大字号 AA） */
+  --accent: #CC6A2B;
   --accent-on: #FFFFFF;
-  --accent-hover: #3D5AF5;
-  --accent-pressed: #2E47E0;
-  --accent-soft: #EEF1FF;
+  --accent-hover: #B85F26;
+  --accent-pressed: #A8541F;
+  --accent-soft: #FCEFE3;   /* 浅桃橙 */
 
   /* 语义色 */
   --success: #16A34A;
   --warn: #D97706;
   --danger: #DC2626;
   --danger-soft: #FDECEC;
-  --warm: #E8873E;        /* 仅"行动收束"标签，每屏 <=1 处 */
-  --warm-soft: #FCF1E7;
-  --warm-on: #B45309;     /* warm 标签文字（浅色，对比度 4.52:1） */
-  --scrim: rgba(0,0,0,0.45);
+  --warm: #CC6A2B;
+  --warm-soft: #FCEFE3;
+  --warm-on: #A8541F;       /* warm 标签文字（暖棕，对比度达标） */
+  --scrim: rgba(43,33,24,0.45);
 
   /* ---- A2: 圆角/间距/图标/层级 ---- */
   --radius-sm: 8px;
@@ -82,29 +82,29 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0F1117;
-  --surface: #161B22;
-  --surface-elevated: #1C222C;
-  --fg: #F2F4F8;
-  --fg-secondary: #C9D1DB;
-  --muted: #8B949E;
-  --meta: #62666D;
-  --border: #262B36;
-  --border-soft: #20262F;
+  --bg: #191411;
+  --surface: #211A16;
+  --surface-elevated: #2A211B;
+  --fg: #F5EEE6;
+  --fg-secondary: #D8C9B8;
+  --muted: #9C8B78;
+  --meta: #6E6050;
+  --border: #382E25;
+  --border-soft: #2E2620;
 
-  --accent: #4D6BFE;
+  --accent: #EB8B4D;
   --accent-on: #FFFFFF;
-  --accent-hover: #5D77FF;
-  --accent-pressed: #3A52E8;
-  --accent-soft: #1E2440;
+  --accent-hover: #F09A60;
+  --accent-pressed: #CC6A2B;
+  --accent-soft: #3D2A1B;
 
   --success: #16A34A;
   --warn: #D97706;
   --danger: #DC2626;
   --danger-soft: #2A1717;
-  --warm: #E8873E;
-  --warm-soft: #2B1F14;
-  --warm-on: #E8873E;
+  --warm: #EB8B4D;
+  --warm-soft: #3D2A1B;
+  --warm-on: #F09A60;
   --scrim: rgba(0,0,0,0.60);
 
   --elev-flat: none;

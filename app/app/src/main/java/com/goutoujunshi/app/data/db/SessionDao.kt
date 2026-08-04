@@ -27,4 +27,8 @@ interface SessionDao {
 
     @Query("DELETE FROM session")
     suspend fun clear()
+
+    /** v1.3：更新会话的对话状态（ConversationState JSON） */
+    @Query("UPDATE session SET stateJson = :stateJson WHERE id = :id")
+    suspend fun updateState(id: Long, stateJson: String)
 }

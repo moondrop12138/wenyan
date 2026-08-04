@@ -80,28 +80,61 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     fun sendText(mode: AnalysisMode? = null) {
         val text = _input.value.trim()
         if (text.isEmpty() || _streaming.value) return
-        // 启发式路由：调用方未显式指定时，按输入形态判断
-        //  - 短输入（单行 < 40 字）→ REPLY 分支（先共情 + 一句可发的话术）
-        //  - 长输入 / 多行 / 含引号 → FIVE_STEP（完整聊天记录，走五步法）
+        // 启发式路由：调用方未显式指定时，按输入形态判断（v1.2 四分）
+        //  - 完整聊天记录粘贴（多行/引号/超 40 字）→ FIVE_STEP 五步法
+        //  - 转述对方的话（"她说我们只是朋友"）→ RELAYED 先解读对方意图
+        //  - 用户自己的简短输入（提问/倾诉）→ REPLY 共情 + 话术
+        //  - 纯打招呼 → GREETING 轻量开场
         val resolved = mode ?: routeByInputShape(text)
         lastSend = text to resolved
         _input.value = ""
         startStream { repo.sendText(text, resolved) }
     }
 
-    /** 简短输入（单行短句、无引号）走 REPLY；其余走 FIVE_STEP */
-    private fun routeByInputShape(text: String): AnalysisMode {
+    /**
+     * 输入四分路由（v1.2）。
+     *
+     * 优先级：FIVE_STEP > RELAYED > GREETING > REPLY。
+     * 关键修复：把「转述对方的话」从 REPLY 里拆出来——此前"她说我们只是朋友"
+     * 会被当成用户自己的发言走共情+推进话术，方向完全反了（应先解读对方在划清边界）。
+     */
+    internal fun routeByInputShape(text: String): AnalysisMode {
         val trimmed = text.trim()
         val isMultiLine = trimmed.contains('\n')
         val hasQuotes = trimmed.any { it == '"' || it == '“' || it == '”' || it == '\'' || it == '‘' || it == '’' }
         val looksLikeChatLog = trimmed.contains("：") && trimmed.contains("\n")
-        return when {
-            looksLikeChatLog -> AnalysisMode.FIVE_STEP
-            isMultiLine -> AnalysisMode.FIVE_STEP
-            hasQuotes -> AnalysisMode.FIVE_STEP
-            trimmed.length > 40 -> AnalysisMode.FIVE_STEP
-            else -> AnalysisMode.REPLY
+
+        // 完整聊天记录优先，避免大段粘贴被转述信号截胡
+        if (looksLikeChatLog || isMultiLine || hasQuotes || trimmed.length > 40) {
+            return AnalysisMode.FIVE_STEP
         }
+
+        if (looksLikeRelayedQuote(trimmed)) return AnalysisMode.RELAYED
+        if (looksLikeGreeting(trimmed)) return AnalysisMode.GREETING
+        return AnalysisMode.REPLY
+    }
+
+    /**
+     * 转述信号：第三人称主语 + 引语动词。只覆盖高置信度特征（短句前提下），
+     * 拿不准的仍落 REPLY，由模型在 prompt 里做最终语境判断（uncertain 时反问）。
+     */
+    private fun looksLikeRelayedQuote(text: String): Boolean =
+        RELAYED_PATTERN.containsMatchIn(text)
+
+    private fun looksLikeGreeting(text: String): Boolean =
+        text.length <= 10 && GREETING_PATTERN.containsMatchIn(text)
+
+    companion object {
+        /** "她说/他说/TA说/对方回/她回了句…" 等第三人称转述信号 */
+        private val RELAYED_PATTERN = Regex(
+            "(他|她|TA|ta|对方|那人|那个|这人|这个)[^，。！？\\n]{0,4}(说|问|回|答|讲|提|发|写)"
+        )
+
+        /** 纯打招呼：你好/hi/在吗 类，长度≤10 字 */
+        private val GREETING_PATTERN = Regex(
+            "^(你好|您好|hi|hello|hey|嗨|喂|在吗|在么|在不在|早|早上好|晚上好|下午好)[！!~。\\s]*$",
+            RegexOption.IGNORE_CASE
+        )
     }
 
     fun analyzeImage(uri: Uri) {
@@ -173,6 +206,13 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
                         _streaming.value = false
                     }
                     StreamEvent.Done -> {
+                        _streamingText.value = ""
+                        _streamingThinking.value = ""
+                        _streaming.value = false
+                    }
+                    StreamEvent.FreeTextDone -> {
+                        // v1.3 freetext：完整文本已由 repo 持久化为 freetext 消息，
+                        // Room Flow 自动刷新列表；这里只需清流式态
                         _streamingText.value = ""
                         _streamingThinking.value = ""
                         _streaming.value = false

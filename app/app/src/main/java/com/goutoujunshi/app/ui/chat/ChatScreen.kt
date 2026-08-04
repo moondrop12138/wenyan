@@ -186,7 +186,7 @@ fun ChatScreen(
                                 }
                             }
                             MessageType.IMAGE -> ImageMessageBubble(msg, onLongClick = { menuFor = msg })
-                            MessageType.TEXT, MessageType.TRANSCRIPTION ->
+                            MessageType.TEXT, MessageType.TRANSCRIPTION, MessageType.FREETEXT ->
                                 MessageBubble(msg, onLongClick = { menuFor = msg })
                         }
                     }
@@ -219,11 +219,23 @@ fun ChatScreen(
                             }
                         }
                         item(key = "streaming") {
-                            // 正文按"reply 预览"渲染：模型输出 JSON，流式期间只看到 reply 字段的内容，
-                            // 避免把 {"steps":[{"key":"emotion",... 这种原始 JSON 当回复糊在气泡里
-                            val replyPreview = StreamingPreview.extractReplyPreview(streamingText)
+                            // v1.3 混合渲染：
+                            // - freetext 模式：模型直出自然中文，流式文本直接打字机上屏；
+                            // - structured 模式：模型输出 JSON，流式期间只抽取 reply 字段预览，
+                            //   避免把 {"steps":[{"key":"emotion",... 这种原始 JSON 糊在气泡里。
+                            // 判据：累积文本一旦呈现 JSON 起始形态就按 structured 处理，否则按 freetext。
+                            val trimmed = streamingText.trimStart()
+                            val looksStructured = trimmed.startsWith("{") || trimmed.startsWith("```")
                             when {
-                                replyPreview != null -> StreamingBubble(text = replyPreview)
+                                looksStructured -> {
+                                    val replyPreview = StreamingPreview.extractReplyPreview(streamingText)
+                                    when {
+                                        replyPreview != null -> StreamingBubble(text = replyPreview)
+                                        streamingThinking.isNotBlank() -> StreamingPlaceholderBubble()
+                                        else -> TypingIndicator()
+                                    }
+                                }
+                                streamingText.isNotBlank() -> StreamingBubble(text = streamingText)
                                 streamingThinking.isNotBlank() -> StreamingPlaceholderBubble()
                                 else -> TypingIndicator()
                             }

@@ -48,7 +48,14 @@ interface ChatRepository {
     val currentModelName: Flow<String>
 }
 
-enum class AnalysisMode { FIVE_STEP, REPLY }
+/**
+ * 分析模式（v1.2 四分，prompt-architecture.md §3 + SPEC §5）：
+ * - FIVE_STEP：完整聊天记录粘贴 → 五步法全量分析
+ * - REPLY：用户自己的简短输入（提问/倾诉/"这句怎么回"）→ 共情 + 一句成品话术
+ * - RELAYED：用户在转述对方说过的话（"她说我们只是朋友"）→ 先解读对方意图，再给回应话术
+ * - GREETING：纯打招呼 → 轻量开场回应
+ */
+enum class AnalysisMode { FIVE_STEP, REPLY, RELAYED, GREETING }
 
 /** 流式事件（UI 渲染依据） */
 sealed interface StreamEvent {
@@ -63,6 +70,9 @@ sealed interface StreamEvent {
 
     /** 通道 B 转述文本（UI 渲染"AI 从截图中读出了这些内容"确认卡） */
     data class Transcription(val text: String) : StreamEvent
+
+    /** v1.3 freetext 自由对话完成：全文已持久化为 freetext 消息，UI 清空流式预览即可 */
+    data object FreeTextDone : StreamEvent
 
     /** 错误（LlmError 已归一，UI 只认文案+可重试标记） */
     data class Error(val error: LlmError) : StreamEvent

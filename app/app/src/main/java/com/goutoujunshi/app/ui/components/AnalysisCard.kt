@@ -44,9 +44,9 @@ fun AnalysisCard(
     val p = LocalGtjColors.current
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = GtjShape.md,
+        shape = GtjShape.lg,
         color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.border),
+        border = BorderStroke(1.dp, p.borderSoft),
     ) {
         Column(Modifier.padding(16.dp)) {
             if (card.conclusion.isNotBlank()) {
@@ -75,7 +75,13 @@ fun AnalysisCard(
                 Spacer(Modifier.height(12.dp))
             }
             if (card.reply.isNotBlank()) {
-                ReplyCard(reply = card.reply, timing = card.replyTiming, onCopy = onCopy)
+                // v1.2：uncertain 时 reply 是反问句，渲染反问卡（无复制按钮）
+                ReplyCard(
+                    reply = card.reply,
+                    timing = card.replyTiming,
+                    onCopy = onCopy,
+                    isClarification = card.isClarification,
+                )
                 Spacer(Modifier.height(12.dp))
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -85,7 +91,6 @@ fun AnalysisCard(
                         val defaultExpanded = step.key != "advice" && step.key != "action"
                         var expanded by rememberSaveable(step.key) { mutableStateOf(defaultExpanded) }
                         AnalysisStepItem(
-                            index = meta.index,
                             icon = meta.icon,
                             title = meta.title,
                             content = step.content,
