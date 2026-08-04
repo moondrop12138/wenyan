@@ -27,9 +27,9 @@ android {
         applicationId = "com.wenyan.app"
         minSdk = 26
         targetSdk = 36
-        // 改名「温言」换包名（等于新 App），版本随包号升 1.2.0；v1.2.1 起 AI 拟定会话标题 + UI 修复
-        versionCode = 4
-        versionName = "1.2.1"
+        // 改名「温言」换包名（等于新 App），版本随包号升 1.2.0；v1.2.1 AI 会话标题 + UI 修复；v1.2.2 图标居中与清晰度
+        versionCode = 5
+        versionName = "1.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
