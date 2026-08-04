@@ -208,7 +208,22 @@ class RealChatRepository(
         }
     }
 
-    override fun analyzeImage(uri: Uri): Flow<StreamEvent> = flow {
+    override fun analyzeImage(
+        uri: Uri,
+        text: String,
+        mode: AnalysisMode,
+    ): Flow<StreamEvent> = flow {
+        // v1.3.1 图文同发：配文先过危机预检（命中即转介，不落库、不发 LLM）
+        val caption = text.trim()
+        if (caption.isNotEmpty()) {
+            val crisis = CrisisDetector.detect(caption)
+            if (crisis.isNotEmpty()) {
+                emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(parseSafety(crisis.first()))))
+                emit(StreamEvent.Done)
+                return@flow
+            }
+        }
+
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: run {
                 emit(StreamEvent.Error(LlmError("READ_FAILED", "图片读取失败，请重试", false)))
@@ -225,14 +240,18 @@ class RealChatRepository(
         }
 
         val sid = ensureSession()
+        // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻两条用户气泡）
         conversationRepository.addMessage(sid, "USER", "image", dataUrl)
+        if (caption.isNotEmpty()) {
+            conversationRepository.addMessage(sid, "USER", "text", caption)
+        }
 
         // 主模型是否支持视觉 → 通道 A 直读
         val mainModel = resolveModel()
         if (mainModel?.supportsVision == true) {
-            runVisionDirect(sid, dataUrl).collect { emit(it) }
+            runVisionDirect(sid, dataUrl, caption, mode).collect { emit(it) }
         } else {
-            // 通道 B：先调视觉模型转述
+            // 通道 B：先调视觉模型转述（配文已作为独立消息在历史里，确认转述后模型可见）
             val vision = resolveVisionClient()
             if (vision == null) {
                 emit(StreamEvent.Error(LlmError("NO_VISION", "未配置视觉模型，请在设置中选择", false)))
@@ -345,16 +364,15 @@ class RealChatRepository(
             }
         }
 
-        // 去掉末尾与当前消息重复的 USER 条目（发送前已写库）
-        val trimmed = if (mapped.isNotEmpty()
-            && mapped.last().role == "user"
-            && (mapped.last().content == currentUserContent
-                || mapped.last().content == "[截图转述] $currentUserContent"
-                || mapped.last().content == IMAGE_PLACEHOLDER)
+        // 去掉末尾与当前消息重复的 USER 条目（发送前已写库）。
+        // v1.3.1 图文同发：image 占位 + text 配文两条都要去，故循环 drop 连续末尾 USER。
+        val trimmed = mapped.toMutableList()
+        while (trimmed.isNotEmpty() && trimmed.last().role == "user" &&
+            (trimmed.last().content == currentUserContent
+                || trimmed.last().content == IMAGE_PLACEHOLDER
+                || trimmed.last().content == "[截图转述] $currentUserContent")
         ) {
-            mapped.dropLast(1)
-        } else {
-            mapped
+            trimmed.removeAt(trimmed.lastIndex)
         }
 
         // 超长兜底：从最早轮次成对丢弃
@@ -399,7 +417,18 @@ class RealChatRepository(
         return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey))
     }
 
-    private suspend fun runVisionDirect(sid: Long, dataUrl: String): Flow<StreamEvent> = flow {
+    /**
+     * v1.3.1 通道 A（主模型直读图片）：支持图文同发。
+     * - 纯图：保持原提示（五步法 JSON 卡片）；
+     * - 图文同发：mode=FIVE_STEP → buildUserText（聊天记录模板），其余 → buildUserReply（简短输入模板）；
+     * - responseMode 按 mode 映射（STRUCTURED/FREETEXT），FREETEXT 完成后直存直渲。
+     */
+    private suspend fun runVisionDirect(
+        sid: Long,
+        dataUrl: String,
+        text: String,
+        mode: AnalysisMode,
+    ): Flow<StreamEvent> = flow {
         val profile = profileRepository.getProfile()
         val target = profileRepository.getTarget()
         val system = promptBuilder.buildSystem(profile, target, "")
@@ -407,25 +436,47 @@ class RealChatRepository(
             emit(StreamEvent.Error(noConfigError()))
             return@flow
         }
+        val responseMode =
+            if (mode == AnalysisMode.FIVE_STEP) ResponseMode.STRUCTURED else ResponseMode.FREETEXT
+        val history = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER })
+        val userText = when {
+            text.isBlank() -> "以下是用户聊天截图，请按五步法分析。"
+            mode == AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
+            else -> {
+                val recentContext = history.takeLast(6)
+                    .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
+                    .takeIf { it.isNotBlank() }
+                promptBuilder.buildUserReply(text, recentContext, responseMode, "")
+            }
+        }
         client.client.stream(
             ChatRequest(
                 model = client.model,
                 system = system,
-                userText = "以下是用户聊天截图，请按五步法分析。",
+                userText = userText,
                 imageDataUrl = dataUrl,
-                history = buildHistory(sid, IMAGE_PLACEHOLDER),
+                history = history,
+                responseMode = responseMode,
             )
         ).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
-                    val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
-                    if (analysis != null) {
-                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(analysis)))
+                    if (responseMode == ResponseMode.FREETEXT) {
+                        // 镜像 sendText：freetext 原文直存直渲，不走 JSON 解析
+                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = false) }
+                        emit(StreamEvent.FreeTextDone)
+                    } else {
+                        val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
+                        if (analysis != null) {
+                            conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                            titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                            emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(analysis)))
+                        }
+                        emit(StreamEvent.Done)
                     }
-                    emit(StreamEvent.Done)
                 }
                 is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
             }

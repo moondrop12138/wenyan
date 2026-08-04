@@ -29,8 +29,9 @@ android {
         targetSdk = 36
         // 改名「温言」换包名（等于新 App），版本随包号升 1.2.0；v1.2.1 AI 会话标题 + UI 修复；v1.2.2 图标居中与清晰度
         // v1.3.0 图片气泡去框融合 + 预设模型名单全面更新（7 厂商）+ 默认模型可取消 + "看图"→"视觉" + 新图标（去水印去方框）
-        versionCode = 6
-        versionName = "1.3.0"
+        // v1.3.1 图片预览+待发送图文同发 + 输入框圆角/全屏输入 + 50 句示例 + 主模型标签精简 + prompt 代词宽容 + freetext 话术卡融合
+        versionCode = 7
+        versionName = "1.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

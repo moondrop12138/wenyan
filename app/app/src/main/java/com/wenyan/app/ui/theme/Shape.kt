@@ -21,6 +21,13 @@ object GtjShape {
     val lg = RoundedCornerShape(lgRadius)
     val xl = RoundedCornerShape(xlRadius)
     val pill = CircleShape
+    /**
+     * v1.3.1 输入栏圆角：固定值，不用 pill（CircleShape）。
+     * 多行输入时输入框变高，pill 的圆角会随高度膨胀成巨大的胶囊（视觉失衡）；
+     * 固定 20dp 在任何高度下都保持协调（介于 lg=16 / xl=24 之间）。
+     */
+    val inputRadius = 20.dp
+    val input = RoundedCornerShape(inputRadius)
     /** 气泡右上/左下小圆角半径（用户/AI 气泡用） */
     val bubbleTailSmRadius = 4.dp
     val bubbleTailSm = RoundedCornerShape(bubbleTailSmRadius)

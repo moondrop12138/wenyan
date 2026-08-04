@@ -1,25 +1,34 @@
 package com.wenyan.app.ui.chat
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.DropdownMenu
@@ -27,44 +36,66 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 底部输入栏（design-tokens component.inputBar，design-pages 页面1）：
  * 回形针（粘贴文本/选择截图）+ TextField + 发送/停止。流式时右侧替换为 stop。
+ * v1.3.1 待发送图片：选图后先显示在输入框上方的预览区（缩略图 + 移除），点发送才真正发出；
+ * 有图即可发送（可与文字同发），发送键高亮条件随之扩展。
  */
 @Composable
 fun ChatInputBar(
     input: String,
     streaming: Boolean,
+    pendingImage: Uri?,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
     onPasteText: (String) -> Unit,
-    onImagePicked: (Uri) -> Unit,
+    onPendingImagePicked: (Uri) -> Unit,
+    onRemovePendingImage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
     val clipboard = LocalClipboardManager.current
     var menuExpanded by remember { mutableStateOf(false) }
+    // v1.3.1 全屏输入弹层（输入大量文字时展开编辑）
+    var showFullScreen by remember { mutableStateOf(false) }
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri -> uri?.let(onImagePicked) },
+        onResult = { uri -> uri?.let(onPendingImagePicked) },
     )
+    val canSend = input.isNotBlank() || pendingImage != null
 
     // edge-to-edge：bottomBar 不自动处理 insets，手动下移导航栏高度（手势条/三键自适应）
     Surface(
@@ -73,10 +104,54 @@ fun ChatInputBar(
             .windowInsetsPadding(WindowInsets.navigationBars),
         color = p.bg,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
+        Column {
+            // v1.3.1 待发送图片预览区：选完照片点确认后图片停在这里，不直接发出
+            if (pendingImage != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    val thumb = rememberPendingImageThumbnail(pendingImage)
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(p.surfaceElevated),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (thumb != null) {
+                            Image(
+                                bitmap = thumb.asImageBitmap(),
+                                contentDescription = "待发送图片",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            Text("加载中…", style = GtjType.BodySm, color = p.meta)
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text("图片待发送，点右侧发送键发出", style = GtjType.BodySm, color = p.muted)
+                    Spacer(Modifier.weight(1f))
+                    GtjIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = "移除图片",
+                        onClick = onRemovePendingImage,
+                        tint = p.muted,
+                    )
+                }
+                androidx.compose.material3.HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = p.border,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
             Box {
                 GtjIconButton(
                     icon = Icons.Outlined.AttachFile,
@@ -110,7 +185,8 @@ fun ChatInputBar(
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 placeholder = { Text("说点什么，或粘贴聊天记录…", style = GtjType.BodySm, color = p.meta) },
                 textStyle = GtjType.Body,
-                shape = GtjShape.pill,
+                // v1.3.1 固定圆角（20dp）：多行变高时圆角不再随高度膨胀成胶囊
+                shape = GtjShape.input,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = p.surfaceElevated,
                     unfocusedContainerColor = p.surfaceElevated,
@@ -119,6 +195,15 @@ fun ChatInputBar(
                     cursorColor = p.accent,
                 ),
                 maxLines = 4,
+                trailingIcon = {
+                    // v1.3.1 全屏输入入口（展开到全屏编辑，适合长文本）
+                    GtjIconButton(
+                        icon = Icons.Outlined.OpenInFull,
+                        contentDescription = "全屏输入",
+                        onClick = { showFullScreen = true },
+                        tint = p.muted,
+                    )
+                },
             )
             Spacer(Modifier.width(8.dp))
             if (streaming) {
@@ -136,21 +221,131 @@ fun ChatInputBar(
             } else {
                 Surface(
                     onClick = onSend,
-                    enabled = input.isNotBlank(),
+                    enabled = canSend,
                     modifier = Modifier.size(48.dp),
                     shape = GtjShape.pill,
-                    color = if (input.isNotBlank()) p.accent else p.borderSoft,
+                    color = if (canSend) p.accent else p.borderSoft,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Outlined.Send,
                             contentDescription = "发送",
                             modifier = Modifier.size(20.dp),
-                            tint = if (input.isNotBlank()) p.accentOn else p.meta,
+                            tint = if (canSend) p.accentOn else p.meta,
                         )
                     }
                 }
             }
+            }
         }
+    }
+
+    // v1.3.1 全屏输入弹层：编辑内容与输入框实时同步（同一 input state），点完成/关闭即收起
+    if (showFullScreen) {
+        FullScreenInputDialog(
+            input = input,
+            onInputChange = onInputChange,
+            onDismiss = { showFullScreen = false },
+        )
+    }
+}
+
+/**
+ * v1.3.1 待发送图片缩略图：两次解码（先读尺寸算采样率，再采样解码），
+ * 目标边长 ≤ 128dp 像素，后台线程执行防 OOM。
+ */
+@Composable
+private fun rememberPendingImageThumbnail(uri: Uri): Bitmap? {
+    val context = LocalContext.current
+    val targetPx = with(LocalDensity.current) { 128.dp.toPx() }.toInt()
+    return produceState<Bitmap?>(initialValue = null, uri) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val resolver = context.contentResolver
+                // 第一遍：只读边界
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                // 第二遍：按采样率解码
+                val opts = BitmapFactory.Options().apply {
+                    inSampleSize = computeSampleSize(bounds.outWidth, bounds.outHeight, targetPx)
+                }
+                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            }.getOrNull()
+        }
+    }.value
+}
+
+private fun computeSampleSize(width: Int, height: Int, targetPx: Int): Int {
+    if (width <= 0 || height <= 0 || targetPx <= 0) return 1
+    var sample = 1
+    while (width / (sample * 2) >= targetPx && height / (sample * 2) >= targetPx) {
+        sample *= 2
+    }
+    return sample
+}
+
+/**
+ * v1.3.1 全屏输入弹层：无行数上限的大编辑区，适合粘贴/编写长文本（参考参考图场景）。
+ * 内容与底部输入框实时同步（绑定同一 input state，编辑即生效），点完成/关闭即收起。
+ */
+@Composable
+private fun FullScreenInputDialog(
+    input: String,
+    onInputChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    val focusRequester = remember { FocusRequester() }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(p.bg)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .windowInsetsPadding(WindowInsets.navigationBars),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+            ) {
+                GtjIconButton(
+                    icon = Icons.Outlined.Close,
+                    contentDescription = "关闭全屏输入",
+                    onClick = onDismiss,
+                    tint = p.fgSecondary,
+                )
+                Spacer(Modifier.weight(1f))
+                Text("全屏输入", style = GtjType.Label, color = p.fg)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onDismiss) {
+                    Text("完成", style = GtjType.Body, color = p.accent)
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = p.border)
+            TextField(
+                value = input,
+                onValueChange = onInputChange,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRequester(focusRequester),
+                placeholder = { Text("输入内容…", style = GtjType.Body, color = p.meta) },
+                textStyle = GtjType.Body,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = p.accent,
+                ),
+                maxLines = Int.MAX_VALUE,
+            )
+        }
+    }
+    // 打开即聚焦唤起键盘
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 }

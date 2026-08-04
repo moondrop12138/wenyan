@@ -109,11 +109,13 @@ fun MessageBubble(
 /**
  * 图片消息气泡：content 为 data:image/...;base64,...，解码后按缩略图渲染，长按删除。
  * v1.3.1 去框融合：不再套 Surface 边框/底色，图片直接用气泡圆角裁剪浮在聊天背景上（微信风格）。
+ * v1.3.1 点击打开全屏预览（onClick 由上层注入，读屏语义同步触发）。
  */
 @Composable
 fun ImageMessageBubble(
     message: ChatMessageUi,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     onLongClick: ((Offset) -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
@@ -130,12 +132,15 @@ fun ImageMessageBubble(
                 .onGloballyPositioned { windowPos = it.positionInWindow() }
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onTap = {},
+                        onTap = { onClick?.invoke() },
                         onLongPress = { offset -> onLongClick?.invoke(windowPos + offset) },
                     )
                 }
                 .semantics {
-                    onClick(label = "查看图片") { true }
+                    onClick(label = "查看图片") {
+                        onClick?.invoke()
+                        true
+                    }
                     onLongClick(label = "打开消息操作菜单") {
                         onLongClick?.invoke(Offset.Zero)
                         true
@@ -261,9 +266,12 @@ private object DataUrlBitmapCache {
     fun keyOf(dataUrl: String): String = "${dataUrl.length}:${dataUrl.hashCode()}"
 }
 
-/** 将 data:image/...;base64,... 解码为 Bitmap；后台线程解码 + LruCache 缓存 */
+/**
+ * 将 data:image/...;base64,... 解码为 Bitmap；后台线程解码 + LruCache 缓存。
+ * v1.3.1 internal：供全屏预览组件（ImagePreviewOverlay）复用同一缓存管线。
+ */
 @Composable
-private fun rememberDataUrlBitmap(dataUrl: String) =
+internal fun rememberDataUrlBitmap(dataUrl: String) =
     produceState<Bitmap?>(initialValue = DataUrlBitmapCache.get(DataUrlBitmapCache.keyOf(dataUrl)), dataUrl) {
         val key = DataUrlBitmapCache.keyOf(dataUrl)
         DataUrlBitmapCache.get(key)?.let {

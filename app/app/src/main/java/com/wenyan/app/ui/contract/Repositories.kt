@@ -23,8 +23,14 @@ interface ChatRepository {
     /**
      * 截图分析（双通道分流，AC-07/AC-08）：后端内部做压缩管线（≤1568px/85%）后，
      * 主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述（转述结果经 TranscriptionEvent 回传）。
+     * v1.3.1 图文同发：text 非空时图片与配文一起落库、一起进 LLM 请求（先图后文）；
+     * mode 决定通道 A 的回复形态（FIVE_STEP→五步法卡片，其余→freetext 自由文本）。
      */
-    fun analyzeImage(uri: Uri): Flow<StreamEvent>
+    fun analyzeImage(
+        uri: Uri,
+        text: String = "",
+        mode: AnalysisMode = AnalysisMode.FIVE_STEP,
+    ): Flow<StreamEvent>
 
     /** 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析 */
     fun confirmTranscription(transcription: String): Flow<StreamEvent>

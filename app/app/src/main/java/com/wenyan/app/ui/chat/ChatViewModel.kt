@@ -55,8 +55,14 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _currentSessionId = MutableStateFlow<Long?>(null)
     val currentSessionId: StateFlow<Long?> = _currentSessionId.asStateFlow()
 
+    /** v1.3.1 待发送图片：选图后暂存（输入框上方预览区），点发送才真正发出 */
+    private val _pendingImage = MutableStateFlow<Uri?>(null)
+    val pendingImage: StateFlow<Uri?> = _pendingImage.asStateFlow()
+
     private var streamJob: Job? = null
-    private var lastSend: Pair<String, AnalysisMode>? = null
+
+    /** 最近一次发送（v1.3.1 携带可选图片 uri，供 retry 复用图文重试） */
+    private var lastSend: LastSend? = null
 
     init {
         viewModelScope.launch {
@@ -86,7 +92,7 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         //  - 用户自己的简短输入（提问/倾诉）→ REPLY 共情 + 话术
         //  - 纯打招呼 → GREETING 轻量开场
         val resolved = mode ?: routeByInputShape(text)
-        lastSend = text to resolved
+        lastSend = LastSend(null, text, resolved)
         _input.value = ""
         startStream { repo.sendText(text, resolved) }
     }
@@ -125,6 +131,16 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         text.length <= 10 && GREETING_PATTERN.containsMatchIn(text)
 
     companion object {
+        /** v1.3.1 最近一次发送记录（retry 复用；uri 非空 = 图文/纯图发送） */
+        private data class LastSend(
+            val uri: Uri?,
+            val text: String,
+            val mode: AnalysisMode,
+        )
+
+        /** v1.3.1 预落库错误码：图片尚未写入，失败后恢复待发送区供重试 */
+        private val RESTORE_PENDING_CODES = setOf("READ_FAILED", "TOO_LARGE", "COMPRESS_FAILED")
+
         /** "她说/他说/TA说/对方回/她回了句…" 等第三人称转述信号 */
         private val RELAYED_PATTERN = Regex(
             "(他|她|TA|ta|对方|那人|那个|这人|这个)[^，。！？\\n]{0,4}(说|问|回|答|讲|提|发|写)"
@@ -137,9 +153,37 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         )
     }
 
-    fun analyzeImage(uri: Uri) {
+    /** v1.3.1 选图后暂存为待发送（输入框上方预览区展示）；流式期间也允许先暂存 */
+    fun setPendingImage(uri: Uri?) {
+        _pendingImage.value = uri
+    }
+
+    fun dismissPendingImage() {
+        _pendingImage.value = null
+    }
+
+    /**
+     * v1.3.1 统一发送入口（DeepSeek 风格）：
+     * - 有图 + 有字 → 图文同发（配文按输入形态路由 mode，空则纯图五步法）
+     * - 有图无字 → 纯图分析；无图有字 → 走 sendText
+     * 发送后清空待发送区与输入框。
+     */
+    fun sendPending() {
         if (_streaming.value) return
-        startStream { repo.analyzeImage(uri) }
+        val uri = _pendingImage.value
+        val text = _input.value.trim()
+        if (uri == null && text.isEmpty()) return
+        if (uri == null) {
+            sendText()
+            return
+        }
+        val resolved = if (text.isEmpty()) AnalysisMode.FIVE_STEP else routeByInputShape(text)
+        lastSend = LastSend(uri, text, resolved)
+        _input.value = ""
+        _pendingImage.value = null
+        startStream(restorePending = uri to text) {
+            repo.analyzeImage(uri, text, resolved)
+        }
     }
 
     fun confirmTranscription(text: String) {
@@ -151,7 +195,14 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
 
     fun retry() {
         val last = lastSend ?: return
-        startStream { repo.sendText(last.first, last.second) }
+        if (last.uri != null) {
+            // v1.3.1 图文重试：复用原 uri + 配文
+            startStream(restorePending = last.uri to last.text) {
+                repo.analyzeImage(last.uri, last.text, last.mode)
+            }
+        } else {
+            startStream { repo.sendText(last.text, last.mode) }
+        }
     }
 
     /** 长按菜单删除单条消息；Room Flow 自动刷新 messages，无需手动改 state */
@@ -178,7 +229,10 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         _streaming.value = false
     }
 
-    private fun startStream(producer: () -> kotlinx.coroutines.flow.Flow<StreamEvent>) {
+    private fun startStream(
+        restorePending: Pair<Uri, String>? = null,
+        producer: () -> kotlinx.coroutines.flow.Flow<StreamEvent>,
+    ) {
         _streaming.value = true
         _streamingText.value = ""
         _streamingThinking.value = ""
@@ -204,6 +258,11 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
                     is StreamEvent.Error -> {
                         _lastError.value = event.error
                         _streaming.value = false
+                        // v1.3.1 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
+                        if (restorePending != null && event.error.code in RESTORE_PENDING_CODES) {
+                            _pendingImage.value = restorePending.first
+                            _input.value = restorePending.second
+                        }
                     }
                     StreamEvent.Done -> {
                         _streamingText.value = ""
