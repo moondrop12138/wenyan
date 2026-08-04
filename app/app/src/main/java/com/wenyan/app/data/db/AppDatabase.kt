@@ -9,8 +9,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room 数据库（v2，6 表 + 索引 + 外键）
+ * Room 数据库（v3，6 表 + 索引 + 外键）
  * v1→v2：session 表加 stateJson（v1.3 对话状态跟踪）
+ * v2→v3：session 表加 title（v1.2.1 主模型拟定会话标题）
  * exportSchema=true，schema JSON 提交入库（app/schemas/）
  */
 @Database(
@@ -22,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderEntity::class,
         ModelEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -44,6 +45,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v2→v3：session 加 title 列（默认空串，老数据不丢） */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE session ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -54,7 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }

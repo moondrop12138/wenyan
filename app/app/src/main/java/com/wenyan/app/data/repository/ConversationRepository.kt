@@ -57,6 +57,9 @@ class ConversationRepository(
 
     suspend fun updateSessionState(id: Long, stateJson: String) = sessionDao.updateState(id, stateJson)
 
+    /** v1.2.1：更新会话标题（主模型拟定） */
+    suspend fun updateSessionTitle(id: Long, title: String) = sessionDao.updateTitle(id, title)
+
     suspend fun deleteSession(id: Long) {
         messageDao.deleteBySession(id)
         sessionDao.deleteById(id)
