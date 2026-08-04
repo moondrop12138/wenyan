@@ -39,6 +39,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,10 +47,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.container.UiMappers
 import com.wenyan.app.ui.components.AnalysisCard
@@ -99,6 +103,8 @@ fun ChatScreen(
     var showModelSheet by remember { mutableStateOf(false) }
     // 长按消息菜单 / 删除确认（局部 UI 态，与 showModelSheet 同模式）
     var menuFor by remember { mutableStateOf<ChatMessageUi?>(null) }
+    // v1.2.1 长按触点窗口坐标（Offset.Zero = 无障碍触发无坐标，用默认落点）→ DropdownMenu offset
+    var menuOffset by remember { mutableStateOf(Offset.Zero) }
     var confirmDeleteFor by remember { mutableStateOf<ChatMessageUi?>(null) }
     var confirmDeleteSession by remember { mutableStateOf<SessionSummaryUi?>(null) }
     val scope = rememberCoroutineScope()
@@ -110,6 +116,12 @@ fun ChatScreen(
     fun copy(text: String) {
         clipboard.setText(AnnotatedString(text))
         Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+    }
+
+    /** 长按任意消息 → 打开菜单并记录触点位置（菜单弹出在手指处） */
+    fun openMessageMenu(msg: ChatMessageUi, offset: Offset) {
+        menuFor = msg
+        menuOffset = offset
     }
 
     ModalNavigationDrawer(
@@ -180,14 +192,20 @@ fun ChatScreen(
                                     card?.safetyOverride == true -> CrisisCard(
                                         onAcknowledge = {},
                                         safetyMessage = card.safetyMessage,
+                                        onLongClick = { offset -> openMessageMenu(msg, offset) },
                                     )
-                                    card != null -> AnalysisCard(card = card, onCopy = ::copy)
-                                    else -> MessageBubble(msg, onLongClick = { menuFor = msg })
+                                    card != null -> AnalysisCard(
+                                        card = card,
+                                        onCopy = ::copy,
+                                        onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                    )
+                                    else -> MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
                                 }
                             }
-                            MessageType.IMAGE -> ImageMessageBubble(msg, onLongClick = { menuFor = msg })
+                            MessageType.IMAGE ->
+                                ImageMessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
                             MessageType.TEXT, MessageType.TRANSCRIPTION, MessageType.FREETEXT ->
-                                MessageBubble(msg, onLongClick = { menuFor = msg })
+                                MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
                         }
                     }
                     transcription?.let { t ->
@@ -242,26 +260,50 @@ fun ChatScreen(
                         }
                     }
                 }
-                LaunchedEffect(messages.size, streamingText, streamingThinking, transcription) {
+                // v1.2.1 滚动跟随修复：仅当用户位于底部时才自动滚到底。
+                // 此前无条件 scrollToItem 导致流式每来一个 token 就把上滑看历史的用户拽回底部。
+                // 动态项（thinking/streaming/transcription/error）都计入 totalItemsCount。
+                val isAtBottom by remember(listState) {
+                    derivedStateOf {
+                        val layout = listState.layoutInfo
+                        val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+                        layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 1
+                    }
+                }
+                LaunchedEffect(messages.size, streamingText, streamingThinking, transcription, isAtBottom) {
                     val count = listState.layoutInfo.totalItemsCount
-                    if (count > 0) listState.scrollToItem(count - 1)
+                    if (count > 0 && isAtBottom && !listState.isScrollInProgress) {
+                        listState.scrollToItem(count - 1)
+                    }
                 }
             }
         }
     }
     }
 
-    // 长按消息操作菜单：文本类可复制/删除，图片仅删除
+    // 长按消息操作菜单：文本类可复制/删除，图片仅删除。
+    // v1.2.1：offset 跟随长按触点（窗口坐标），菜单出现在手指处而非固定左下角。
     menuFor?.let { msg ->
         DropdownMenu(
             expanded = true,
             onDismissRequest = { menuFor = null },
+            offset = with(LocalDensity.current) {
+                // 无障碍触发（读屏长按）无坐标传 Zero，给默认落点避免菜单贴顶
+                if (menuOffset == Offset.Zero) DpOffset(24.dp, 120.dp)
+                else DpOffset(menuOffset.x.toDp(), menuOffset.y.toDp())
+            },
         ) {
             if (msg.type != MessageType.IMAGE) {
                 DropdownMenuItem(
                     text = { Text("复制") },
                     onClick = {
-                        copy(msg.content)
+                        // v1.2.1：分析卡复制成品话术（reply）而非原始 JSON
+                        val copyText = when (msg.type) {
+                            MessageType.ANALYSIS -> UiMappers.parseAnalysisCard(msg.content)
+                                ?.reply?.takeIf { it.isNotBlank() } ?: msg.content
+                            else -> msg.content
+                        }
+                        copy(copyText)
                         menuFor = null
                     },
                 )
