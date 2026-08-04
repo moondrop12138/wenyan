@@ -85,4 +85,93 @@ class FreetextSplitTest {
         assertEquals("收到，我知道了。", s.reply)
         assertEquals("第一行解释。\n第二行解释。", s.body)
     }
+
+    // ===== v1.3.1 修复：段中引导词（去掉行首锚定）=====
+
+    @Test
+    fun `用户实测 - 段中引导词加弯引号`() {
+        val raw = "如果决定不去，直接礼貌回绝就好，不用解释太多，也不用给自己加戏。可以回：\n\n“谢谢你的邀请。我就不去现场了，祝你们幸福。”\n\n如果心里还存着一丝想见证他幸福的念头，那就先问问自己：去完回来，哭的是不是你。你能接受，再去；不能，就守住这一条边界。\n\n回完就放下手机，别盯对话框等他回复。"
+        val s = FreetextSplitter.split(raw)
+        assertEquals("谢谢你的邀请。我就不去现场了，祝你们幸福。", s.reply)
+        assertEquals("如果决定不去，直接礼貌回绝就好，不用解释太多，也不用给自己加戏。\n如果心里还存着一丝想见证他幸福的念头，那就先问问自己：去完回来，哭的是不是你。你能接受，再去；不能，就守住这一条边界。\n\n回完就放下手机，别盯对话框等他回复。", s.body)
+    }
+
+    @Test
+    fun `段中引导词无引号 - 取首行`() {
+        val raw = "先接住情绪再说。可以回：好，我知道了，谢谢你告诉我。\n之后别再提这事。"
+        val s = FreetextSplitter.split(raw)
+        assertEquals("好，我知道了，谢谢你告诉我。", s.reply)
+        assertEquals("先接住情绪再说。\n之后别再提这事。", s.body)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 可以发了`() {
+        assertEquals("", FreetextSplitter.split("消息可以发了吗？").reply)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 这样回我`() {
+        assertEquals("", FreetextSplitter.split("他这样回我是不是没戏了？").reply)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 回这句话`() {
+        assertEquals("", FreetextSplitter.split("你帮我回这句话。").reply)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 你直接回她`() {
+        assertEquals("", FreetextSplitter.split("你可以直接回她一句。").reply)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 就这样回去`() {
+        assertEquals("", FreetextSplitter.split("要不就这样回去算了。").reply)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 下次可以回`() {
+        assertEquals("", FreetextSplitter.split("下次可以回一句问候。").reply)
+    }
+
+    @Test
+    fun `组合词命中 - 可以发这段话`() {
+        assertEquals("周末见。", FreetextSplitter.split("可以发这段话：“周末见。”").reply)
+    }
+
+    @Test
+    fun `组合词命中 - 可以这样回`() {
+        assertEquals("我考虑一下。", FreetextSplitter.split("可以这样回：“我考虑一下。”").reply)
+    }
+
+    @Test
+    fun `嵌句拒绝 - 你可以这样回`() {
+        // "你"前缀是正文叙事（"你可以这样回她一句"），不是话术引导
+        assertEquals("", FreetextSplitter.split("你可以这样回：“我考虑一下。”").reply)
+    }
+
+    @Test
+    fun `组合词命中 - 可以回这句`() {
+        assertEquals("谢谢关心。", FreetextSplitter.split("可以回这句：“谢谢关心。”").reply)
+    }
+
+    @Test
+    fun `组合词命中 - 可以直接回`() {
+        assertEquals("嗯，我知道了。", FreetextSplitter.split("可以直接回：“嗯，我知道了。”").reply)
+    }
+
+    @Test
+    fun `句首无前文 - 放行`() {
+        val s = FreetextSplitter.split("可以发：晚上我先不打了，想自己待会儿。")
+        assertEquals("晚上我先不打了，想自己待会儿。", s.reply)
+        assertEquals("", s.body)
+    }
+
+    @Test
+    fun `段中引导词引号未闭合 - 回退首行`() {
+        val raw = "先讲个道理。可以发：“晚上我们聊聊吧"
+        val s = FreetextSplitter.split(raw)
+        assertEquals("晚上我们聊聊吧", s.reply)
+        assertEquals("先讲个道理。", s.body)
+    }
 }
