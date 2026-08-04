@@ -16,4 +16,6 @@ data class SessionEntity(
     val refDocs: String = "[]",
     /** v1.3 对话状态（ConversationState JSON），连续话题跟踪/话术查重；DB v2 新增 */
     val stateJson: String = "",
+    /** v1.2.1 会话标题（首轮回复完成后由主模型拟定）；空串 = 未生成，抽屉回退首句截断；DB v3 新增 */
+    val title: String = "",
 )

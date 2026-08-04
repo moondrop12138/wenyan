@@ -25,14 +25,21 @@ import com.wenyan.app.ui.contract.ChatRepository
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.contract.StreamEvent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 /**
  * 对话 Repository 真实实现（AC-04/05/06/07/08/13/14/15）
@@ -56,6 +63,9 @@ class RealChatRepository(
     /** v1.3 对话状态机：本地结构化跟踪，驱动同题追问不复读 */
     private val stateTracker = ConversationStateTracker()
 
+    /** v1.2.1 会话标题生成 scope：独立于发送流，发射即返回不阻塞 UI；失败静默 */
+    private val titleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val currentModelId = dataStore.currentModelId
     private val visionModelId = dataStore.visionModelId
 
@@ -77,12 +87,8 @@ class RealChatRepository(
             val firstBySession = firstMessages.associateBy { it.sessionId }
             sessions.mapNotNull { s ->
                 val first = firstBySession[s.id]
-                // 没有 USER 消息的会话（新建的）也展示，标题用占位
-                val title = first?.firstUserText
-                    ?.replace(Regex("\\s+"), " ")
-                    ?.take(30)
-                    ?.takeIf { it.isNotBlank() }
-                    ?: "新会话"
+                // v1.2.1 三级回退：DB 标题（主模型拟定）> 首条 USER 前 30 字 > "新会话"
+                val title = SessionTitle.resolveSessionTitle(s.title, first?.firstUserText)
                 SessionSummaryUi(
                     id = s.id,
                     title = title,
@@ -168,6 +174,8 @@ class RealChatRepository(
                     if (responseMode == ResponseMode.FREETEXT) {
                         // freetext：原文直存直渲，不走 JSON 解析
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                        // v1.2.1：首轮回复完成后异步拟题（独立 scope 不阻塞流）
+                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = false) }
                         // 状态落地：记录本轮结论摘要与话术痕迹，供下轮查重
                         if (trackerEnabled) {
                             val newState = stateTracker.onModelReply(
@@ -187,6 +195,8 @@ class RealChatRepository(
                         val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
                         if (analysis != null) {
                             conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                            // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
+                            titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
                             val card = UiMappers.toAnalysisCard(analysis)
                             emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
                         }
@@ -429,6 +439,54 @@ class RealChatRepository(
     private fun noConfigError(): LlmError =
         LlmError("NO_CONFIG", "请先在设置中配置 API Key 与主模型", false)
 
+    // ===== v1.2.1 会话标题生成辅助 =====
+
+    /**
+     * 首轮回复完成后由主模型拟定会话标题（幂等，失败静默）。
+     *
+     * - 幂等：DB 已有非空 title 直接跳过（防第二/后续轮重复生成）
+     * - 素材：首句用户输入 + 首条回复；STRUCTURED 时 fullText 是 JSON，取 reply 字段
+     * - 调用：复用流式接口收集首个 Done（标题短，SSE 开销可忽略），20s 超时兜底
+     * - 失败：静默留空 → 抽屉走 resolveSessionTitle 首句回退；下轮 Done 天然重试
+     */
+    private suspend fun generateTitleOnce(
+        sid: Long,
+        userText: String,
+        replyFullText: String,
+        isStructured: Boolean,
+    ) {
+        if (conversationRepository.getSession(sid)?.title?.isNotBlank() == true) return
+        val replyMaterial = if (isStructured) {
+            runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault("")
+        } else {
+            replyFullText
+        }
+        val (userLine, replyLine) = SessionTitle.buildTitleMaterial(userText, replyMaterial)
+        if (userLine.isBlank()) return
+
+        val title = runCatching {
+            withTimeout(TITLE_TIMEOUT_MS) {
+                val client = resolveClient() ?: return@withTimeout null
+                client.client.stream(
+                    ChatRequest(
+                        model = client.model,
+                        system = TITLE_SYSTEM_PROMPT,
+                        userText = SessionTitle.buildTitlePrompt(userLine, replyLine),
+                        temperature = 0.3,
+                        responseMode = ResponseMode.FREETEXT,
+                    ),
+                ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
+            }
+        }.getOrNull()?.let { SessionTitle.sanitizeTitle(it) }?.takeIf { it.isNotBlank() }
+
+        if (title != null) {
+            conversationRepository.updateSessionTitle(sid, title)
+            Log.i("RealChatRepository", "session $sid title generated: $title")
+        } else {
+            Log.w("RealChatRepository", "session $sid title generation failed/skipped, fallback to first message")
+        }
+    }
+
     // ===== v1.3 freetext 状态摘要辅助 =====
 
     /**
@@ -479,6 +537,11 @@ class RealChatRepository(
         const val HISTORY_TOKEN_LIMIT = 24_000
         /** 历史中的图片消息占位文本 */
         const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
+
+        /** v1.2.1：标题生成超时（毫秒），超时静默回退首句截断 */
+        const val TITLE_TIMEOUT_MS = 20_000L
+        /** v1.2.1：标题生成 system prompt，只输出标题本身 */
+        const val TITLE_SYSTEM_PROMPT = "你是会话标题生成器。只输出标题本身，不要任何解释、引号、标点或表情。"
 
         /** freetext 输出中"可发送话术"段落的引导词（reply-on-demand 约定） */
         val REPLY_SECTION_PATTERN = Regex("(可以发|可以直接发|可以回|直接回|这样回|发这句|回这句|发这段话)")

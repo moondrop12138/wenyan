@@ -31,4 +31,8 @@ interface SessionDao {
     /** v1.3：更新会话的对话状态（ConversationState JSON） */
     @Query("UPDATE session SET stateJson = :stateJson WHERE id = :id")
     suspend fun updateState(id: Long, stateJson: String)
+
+    /** v1.2.1：更新会话标题（主模型拟定） */
+    @Query("UPDATE session SET title = :title WHERE id = :id")
+    suspend fun updateTitle(id: Long, title: String)
 }
