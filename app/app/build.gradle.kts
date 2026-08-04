@@ -20,15 +20,16 @@ val hasReleaseKeystore = keystoreProps.isNotEmpty() &&
     file(keystoreProps.getProperty("storeFile", "keystore/release.jks")).exists()
 
 android {
-    namespace = "com.goutoujunshi.app"
+    namespace = "com.wenyan.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.goutoujunshi.app"
+        applicationId = "com.wenyan.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.3"
+        // 改名「温言」换包名（等于新 App），版本随包号升 1.2.0
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -90,6 +91,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // 版本号注入 BuildConfig，设置页动态读取（避免硬编码漂移）
+        buildConfig = true
     }
     // Room schema 导出到 app/schemas/（db-schema §4：作为迁移对照基线）
     ksp {
