@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 「温言」启动图标：AI 原稿位图版（气泡焰，原稿 1:1 质感）
+     前景=发光气泡抠图（收进 66dp 安全区），背景=深夜暖棕径向渐变，
+     各密度 PNG 见 mipmap-{mdpi..xxxhdpi}/ic_launcher_*.png -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>
