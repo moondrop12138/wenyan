@@ -79,7 +79,9 @@ fun ModelSheet(
                 Text("当前：${current.name}", style = GtjType.Caption, color = p.muted)
             }
             Spacer(Modifier.height(8.dp))
-            if (models.isEmpty()) {
+            // v1.6.3 只展示模型管理里"可见"的模型（showInSheet 开关控制）
+            val visible = models.filter { it.showInSheet }
+            if (visible.isEmpty()) {
                 EmptyState(
                     title = "没有可用模型",
                     actionText = "去设置添加",
@@ -88,7 +90,7 @@ fun ModelSheet(
                 )
             } else {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    models.groupBy { it.providerName }.forEach { (providerName, list) ->
+                    visible.groupBy { it.providerName }.forEach { (providerName, list) ->
                         item(key = "header_$providerName") {
                             Text(providerName, style = GtjType.Label, color = p.muted, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
                         }

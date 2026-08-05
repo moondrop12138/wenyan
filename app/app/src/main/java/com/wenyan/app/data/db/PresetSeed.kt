@@ -42,6 +42,7 @@ object PresetSeed {
             baseUrl = "https://open.bigmodel.cn/api/paas/v4",
             models = listOf(
                 ModelDef("glm-5.2", supportsVision = false, isDefault = true),
+                ModelDef("GLM-4.6V-Flash", supportsVision = true), // v1.6.3 新增：免费视觉模型
                 ModelDef("glm-5-turbo", supportsVision = false),
                 ModelDef("glm-5v-turbo", supportsVision = true),
             ),

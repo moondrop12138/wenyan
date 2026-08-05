@@ -4,6 +4,7 @@
     <style name="Theme.Wenyan" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/white</item>
+        <!-- v1.6.3 沉浸式手势小白条：导航栏透明（防冷启动闪白条；运行时由 enableEdgeToEdge 接管） -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

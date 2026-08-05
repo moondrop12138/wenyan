@@ -9,9 +9,10 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room 数据库（v3，6 表 + 索引 + 外键）
+ * Room 数据库（v4，6 表 + 索引 + 外键）
  * v1→v2：session 表加 stateJson（v1.3 对话状态跟踪）
  * v2→v3：session 表加 title（v1.2.1 主模型拟定会话标题）
+ * v3→v4：model 表加 showInSheet（v1.6.3 主页弹层可见性）+ provider 表加 connectionStatus（连接状态灯）
  * exportSchema=true，schema JSON 提交入库（app/schemas/）
  */
 @Database(
@@ -23,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderEntity::class,
         ModelEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -52,6 +53,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3→v4：model 加 showInSheet（默认 1 展示）+ provider 加 connectionStatus（默认空=未测/失败红灯） */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE model ADD COLUMN showInSheet INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE provider ADD COLUMN connectionStatus TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -62,7 +71,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

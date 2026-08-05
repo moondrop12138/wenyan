@@ -109,20 +109,16 @@ class RealSettingsRepository(
     }
 
     /**
-     * 切换默认模型（v1.3.1 可取消）：
-     * - 目标模型已是默认 → 取消默认（该提供商可暂时无默认模型）
-     * - 目标模型非默认 → 同提供商下先清默认，再置目标为默认
+     * v1.6.3 切换模型在主页"选择模型"弹层的可见性（替代原"设为默认"单选）
      */
-    override suspend fun toggleDefaultModel(id: Long) {
+    override suspend fun toggleSheetVisible(id: Long) {
         val model = providerRepository.getModel(id) ?: return
-        if (model.isDefault) {
-            providerRepository.updateModel(model.copy(isDefault = false))
-        } else {
-            providerRepository.listModels(model.providerId)
-                .filter { it.isDefault }
-                .forEach { providerRepository.updateModel(it.copy(isDefault = false)) }
-            providerRepository.updateModel(model.copy(isDefault = true))
-        }
+        providerRepository.updateModel(model.copy(showInSheet = !model.showInSheet))
+    }
+
+    /** v1.6.3 写入连接测试结果（保存提供商后自动测试） */
+    override suspend fun markConnectionStatus(providerId: Long, ok: Boolean) {
+        providerRepository.updateConnectionStatus(providerId, ok)
     }
 
     override suspend fun setVisionFlag(id: Long, supportsVision: Boolean) {

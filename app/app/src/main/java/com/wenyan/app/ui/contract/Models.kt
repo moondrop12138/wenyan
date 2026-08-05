@@ -12,6 +12,8 @@ data class ProviderInfo(
     val apiKeyConfigured: Boolean,
     val isPreset: Boolean,
     val sortOrder: Int,
+    /** v1.6.3 连接状态："ok"=测试成功（绿灯），""=未测试/失败（红灯） */
+    val connectionStatus: String = "",
 )
 
 data class ModelInfo(
@@ -22,6 +24,8 @@ data class ModelInfo(
     val supportsVision: Boolean,
     val isDefault: Boolean,
     val sortOrder: Int,
+    /** v1.6.3 是否在主页"选择模型"弹层展示（模型管理里切换） */
+    val showInSheet: Boolean = true,
 )
 
 enum class ChatRole { USER, ASSISTANT }
