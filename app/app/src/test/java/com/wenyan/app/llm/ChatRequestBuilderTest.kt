@@ -35,27 +35,39 @@ class ChatRequestBuilderTest {
     }
 
     @Test
-    fun `multimodal request builds content array`() {
+    fun `multimodal request builds content array with multiple images`() {
         val request = ChatRequest(
             model = "gpt-5.6-terra",
             system = "s",
             userText = "分析截图",
-            imageDataUrl = "data:image/jpeg;base64,AAA",
+            imageDataUrls = listOf(
+                "data:image/jpeg;base64,AAA",
+                "data:image/png;base64,BBB",
+                "data:image/jpeg;base64,CCC",
+            ),
         )
         val body = JSONObject(ChatRequestBuilder.build(request))
         val messages = body.getJSONArray("messages")
         val user = messages.getJSONObject(1)
         val content = user.getJSONArray("content")
-        assertEquals(2, content.length())
+        // text + 3 张图
+        assertEquals(4, content.length())
 
         val textPart = content.getJSONObject(0)
         assertEquals("text", textPart.getString("type"))
         assertEquals("分析截图", textPart.getString("text"))
 
-        val imagePart = content.getJSONObject(1)
-        assertEquals("image_url", imagePart.getString("type"))
-        val imageUrl = imagePart.getJSONObject("image_url")
-        assertTrue(imageUrl.getString("url").startsWith("data:image/jpeg;base64,"))
+        // v1.6.1 多图：image_url part 顺序与传入列表一致
+        for (i in 1..3) {
+            val imagePart = content.getJSONObject(i)
+            assertEquals("image_url", imagePart.getString("type"))
+            val imageUrl = imagePart.getJSONObject("image_url")
+            assertTrue(imageUrl.getString("url").startsWith("data:image/"))
+        }
+        assertEquals(
+            "data:image/png;base64,BBB",
+            content.getJSONObject(2).getJSONObject("image_url").getString("url"),
+        )
     }
 
     @Test

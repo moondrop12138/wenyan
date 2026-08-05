@@ -25,6 +25,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AttachFile
@@ -72,19 +75,20 @@ import kotlinx.coroutines.withContext
  * 底部输入栏（design-tokens component.inputBar，design-pages 页面1）：
  * 回形针（粘贴文本/选择截图）+ TextField + 发送/停止。流式时右侧替换为 stop。
  * v1.3.1 待发送图片：选图后先显示在输入框上方的预览区（缩略图 + 移除），点发送才真正发出；
+ * v1.6.1 多图：最多 [ChatViewModel.MAX_PENDING_IMAGES] 张，横向缩略图流 + 右上角删除角标 + 计数；
  * 有图即可发送（可与文字同发），发送键高亮条件随之扩展。
  */
 @Composable
 fun ChatInputBar(
     input: String,
     streaming: Boolean,
-    pendingImage: Uri?,
+    pendingImages: List<Uri>,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
     onPasteText: (String) -> Unit,
-    onPendingImagePicked: (Uri) -> Unit,
-    onRemovePendingImage: () -> Unit,
+    onPendingImagesPicked: (List<Uri>) -> Unit,
+    onRemovePendingImage: (Uri) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
@@ -92,11 +96,13 @@ fun ChatInputBar(
     var menuExpanded by remember { mutableStateOf(false) }
     // v1.3.1 全屏输入弹层（输入大量文字时展开编辑）
     var showFullScreen by remember { mutableStateOf(false) }
+    // v1.6.1 多图选择器：剩余名额 = 上限 - 已选（已选 0 张时至少允许选 1）
+    val remainingSlots = (ChatViewModel.MAX_PENDING_IMAGES - pendingImages.size).coerceAtLeast(1)
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri -> uri?.let(onPendingImagePicked) },
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = remainingSlots),
+        onResult = { uris -> if (uris.isNotEmpty()) onPendingImagesPicked(uris) },
     )
-    val canSend = input.isNotBlank() || pendingImage != null
+    val canSend = input.isNotBlank() || pendingImages.isNotEmpty()
 
     // edge-to-edge：bottomBar 不自动处理 insets，手动下移导航栏高度（手势条/三键自适应）
     // v1.5：悬浮胶囊形态——外层无底，内层 r28 圆角 + 投影 + surfaceElevated 底（设计稿 WY-01 输入栏）
@@ -107,42 +113,70 @@ fun ChatInputBar(
         color = Color.Transparent,
     ) {
         Column {
-            // v1.3.1 待发送图片预览区：选完照片点确认后图片停在这里，不直接发出
-            if (pendingImage != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+            // v1.3.1 待发送图片预览区（v1.6.1 多图横向流）：选完照片点确认后图片停在这里，不直接发出
+            if (pendingImages.isNotEmpty()) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    val thumb = rememberPendingImageThumbnail(pendingImage)
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(p.surfaceElevated),
-                        contentAlignment = Alignment.Center,
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (thumb != null) {
-                            Image(
-                                bitmap = thumb.asImageBitmap(),
-                                contentDescription = "待发送图片",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        } else {
-                            Text("加载中…", style = GtjType.BodySm, color = p.meta)
+                        items(pendingImages, key = { it.toString() }) { uri ->
+                            val thumb = rememberPendingImageThumbnail(uri)
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(p.surfaceElevated),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (thumb != null) {
+                                    Image(
+                                        bitmap = thumb.asImageBitmap(),
+                                        contentDescription = "待发送图片",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                } else {
+                                    Text("加载中…", style = GtjType.BodySm, color = p.meta)
+                                }
+                                // v1.6.1 右上角删除角标：半透明底 + 小叉
+                                Surface(
+                                    onClick = { onRemovePendingImage(uri) },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(3.dp)
+                                        .size(18.dp),
+                                    shape = CircleShape,
+                                    color = p.bg.copy(alpha = 0.85f),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.Close,
+                                            contentDescription = "移除图片",
+                                            modifier = Modifier.size(12.dp),
+                                            tint = p.fg,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Text("图片待发送，点右侧发送键发出", style = GtjType.BodySm, color = p.muted)
-                    Spacer(Modifier.weight(1f))
-                    GtjIconButton(
-                        icon = Icons.Outlined.Close,
-                        contentDescription = "移除图片",
-                        onClick = onRemovePendingImage,
-                        tint = p.muted,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    ) {
+                        Text("图片待发送，可继续添加", style = GtjType.BodySm, color = p.muted)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "${pendingImages.size}/${ChatViewModel.MAX_PENDING_IMAGES}",
+                            style = GtjType.Caption,
+                            color = p.meta,
+                        )
+                    }
                 }
                 androidx.compose.material3.HorizontalDivider(
                     thickness = 0.5.dp,

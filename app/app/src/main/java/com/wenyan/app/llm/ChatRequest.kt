@@ -20,11 +20,15 @@ data class ChatRequest(
     val model: String,
     val system: String,
     val userText: String,
-    val imageDataUrl: String? = null,
+    /** v1.6.1 多图：一次请求可携带最多 [MAX_IMAGES_PER_REQUEST] 张图（content 数组多 image_url part） */
+    val imageDataUrls: List<String> = emptyList(),
     val temperature: Double = 0.7,
     /** 同会话历史消息，注入在 system 之后、当前 user 之前 */
     val history: List<ChatHistoryMessage> = emptyList(),
 )
+
+/** v1.6.1 单次 LLM 请求图片上限（与选图上限一致，防超长请求体） */
+const val MAX_IMAGES_PER_REQUEST = 10
 
 /**
  * 输入 token 粗略估算（可观测性元数据，仅用量，不含内容）。
@@ -33,7 +37,7 @@ data class ChatRequest(
 fun ChatRequest.estimatedInputTokens(): Int {
     val historyLen = history.sumOf { it.content.length }
     val textTokens = (system.length + userText.length + historyLen) / 4
-    val imageTokens = if (imageDataUrl != null) IMAGE_TOKEN_ESTIMATE else 0
+    val imageTokens = imageDataUrls.size * IMAGE_TOKEN_ESTIMATE
     return textTokens + imageTokens
 }
 
@@ -78,7 +82,7 @@ object ChatRequestBuilder {
 
         val userMsg = JSONObject()
         userMsg.put("role", "user")
-        if (request.imageDataUrl == null) {
+        if (request.imageDataUrls.isEmpty()) {
             userMsg.put("content", request.userText)
         } else {
             val content = JSONArray()
@@ -87,12 +91,15 @@ object ChatRequestBuilder {
             textPart.put("text", request.userText)
             content.put(textPart)
 
-            val imagePart = JSONObject()
-            imagePart.put("type", "image_url")
-            val imageUrl = JSONObject()
-            imageUrl.put("url", request.imageDataUrl)
-            imagePart.put("image_url", imageUrl)
-            content.put(imagePart)
+            // v1.6.1 多图：逐张追加 image_url part（顺序与选图一致）
+            for (dataUrl in request.imageDataUrls) {
+                val imagePart = JSONObject()
+                imagePart.put("type", "image_url")
+                val imageUrl = JSONObject()
+                imageUrl.put("url", dataUrl)
+                imagePart.put("image_url", imageUrl)
+                content.put(imagePart)
+            }
 
             userMsg.put("content", content)
         }

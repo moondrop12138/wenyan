@@ -20,10 +20,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
@@ -47,9 +49,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -94,7 +98,7 @@ fun ChatScreen(
     val streamingText by vm.streamingText.collectAsState()
     val streamingThinking by vm.streamingThinking.collectAsState()
     val input by vm.input.collectAsState()
-    val pendingImage by vm.pendingImage.collectAsState()
+    val pendingImages by vm.pendingImages.collectAsState()
     val lastError by vm.lastError.collectAsState()
     val transcription by vm.transcription.collectAsState()
     val modelName by vm.currentModelName.collectAsState()
@@ -113,6 +117,9 @@ fun ChatScreen(
     var menuOffset by remember { mutableStateOf(Offset.Zero) }
     var confirmDeleteFor by remember { mutableStateOf<ChatMessageUi?>(null) }
     var confirmDeleteSession by remember { mutableStateOf<SessionSummaryUi?>(null) }
+    // v1.6.1 文本选择模式：长按菜单"选择文字"进入——气泡文字变为可选中（SelectionContainer），
+    // 用户长按文字拖选部分复制；点空白处（Box tap）或滚动列表退出
+    var textSelectForId by remember { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val models by container.settingsRepository.models.collectAsState(initial = emptyList())
@@ -128,6 +135,12 @@ fun ChatScreen(
     fun openMessageMenu(msg: ChatMessageUi, offset: Offset) {
         menuFor = msg
         menuOffset = offset
+    }
+
+    // v1.6.1 滚动列表时退出选择模式（用户已转移注意力）
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { scrolling -> if (scrolling) textSelectForId = null }
     }
 
     ModalNavigationDrawer(
@@ -167,24 +180,34 @@ fun ChatScreen(
             ChatInputBar(
                 input = input,
                 streaming = streaming,
-                pendingImage = pendingImage,
+                pendingImages = pendingImages,
                 onInputChange = vm::onInputChange,
                 // v1.3.1 统一发送入口：有图 → 图文同发/纯图，无图 → 纯文本
                 onSend = vm::sendPending,
                 onStop = vm::stop,
                 onPasteText = { vm.onInputChange(it) },
-                onPendingImagePicked = vm::setPendingImage,
-                onRemovePendingImage = vm::dismissPendingImage,
+                onPendingImagesPicked = vm::addPendingImages,
+                onRemovePendingImage = vm::removePendingImage,
             )
         },
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
+        // v1.6.1 选择模式激活时，点列表任意空白处退出（tap 与长按拖选手势不冲突）
+        Box(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .pointerInput(textSelectForId) {
+                    if (textSelectForId != null) {
+                        detectTapGestures(onTap = { textSelectForId = null })
+                    }
+                },
+        ) {
             if (messages.isEmpty() && !streaming && transcription == null && lastError == null) {
                 ChatEmptyState(
                     onExampleClick = vm::onInputChange,
                     onPasteText = vm::onInputChange,
-                    // v1.3.1 统一走待发送预览流程（选完照片停到输入框上方，不直接发）
-                    onImagePicked = vm::setPendingImage,
+                    // v1.3.1 统一走待发送预览流程（v1.6.1 多图，选完照片停到输入框上方，不直接发）
+                    onImagesPicked = vm::addPendingImages,
                 )
             } else {
                 LazyColumn(
@@ -225,20 +248,30 @@ fun ChatScreen(
                             MessageType.FREETEXT -> {
                                 // v1.3.1 freetext 融合：话术段提升为上方可复制话术卡，下方正文气泡；
                                 // 无话术段退化为纯文本气泡
-                                val split = remember(msg.id) { FreetextSplitter.split(msg.content) }
-                                if (split.reply.isBlank()) {
-                                    MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                if (textSelectForId == msg.id) {
+                                    // v1.6.1 选择模式：整条原文（含话术段）可拖选部分复制
+                                    SelectableMessageContent(msg)
                                 } else {
-                                    FreetextBubble(
-                                        msg,
-                                        split,
-                                        onCopyReply = ::copy,
-                                        onLongClick = { offset -> openMessageMenu(msg, offset) },
-                                    )
+                                    val split = remember(msg.id) { FreetextSplitter.split(msg.content) }
+                                    if (split.reply.isBlank()) {
+                                        MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                    } else {
+                                        FreetextBubble(
+                                            msg,
+                                            split,
+                                            onCopyReply = ::copy,
+                                            onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                        )
+                                    }
                                 }
                             }
                             MessageType.TEXT, MessageType.TRANSCRIPTION ->
-                                MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                if (textSelectForId == msg.id) {
+                                    // v1.6.1 选择模式：长按文字拖选手柄部分复制
+                                    SelectableMessageContent(msg)
+                                } else {
+                                    MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                }
                         }
                     }
                     transcription?.let { t ->
@@ -353,6 +386,23 @@ fun ChatScreen(
                         menuFor = null
                     },
                 )
+                // v1.6.1 部分选取复制：进入文本选择模式，长按文字拖动手柄选取部分内容后复制
+                if (msg.type == MessageType.TEXT ||
+                    msg.type == MessageType.TRANSCRIPTION ||
+                    msg.type == MessageType.FREETEXT
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("选择文字") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.TextFields, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            textSelectForId = msg.id
+                            menuFor = null
+                            Toast.makeText(context, "长按消息文字拖动选取，点空白处完成", Toast.LENGTH_SHORT).show()
+                        },
+                    )
+                }
             }
             DropdownMenuItem(
                 text = { Text("删除") },

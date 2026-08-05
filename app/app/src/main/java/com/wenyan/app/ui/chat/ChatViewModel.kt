@@ -52,11 +52,11 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _currentSessionId = MutableStateFlow<Long?>(null)
     val currentSessionId: StateFlow<Long?> = _currentSessionId.asStateFlow()
 
-    /** v1.3.1 待发送图片：选图后暂存（输入框上方预览区），点发送才真正发出 */
-    private val _pendingImage = MutableStateFlow<Uri?>(null)
-    val pendingImage: StateFlow<Uri?> = _pendingImage.asStateFlow()
+    /** v1.3.1 待发送图片（v1.6.1 多图：最多 10 张，选图后暂存，点发送才真正发出） */
+    private val _pendingImages = MutableStateFlow<List<Uri>>(emptyList())
+    val pendingImages: StateFlow<List<Uri>> = _pendingImages.asStateFlow()
 
-    /** 最近一次发送（v1.3.1 携带可选图片 uri，供 retry 复用图文重试） */
+    /** 最近一次发送（v1.3.1 携带可选图片 uri；v1.6.1 多图列表，供 retry 复用图文重试） */
     private var lastSend: LastSend? = null
 
     init {
@@ -85,8 +85,8 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
                 // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
                 if (!st.streaming && st.error != null) {
                     val last = lastSend
-                    if (last?.uri != null && st.error.code in RESTORE_PENDING_CODES) {
-                        _pendingImage.value = last.uri
+                    if (last?.uris?.isNotEmpty() == true && st.error.code in RESTORE_PENDING_CODES) {
+                        _pendingImages.value = last.uris
                         _input.value = last.text
                     }
                 }
@@ -108,7 +108,7 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         //  - 用户自己的简短输入（提问/倾诉）→ REPLY 共情 + 话术
         //  - 纯打招呼 → GREETING 轻量开场
         val resolved = mode ?: routeByInputShape(text)
-        lastSend = LastSend(null, text, resolved)
+        lastSend = LastSend(emptyList(), text, resolved)
         _input.value = ""
         repo.sendTextAsync(text, resolved)
     }
@@ -147,12 +147,15 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         text.length <= 10 && GREETING_PATTERN.containsMatchIn(text)
 
     companion object {
-        /** v1.3.1 最近一次发送记录（retry 复用；uri 非空 = 图文/纯图发送） */
+        /** v1.3.1 最近一次发送记录（retry 复用；uris 非空 = 图文/纯图发送） */
         private data class LastSend(
-            val uri: Uri?,
+            val uris: List<Uri>,
             val text: String,
             val mode: AnalysisMode,
         )
+
+        /** v1.6.1 待发送图片上限：一次最多选 10 张 */
+        const val MAX_PENDING_IMAGES = 10
 
         /** v1.3.1 预落库错误码：图片尚未写入，失败后恢复待发送区供重试 */
         private val RESTORE_PENDING_CODES = setOf("READ_FAILED", "TOO_LARGE", "COMPRESS_FAILED")
@@ -169,35 +172,41 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         )
     }
 
-    /** v1.3.1 选图后暂存为待发送（输入框上方预览区展示）；流式期间也允许先暂存 */
-    fun setPendingImage(uri: Uri?) {
-        _pendingImage.value = uri
+    /**
+     * v1.6.1 选图后追加为待发送（多图合并：去重 + 上限 10 张；超出部分静默截断）。
+     * 流式期间也允许先暂存。
+     */
+    fun addPendingImages(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val merged = (_pendingImages.value + uris).distinct()
+        _pendingImages.value = merged.take(MAX_PENDING_IMAGES)
     }
 
-    fun dismissPendingImage() {
-        _pendingImage.value = null
+    /** v1.6.1 移除指定待发送图片（预览区缩略图右上角删除角标） */
+    fun removePendingImage(uri: Uri) {
+        _pendingImages.value = _pendingImages.value.filterNot { it == uri }
     }
 
     /**
-     * v1.3.1 统一发送入口（DeepSeek 风格）：
+     * v1.3.1 统一发送入口（DeepSeek 风格；v1.6.1 多图）：
      * - 有图 + 有字 → 图文同发（配文按输入形态路由 mode，空则纯图五步法）
      * - 有图无字 → 纯图分析；无图有字 → 走 sendText
      * 发送后清空待发送区与输入框。
      */
     fun sendPending() {
         if (_streaming.value) return
-        val uri = _pendingImage.value
+        val uris = _pendingImages.value
         val text = _input.value.trim()
-        if (uri == null && text.isEmpty()) return
-        if (uri == null) {
+        if (uris.isEmpty() && text.isEmpty()) return
+        if (uris.isEmpty()) {
             sendText()
             return
         }
         val resolved = if (text.isEmpty()) AnalysisMode.FIVE_STEP else routeByInputShape(text)
-        lastSend = LastSend(uri, text, resolved)
+        lastSend = LastSend(uris, text, resolved)
         _input.value = ""
-        _pendingImage.value = null
-        repo.analyzeImageAsync(uri, text, resolved)
+        _pendingImages.value = emptyList()
+        repo.analyzeImagesAsync(uris, text, resolved)
     }
 
     fun confirmTranscription(text: String) {
@@ -209,8 +218,8 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     fun retry() {
         val last = lastSend ?: return
         // v1.3.1 失败重试：persistUser=false——用户消息首次发送已落库，重试不再重复发一遍
-        if (last.uri != null) {
-            repo.analyzeImageAsync(last.uri, last.text, last.mode, persistUser = false)
+        if (last.uris.isNotEmpty()) {
+            repo.analyzeImagesAsync(last.uris, last.text, last.mode, persistUser = false)
         } else {
             repo.sendTextAsync(last.text, last.mode, persistUser = false)
         }
