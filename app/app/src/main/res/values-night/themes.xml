@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v1.6.3 系统深色下冷启动镜像主题：windowBackground 用暖黑 #17120E（DarkPalette.bg）避免白闪，
+         双栏透明；App 内深色由 DataStore 控制，本文件仅覆盖 SYSTEM 跟随场景 -->
+    <style name="Theme.Wenyan" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#17120E</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

@@ -5,7 +5,7 @@
     "register": "product",
     "platform": "android-compose",
     "axes": { "variance": 5, "motion": 4, "density": 3 },
-    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。v1.6.1 配色与启动图标（陶土棕气泡×米白底）对齐：墨绿×宣纸 → 陶土棕×暖米白。"
+    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。v1.6.1 配色与启动图标（陶土棕气泡×米白底）对齐：墨绿×宣纸 → 陶土棕×暖米白。v1.6.3 沉浸式手势小白条：系统状态栏/导航栏全透明露出 color.light.bg / color.dark.bg，手势条颜色由 Android 15 系统按背景亮度自动对比（浅底深灰条/深底浅条），无需新 Token。"
   },
 
   "color": {

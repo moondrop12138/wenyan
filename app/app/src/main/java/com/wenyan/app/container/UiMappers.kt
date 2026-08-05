@@ -30,6 +30,7 @@ object UiMappers {
         apiKeyConfigured = !e.apiKeyEncrypted.isNullOrBlank(),
         isPreset = e.isPreset,
         sortOrder = e.sortOrder,
+        connectionStatus = e.connectionStatus,
     )
 
     fun toModelInfo(m: ModelEntity, providerName: String): ModelInfo = ModelInfo(
@@ -40,6 +41,7 @@ object UiMappers {
         supportsVision = m.supportsVision,
         isDefault = m.isDefault,
         sortOrder = m.sortOrder,
+        showInSheet = m.showInSheet,
     )
 
     fun toChatMessage(e: MessageEntity): ChatMessageUi = ChatMessageUi(

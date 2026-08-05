@@ -98,6 +98,51 @@ class ProviderEditViewModelTest {
         assertEquals(listOf(Triple(1L, "gpt-fast", false)), repo.addedModels)
     }
 
+    // v1.6.3 保存后自动测试连接并写入红绿灯状态
+    @Test
+    fun `save tests connection and marks green when ok`() = runTest(dispatcher) {
+        val repo = FakeSettingsRepository()
+        val vm = ProviderEditViewModel(repo, providerId = 0L)
+        vm.privacyAck = true
+        vm.apiKey = "sk-ok"
+        var done = false
+
+        vm.save { done = true }
+        advanceUntilIdle()
+
+        assertEquals(1, repo.testConnectionCalls)
+        assertEquals(listOf(1L to true), repo.connectionStatusCalls)
+        assertTrue(done)
+    }
+
+    @Test
+    fun `save tests connection and marks red when failed`() = runTest(dispatcher) {
+        val repo = FakeSettingsRepository()
+        repo.testConnectionResult = LlmError("401", "invalid key", retryable = false)
+        val vm = ProviderEditViewModel(repo, providerId = 0L)
+        vm.privacyAck = true
+        vm.apiKey = "sk-bad"
+
+        vm.save {}
+        advanceUntilIdle()
+
+        assertEquals(listOf(1L to false), repo.connectionStatusCalls)
+    }
+
+    @Test
+    fun `save without api key marks red and skips test`() = runTest(dispatcher) {
+        val repo = FakeSettingsRepository()
+        val vm = ProviderEditViewModel(repo, providerId = 0L)
+        vm.privacyAck = true
+        vm.apiKey = "" // 未填 Key：直接红灯，不发起测试
+
+        vm.save {}
+        advanceUntilIdle()
+
+        assertEquals(0, repo.testConnectionCalls)
+        assertEquals(listOf(1L to false), repo.connectionStatusCalls)
+    }
+
     /** 轻量内存版 SettingsRepository（仅测试 ProviderEditViewModel 所需行为） */
     private class FakeSettingsRepository : SettingsRepository {
         override val providers = MutableStateFlow<List<ProviderInfo>>(emptyList())
@@ -109,11 +154,17 @@ class ProviderEditViewModelTest {
 
         val addedModels = mutableListOf<Triple<Long, String, Boolean>>()
         var privacyAckValue = false
+        var testConnectionCalls = 0
+        var testConnectionResult: LlmError? = null
+        val connectionStatusCalls = mutableListOf<Pair<Long, Boolean>>()
 
         override suspend fun setCurrentModel(id: Long) = Unit
         override suspend fun setVisionModel(id: Long) = Unit
         override suspend fun setThemeMode(mode: String) = Unit
-        override suspend fun testConnection(providerId: Long): LlmError? = null
+        override suspend fun testConnection(providerId: Long): LlmError? {
+            testConnectionCalls++
+            return testConnectionResult
+        }
         override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long = 1L
         override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) = Unit
         override suspend fun deleteProvider(id: Long) = Unit
@@ -121,8 +172,11 @@ class ProviderEditViewModelTest {
             addedModels.add(Triple(providerId, name, supportsVision))
         }
         override suspend fun deleteModel(id: Long) = Unit
-        override suspend fun toggleDefaultModel(id: Long) = Unit
+        override suspend fun toggleSheetVisible(id: Long) = Unit
         override suspend fun setVisionFlag(id: Long, supportsVision: Boolean) = Unit
+        override suspend fun markConnectionStatus(providerId: Long, ok: Boolean) {
+            connectionStatusCalls.add(providerId to ok)
+        }
         override suspend fun wipeAll() = Unit
         override suspend fun setPrivacyAck(ack: Boolean) {
             privacyAckValue = ack

@@ -87,6 +87,7 @@ class ProviderRepository(
             name = name,
             supportsVision = supportsVision,
             isDefault = isDefault,
+            showInSheet = true, // v1.6.3 手动新增模型默认在主页弹层展示
             sortOrder = sortOrder,
         )
     )
@@ -94,6 +95,12 @@ class ProviderRepository(
     suspend fun updateModel(entity: ModelEntity) = modelDao.update(entity)
 
     suspend fun deleteModel(id: Long) = modelDao.deleteById(id)
+
+    /** v1.6.3 写入连接测试结果：ok=true → "ok"（绿灯），否则 ""（红灯/未测） */
+    suspend fun updateConnectionStatus(providerId: Long, ok: Boolean) {
+        val current = providerDao.getById(providerId) ?: return
+        providerDao.update(current.copy(connectionStatus = if (ok) "ok" else ""))
+    }
 
     suspend fun clearAll() {
         providerDao.clear()

@@ -1,7 +1,9 @@
 package com.wenyan.app.ui.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -28,8 +31,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -148,7 +149,13 @@ fun ProviderEditScreen(
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("模型管理", style = GtjType.Label, color = p.muted)
                     vm.models.forEach { model ->
-                        ModelManageRow(model = model, onVisionChange = { vm.setVision(model.id, it) }, onToggleDefault = { vm.toggleDefault(model.id) }, onDelete = { vm.deleteModel(model.id) })
+                        ModelManageRow(
+                            model = model,
+                            connected = vm.connectionStatus == "ok",
+                            onSheetVisibleChange = { vm.toggleSheetVisible(model.id) },
+                            onVisionChange = { vm.setVision(model.id, it) },
+                            onDelete = { vm.deleteModel(model.id) },
+                        )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -259,19 +266,34 @@ private fun EditField(
 @Composable
 private fun ModelManageRow(
     model: ModelInfo,
+    connected: Boolean,
+    onSheetVisibleChange: () -> Unit,
     onVisionChange: (Boolean) -> Unit,
-    onToggleDefault: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val p = LocalGtjColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        RadioButton(
-            selected = model.isDefault,
-            onClick = onToggleDefault,
-            // 无障碍：RadioButton 无相邻文本语义，显式关联模型名；再点可取消默认（v1.3.1）
-            modifier = Modifier.semantics { contentDescription = "默认模型：${model.name}，点击切换" },
-            colors = RadioButtonDefaults.colors(selectedColor = p.accent, unselectedColor = p.meta),
+        // v1.6.3 可见性开关（替代原"设为默认"单选）：控制是否在主页"选择模型"弹层展示
+        Switch(
+            checked = model.showInSheet,
+            onCheckedChange = { onSheetVisibleChange() },
+            // 无障碍：Switch 显式关联 label
+            modifier = Modifier.semantics { contentDescription = "在主页模型选择中显示：${model.name}" },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = p.accentOn,
+                checkedTrackColor = p.accent,
+                uncheckedTrackColor = p.borderSoft,
+            ),
         )
+        Spacer(Modifier.width(6.dp))
+        // v1.6.3 红绿灯（2D 平面圆点）：厂商连接成功亮绿灯，未测/失败亮红灯（保存提供商后自动测试）
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(if (connected) p.success else p.danger, CircleShape)
+                .semantics { contentDescription = if (connected) "${model.name} 已连接" else "${model.name} 未连接" },
+        )
+        Spacer(Modifier.width(8.dp))
         Text(model.name, style = GtjType.Body, color = p.fg, modifier = Modifier.weight(1f))
         Text("视觉", style = GtjType.Caption, color = p.muted)
         Switch(

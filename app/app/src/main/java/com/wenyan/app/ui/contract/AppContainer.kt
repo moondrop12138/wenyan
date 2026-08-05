@@ -24,9 +24,14 @@ interface SettingsRepository {
     suspend fun deleteProvider(id: Long)
     suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean)
     suspend fun deleteModel(id: Long)
-    /** 切换默认模型：已默认则取消，未默认则置为该提供商唯一默认 */
-    suspend fun toggleDefaultModel(id: Long)
+    /**
+     * v1.6.3 切换模型在主页"选择模型"弹层的可见性（替代原"设为默认"单选）：
+     * 模型管理里每个模型名前的开关控制是否展示
+     */
+    suspend fun toggleSheetVisible(id: Long)
     suspend fun setVisionFlag(id: Long, supportsVision: Boolean)
+    /** v1.6.3 写入连接测试结果：保存提供商后自动测试，ok=true 绿灯 / false 红灯 */
+    suspend fun markConnectionStatus(providerId: Long, ok: Boolean)
 
     /** 一键清除全部档案（Key/档案/会话，AC-12） */
     suspend fun wipeAll()

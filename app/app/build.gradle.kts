@@ -48,8 +48,10 @@ android {
         // v1.6.1+ 长按菜单"选择文字"：部分选取复制（SelectionContainer 可选中模式，点空白/滚动退出）
         // v1.6.2 "部分选择"完善：点菜单立即全选出选区（readOnly TextField 替代 SelectionContainer，微信式拖手柄）/
         //  模型回复（分析卡）也可部分选择（四段拼接文本，含默认风格话术）/ 菜单项去图标并改名"部分选择"
-        versionCode = 13
-        versionName = "1.6.2"
+        // v1.6.3 沉浸式手势小白条：enableEdgeToEdge 双 scrim 全透明（去导航栏白条）/ 系统栏外观跟随 App 主题三态 /
+        //  themes.xml 导航栏透明 + values-night 镜像防冷启动白闪 / API 26-28 navBar 用背景色顶替
+        versionCode = 14
+        versionName = "1.6.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

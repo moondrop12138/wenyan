@@ -37,6 +37,9 @@ class ProviderEditViewModel(
     var newModelName by mutableStateOf("")
     var newModelVision by mutableStateOf(false)
 
+    /** v1.6.3 提供商连接状态（红绿灯）："ok"=绿灯，""=未测试/失败红灯 */
+    var connectionStatus by mutableStateOf("")
+
     var testing by mutableStateOf(false)
     var testResult by mutableStateOf<TestResult?>(null)
     var saving by mutableStateOf(false)
@@ -67,6 +70,7 @@ class ProviderEditViewModel(
                     providers.firstOrNull { it.id == providerId }?.let { p ->
                         name = p.name
                         baseUrl = p.baseUrl
+                        connectionStatus = p.connectionStatus // v1.6.3 红绿灯
                     }
                 }
             }
@@ -188,9 +192,9 @@ class ProviderEditViewModel(
         viewModelScope.launch { repo.setVisionFlag(id, supportsVision) }
     }
 
-    /** 切换默认模型（再点已选中的可取消，v1.3.1） */
-    fun toggleDefault(id: Long) {
-        viewModelScope.launch { repo.toggleDefaultModel(id) }
+    /** v1.6.3 切换模型在主页"选择模型"弹层的可见性（替代原"设为默认"单选） */
+    fun toggleSheetVisible(id: Long) {
+        viewModelScope.launch { repo.toggleSheetVisible(id) }
     }
 
     fun requestDelete() {
@@ -215,10 +219,18 @@ class ProviderEditViewModel(
         if (saving) return
         saving = true
         viewModelScope.launch {
-            if (isNew) {
+            val id = if (isNew) {
                 repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
             } else {
                 repo.updateProvider(providerId, name, baseUrl, apiKey.ifBlank { null })
+                providerId
+            }
+            // v1.6.3 保存后立即测试连接并写入红绿灯状态：成功绿灯，失败/未填 Key 红灯
+            if (apiKey.isBlank()) {
+                repo.markConnectionStatus(id, ok = false)
+            } else {
+                val err = repo.testConnection(id)
+                repo.markConnectionStatus(id, ok = err == null)
             }
             saving = false
             onDone()
