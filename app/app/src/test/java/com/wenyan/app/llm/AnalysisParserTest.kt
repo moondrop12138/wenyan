@@ -82,24 +82,154 @@ class AnalysisParserTest {
     @Test
     fun `input_kind relayed_quote parsed`() {
         val json = """{"steps":[],"reply":"尊重她的边界","citations":[],"input_kind":"relayed_quote"}"""
-        assertEquals(FiveStepAnalysis.InputKind.RELAYED_QUOTE, AnalysisParser.parse(json).inputKind)
+        assertEquals(InputKind.RELAYED_QUOTE, AnalysisParser.parse(json).inputKind)
     }
 
     @Test
     fun `input_kind uncertain parsed`() {
         val json = """{"steps":[],"reply":"我先确认下——这是她对你说的，对吧？","citations":[],"input_kind":"uncertain"}"""
-        assertEquals(FiveStepAnalysis.InputKind.UNCERTAIN, AnalysisParser.parse(json).inputKind)
+        assertEquals(InputKind.UNCERTAIN, AnalysisParser.parse(json).inputKind)
     }
 
     @Test
     fun `input_kind missing falls back to UNKNOWN`() {
         // 旧模型无此字段 → UNKNOWN，不崩
-        assertEquals(FiveStepAnalysis.InputKind.UNKNOWN, AnalysisParser.parse(validJson).inputKind)
+        assertEquals(InputKind.UNKNOWN, AnalysisParser.parse(validJson).inputKind)
     }
 
     @Test
     fun `input_kind invalid value falls back to UNKNOWN`() {
         val json = """{"steps":[],"reply":"","citations":[],"input_kind":"bogus"}"""
-        assertEquals(FiveStepAnalysis.InputKind.UNKNOWN, AnalysisParser.parse(json).inputKind)
+        assertEquals(InputKind.UNKNOWN, AnalysisParser.parse(json).inputKind)
+    }
+
+    // ===== v1.6 四段结构（schema v2 / parseAny） =====
+
+    private val v2Json = """
+        {
+          "input_kind": "pasted_chat",
+          "empathy": "这件事确实让人心里发堵",
+          "reply": "今天先忙自己的事，明天再回她",
+          "reply_timing": "今晚别发，明早回",
+          "facts": {
+            "known": ["她连续三天主动找话题", "上周约了一次线下"],
+            "assumed": ["她可能对你有好感", "冷淡可能只是忙"],
+            "unknown": ["她现在的真实想法", "是否有其他人选"]
+          },
+          "advice": {
+            "tag": "常规主动",
+            "core": "保持低强度主动，先不追问",
+            "reasons": ["持续主动是真实信号", "追问会显得有压迫感"],
+            "styles": [
+              {"key": "steady", "label": "稳健", "text": "明天下午问一句周末有空吗"},
+              {"key": "charming", "label": "会撩", "text": "周末有个展，想拉个人一起"},
+              {"key": "assertive", "label": "强势", "text": "直接约，行就约不行就撤"}
+            ]
+          },
+          "actions": [
+            {"label": "小动作", "text": "今晚8点前不发消息"},
+            {"label": "观察窗口", "text": "观察3天她是否主动"}
+          ],
+          "citations": ["实战话术编排器：从一句回复到后续分支.md"],
+          "safety_override": false,
+          "safety_message": "",
+          "token_estimate": 1500
+        }
+    """.trimIndent()
+
+    @Test
+    fun `parseAny v2 json full fields`() {
+        val c = AnalysisParser.parseAny(v2Json)
+        assertEquals(InputKind.PASTED_CHAT, c.inputKind)
+        assertEquals("这件事确实让人心里发堵", c.empathy)
+        assertEquals("今天先忙自己的事，明天再回她", c.reply)
+        assertEquals("今晚别发，明早回", c.replyTiming)
+        assertEquals(listOf("她连续三天主动找话题", "上周约了一次线下"), c.facts.known)
+        assertEquals(2, c.facts.assumed.size)
+        assertEquals(2, c.facts.unknown.size)
+        assertEquals("常规主动", c.advice.tag)
+        assertEquals("保持低强度主动，先不追问", c.advice.core)
+        assertEquals(2, c.advice.reasons.size)
+        assertEquals(3, c.advice.styles.size)
+        assertEquals("steady", c.advice.styles[0].key)
+        assertEquals("会撩", c.advice.styles[1].label)
+        assertEquals(2, c.actions.size)
+        assertEquals("小动作", c.actions[0].label)
+        assertEquals("观察窗口", c.actions[1].label)
+        assertEquals(1, c.citations.size)
+        assertFalse(c.safetyOverride)
+        assertEquals(1500, c.tokenEstimate)
+    }
+
+    @Test
+    fun `parseAny legacy json maps into v2 structure`() {
+        val c = AnalysisParser.parseAny(validJson)
+        // emotion.content → empathy
+        assertEquals("你感到失落", c.empathy)
+        // facts.items → known
+        assertEquals(listOf("已知事实1", "推测2"), c.facts.known)
+        assertTrue(c.facts.assumed.isEmpty())
+        assertTrue(c.facts.unknown.isEmpty())
+        // advice.content → core
+        assertEquals("首选建议", c.advice.core)
+        assertTrue(c.advice.tag.isEmpty())
+        // reply → 单条稳健风格
+        assertEquals(1, c.advice.styles.size)
+        assertEquals("稳健", c.advice.styles[0].label)
+        assertEquals("可以直接发的话术", c.reply)
+        // action 段 content 非 items → actions 为空
+        assertTrue(c.actions.isEmpty())
+        assertEquals("今晚发送", c.replyTiming)
+    }
+
+    @Test
+    fun `parseAny with fence strips it`() {
+        val c = AnalysisParser.parseAny("```json\n$v2Json\n```")
+        assertEquals(3, c.advice.styles.size)
+    }
+
+    @Test
+    fun `parseV2 uncertain question`() {
+        val json = """{
+          "input_kind": "uncertain",
+          "empathy": "这里我拿不准一个关键信息",
+          "reply": "我先确认下——这是她对你说的，对吧？",
+          "facts": {"known": [], "assumed": [], "unknown": []},
+          "advice": {"tag": "", "core": "先确认再判断", "reasons": [], "styles": []},
+          "actions": [],
+          "citations": [],
+          "safety_override": false,
+          "safety_message": "",
+          "token_estimate": 400
+        }"""
+        val c = AnalysisParser.parseV2(json)
+        assertEquals(InputKind.UNCERTAIN, c.inputKind)
+        assertTrue(c.advice.styles.isEmpty())
+        assertTrue(c.actions.isEmpty())
+    }
+
+    @Test
+    fun `parseV2 invalid json throws`() {
+        org.junit.Assert.assertThrows(AnalysisParser.AnalysisParseException::class.java) {
+            AnalysisParser.parseV2("not-json")
+        }
+    }
+
+    @Test
+    fun `parseAny invalid json throws`() {
+        org.junit.Assert.assertThrows(AnalysisParser.AnalysisParseException::class.java) {
+            AnalysisParser.parseAny("not-json")
+        }
+    }
+
+    @Test
+    fun `parseAny missing fields default safely`() {
+        val c = AnalysisParser.parseAny("""{"input_kind":"greeting"}""")
+        assertEquals(InputKind.GREETING, c.inputKind)
+        assertTrue(c.empathy.isEmpty())
+        assertTrue(c.facts.known.isEmpty())
+        assertTrue(c.advice.styles.isEmpty())
+        assertTrue(c.actions.isEmpty())
+        assertNull(c.tokenEstimate)
     }
 }

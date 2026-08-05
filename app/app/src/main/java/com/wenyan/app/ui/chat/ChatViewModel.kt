@@ -3,7 +3,6 @@ package com.wenyan.app.ui.chat
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.wenyan.app.ui.contract.AnalysisCard
 import com.wenyan.app.ui.contract.AnalysisMode
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.ChatRepository
@@ -102,8 +101,9 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     fun sendText(mode: AnalysisMode? = null) {
         val text = _input.value.trim()
         if (text.isEmpty() || _streaming.value) return
-        // 启发式路由：调用方未显式指定时，按输入形态判断（v1.2 四分）
-        //  - 完整聊天记录粘贴（多行/引号/超 40 字）→ FIVE_STEP 五步法
+        // 启发式路由：调用方未显式指定时，按输入形态判断（v1.2 四分；v1.6 起仅决定 user 模板，
+        // 输出统一四段结构）——完整聊天记录粘贴 → buildUserText；短句 → buildUserReply（轻量四段）
+        //  - 完整聊天记录粘贴（多行/引号/超 40 字）→ FIVE_STEP 全量分析
         //  - 转述对方的话（"她说我们只是朋友"）→ RELAYED 先解读对方意图
         //  - 用户自己的简短输入（提问/倾诉）→ REPLY 共情 + 话术
         //  - 纯打招呼 → GREETING 轻量开场

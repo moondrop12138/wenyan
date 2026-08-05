@@ -21,9 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,13 +41,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 左滑抽屉 - 历史会话列表（DeepSeek 客户端风格）：
- * - 顶部"新会话"按钮（accent 实心）
- * - 中部会话列表（标题 = 首条用户消息，副标题 = 创建时间），当前会话 accentSoft 高亮
+ * 左滑抽屉 - 历史会话列表（v1.5 WY-04，Arc/Things 温暖质感）：
+ * - 头部：产品名"温言"+ 副标题"恋爱决策支持"
+ * - "新建会话"陶土棕胶囊按钮
+ * - 会话列表（标题 + 首条消息预览），当前会话 8% 陶土棕底高亮
  * - 长按会话条目 → 删除（由上层弹确认）
- * - 点会话条目 → 切换并关抽屉
  *
- * 由 ChatScreen 用 ModalNavigationDrawer 承载。
+ * 由 ChatScreen 用 ModalNavigationDrawer 承载；面板宽度 312，右侧圆角 24。
  */
 @Composable
 fun SessionDrawerContent(
@@ -62,21 +62,19 @@ fun SessionDrawerContent(
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(300.dp)
+            .width(312.dp)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        // 顶部：标题 + 新建按钮
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            Text("聊天记录", style = GtjType.Title, color = p.fg, modifier = Modifier.weight(1f))
+        // v1.5 头部：产品名 + 副标题（设计稿 WY-04）
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text("温言", style = GtjType.Title, color = p.fg)
+            Spacer(Modifier.height(2.dp))
+            Text("恋爱决策支持", style = GtjType.Caption, color = p.meta)
         }
+        // 新建会话：陶土棕胶囊（设计稿 280×44 r22）
         Surface(
             onClick = onNewSession,
-            shape = GtjShape.md,
+            shape = RoundedCornerShape(22.dp),
             color = p.accent,
             modifier = Modifier
                 .fillMaxWidth()
@@ -97,7 +95,15 @@ fun SessionDrawerContent(
                 Text("新建会话", style = GtjType.Subtitle, color = p.accentOn)
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
+        // 会话列表标题
+        Text(
+            "最近会话",
+            style = GtjType.Caption,
+            color = p.muted,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        Spacer(Modifier.height(8.dp))
 
         if (sessions.isEmpty()) {
             Box(
@@ -142,36 +148,32 @@ private fun SessionItem(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        shape = GtjShape.sm,
-        color = if (isCurrent) p.accentSoft else p.surface,
-        border = if (isCurrent) BorderStroke(1.dp, p.accent.copy(alpha = 0.4f)) else null,
+        shape = GtjShape.md,
+        color = if (isCurrent) p.accentSoft else p.surfaceElevated,
+        border = if (isCurrent) BorderStroke(1.dp, p.accent.copy(alpha = 0.35f)) else BorderStroke(1.dp, p.borderSoft),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        // v1.5：标题 + 首条消息预览（设计稿 WY-04 会话项）
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            Icon(
-                imageVector = Icons.Outlined.ChatBubbleOutline,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = if (isCurrent) p.accent else p.muted,
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = session.title,
-                    style = GtjType.BodySm,
-                    color = if (isCurrent) p.accent else p.fg,
+                    style = GtjType.BodySm.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    color = p.fg,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = formatSessionTime(session.createdAt),
-                    style = GtjType.Caption,
-                    color = p.muted,
+                    modifier = Modifier.weight(1f),
                 )
             }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = formatSessionTime(session.createdAt),
+                style = GtjType.Caption,
+                color = p.meta,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

@@ -13,16 +13,17 @@ import androidx.compose.ui.unit.sp
  * caption→labelMedium。mono 供 API Key / Base URL 等固定宽度场景。
  */
 object GtjType {
+    /** v1.4：标题字重 600→500，高级感来自克制而非粗重；Display 字距收紧至 -0.8 */
     val Display = TextStyle(
-        fontSize = 32.sp, fontWeight = FontWeight.SemiBold,
-        lineHeight = 40.sp, letterSpacing = (-0.5).sp,
+        fontSize = 32.sp, fontWeight = FontWeight.Medium,
+        lineHeight = 40.sp, letterSpacing = (-0.8).sp,
     )
     val Headline = TextStyle(
-        fontSize = 24.sp, fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp, fontWeight = FontWeight.Medium,
         lineHeight = 32.sp, letterSpacing = 0.sp,
     )
     val Title = TextStyle(
-        fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp, fontWeight = FontWeight.Medium,
         lineHeight = 28.sp, letterSpacing = 0.sp,
     )
     val Subtitle = TextStyle(

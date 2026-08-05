@@ -7,14 +7,14 @@ import androidx.compose.ui.unit.dp
 
 /**
  * 圆角体系唯一来源：docs/design-tokens.json radius。
- * 四级体系 + pill：sm=8 / md=12 / lg=16 / xl=24 / pill=圆形。
+ * 四级体系 + pill：sm=8 / md=12 / lg=16 / xl=18（v1.4 由 24 收至 18，更内敛） / pill=圆形。
  */
 object GtjShape {
     /** 半径数值（供组合圆角时取用，如气泡小圆角） */
     val smRadius = 8.dp
     val mdRadius = 12.dp
     val lgRadius = 16.dp
-    val xlRadius = 24.dp
+    val xlRadius = 18.dp
 
     val sm = RoundedCornerShape(smRadius)
     val md = RoundedCornerShape(mdRadius)

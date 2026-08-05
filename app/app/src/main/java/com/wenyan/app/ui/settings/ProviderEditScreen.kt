@@ -158,7 +158,7 @@ fun ProviderEditScreen(
                             placeholder = { Text("添加模型名", style = GtjType.BodySm, color = p.meta) },
                             textStyle = GtjType.Mono,
                             singleLine = true,
-                            shape = GtjShape.sm,
+                            shape = GtjShape.md,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = p.accent,
                                 unfocusedBorderColor = p.border,
@@ -245,7 +245,7 @@ private fun EditField(
         singleLine = true,
         visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = { trailing?.invoke() },
-        shape = GtjShape.sm,
+        shape = GtjShape.md,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = p.accent,
             unfocusedBorderColor = p.border,

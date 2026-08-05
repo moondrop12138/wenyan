@@ -28,7 +28,8 @@ import com.wenyan.app.ui.theme.LocalGtjColors
 
 /**
  * Chip 体系（design-tokens.json component.chip）。
- * 高度 36dp、pill 圆角；选中态 accentSoft 底 + accent 边 + accent 字（双通道：文字+色）。
+ * 高度 40dp、pill 圆角；选中态 v1.5：accent 实底 + accentOn 字（设计稿 WY-09 标签云）；
+ * 未选中 surfaceElevated 底 + borderSoft 边 + fg 字。双通道：文字+色。
  */
 @Composable
 fun GtjChip(
@@ -43,17 +44,17 @@ fun GtjChip(
         onClick = onClick,
         // 无障碍：单选 chips 组以 RadioButton 语义播报（选中态双通道：视觉 accent + 语义 selected）
         modifier = modifier
-            .heightIn(min = 36.dp)
+            .heightIn(min = 40.dp)
             .semantics {
                 role = Role.RadioButton
                 this.selected = selected
             },
         shape = RoundedCornerShape(9999.dp),
-        color = if (selected) p.accentSoft else p.surface,
-        contentColor = if (selected) p.accent else p.fg,
+        color = if (selected) p.accent else p.surfaceElevated,
+        contentColor = if (selected) p.accentOn else p.fg,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (selected) p.accent else p.border,
+            if (selected) p.accent else p.borderSoft,
         ),
     ) {
         Row(

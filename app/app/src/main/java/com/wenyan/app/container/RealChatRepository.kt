@@ -15,9 +15,9 @@ import com.wenyan.app.knowledge.KnowledgeEngine
 import com.wenyan.app.llm.AnalysisParser
 import com.wenyan.app.llm.ChatHistoryMessage
 import com.wenyan.app.llm.ChatRequest
+import com.wenyan.app.llm.CoachAnalysis
 import com.wenyan.app.llm.LlmClient
 import com.wenyan.app.llm.LlmEvent
-import com.wenyan.app.llm.ResponseMode
 import com.wenyan.app.prompt.PromptBuilder
 import com.wenyan.app.ui.contract.AnalysisMode
 import com.wenyan.app.ui.contract.ChatMessageUi
@@ -130,7 +130,7 @@ class RealChatRepository(
         // AC-13：危机关键词本地预检，命中即转介，不调 LLM
         val crisis = CrisisDetector.detect(text)
         if (crisis.isNotEmpty()) {
-            emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(parseSafety(crisis.first()))))
+            emit(StreamEvent.Analysis(UiMappers.toCoachCard(parseSafety(crisis.first()))))
             emit(StreamEvent.Done)
             return@flow
         }
@@ -140,37 +140,27 @@ class RealChatRepository(
             conversationRepository.addMessage(sid, "USER", "text", text)
         }
 
-        // v1.3 混合渲染：粘贴聊天记录走五步法 JSON 卡片；
-        // 简短输入（提问/转述/打招呼）走 freetext 自由文本，直出自然中文，skill 体感。
-        val responseMode = when (mode) {
-            AnalysisMode.FIVE_STEP -> ResponseMode.STRUCTURED
-            AnalysisMode.REPLY, AnalysisMode.RELAYED, AnalysisMode.GREETING -> ResponseMode.FREETEXT
-        }
+        // v1.6 全部输入统一四段结构 JSON（无 freetext 分支）
 
-        // v1.3 对话状态机：简短输入时驱动同题判定与状态前缀注入
-        val trackerEnabled = responseMode == ResponseMode.FREETEXT
-        val previousState = if (trackerEnabled) {
-            ConversationState.fromJson(conversationRepository.getSessionState(sid))
-        } else {
-            ConversationState.EMPTY
-        }
+        // v1.6 对话状态机全模式常开：同题判定与状态前缀对所有输入生效
+        val previousState = ConversationState.fromJson(conversationRepository.getSessionState(sid))
         // 新话题信号：本地判定与进行中话题不延续（如粘贴完整聊天记录换题）
-        val wasNewTopic = trackerEnabled && previousState.hasActiveTopic &&
+        val wasNewTopic = previousState.hasActiveTopic &&
             !stateTracker.isSameTopic(previousState, text)
         // v1.3.1 重试（persistUser=false）不重复推进状态机，state 保持当前值，prompt 注入一致
-        val state = if (trackerEnabled && persistUser) {
+        val state = if (persistUser) {
             stateTracker.onUserInput(previousState, text).also {
                 conversationRepository.updateSessionState(sid, it.toJson())
             }
         } else {
             previousState
         }
-        val statePrefix = if (trackerEnabled) stateTracker.buildStatePrefix(state) else ""
+        val statePrefix = stateTracker.buildStatePrefix(state)
 
         val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
         val profile = profileRepository.getProfile()
         val target = profileRepository.getTarget()
-        val system = promptBuilder.buildSystem(profile, target, knowledge, responseMode)
+        val system = promptBuilder.buildSystem(profile, target, knowledge)
         val history = buildHistory(sid, text)
         val user = when (mode) {
             AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
@@ -182,7 +172,7 @@ class RealChatRepository(
                 val recentContext = history.takeLast(6)
                     .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
                     .takeIf { it.isNotBlank() }
-                promptBuilder.buildUserReply(text, recentContext, responseMode, statePrefix)
+                promptBuilder.buildUserReply(text, recentContext, statePrefix)
             }
         }
 
@@ -192,43 +182,34 @@ class RealChatRepository(
         }
 
         client.client.stream(
-            ChatRequest(client.model, system, user, history = history, responseMode = responseMode),
+            ChatRequest(client.model, system, user, history = history),
         ).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
-                    if (responseMode == ResponseMode.FREETEXT) {
-                        // freetext：原文直存直渲，不走 JSON 解析
-                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        // v1.2.1：首轮回复完成后异步拟题（独立 scope 不阻塞流）
-                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = false) }
-                        // 状态落地：记录本轮结论摘要与话术痕迹，供下轮查重
-                        if (trackerEnabled) {
-                            val newState = stateTracker.onModelReply(
-                                state = state,
-                                topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
-                                    summarizeTopic(text, event.fullText)
-                                } else {
-                                    state.topicSummary
-                                },
-                                conclusion = summarizeConclusion(event.fullText),
-                                reply = extractReplySection(event.fullText),
-                            )
-                            conversationRepository.updateSessionState(sid, newState.toJson())
-                        }
-                        emit(StreamEvent.FreeTextDone)
-                    } else {
-                        val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
-                        if (analysis != null) {
-                            conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                            // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
-                            titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
-                            val card = UiMappers.toAnalysisCard(analysis)
-                            emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
-                        }
-                        emit(StreamEvent.Done)
+                    // v1.6 统一结构化落库：解析失败不落库（Room 无脏数据），流结束置 Done
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
+                    if (analysis != null) {
+                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
+                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        // v1.6 状态回填走卡片字段：结论摘要=advice.core（空则 empathy 首句），话术=reply
+                        val newState = stateTracker.onModelReply(
+                            state = state,
+                            topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
+                                summarizeTopic(text, analysis)
+                            } else {
+                                state.topicSummary
+                            },
+                            conclusion = summarizeConclusion(analysis),
+                            reply = analysis.reply,
+                        )
+                        conversationRepository.updateSessionState(sid, newState.toJson())
+                        val card = UiMappers.toCoachCard(analysis)
+                        emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
                     }
+                    emit(StreamEvent.Done)
                 }
                 is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
             }
@@ -253,7 +234,7 @@ class RealChatRepository(
         if (caption.isNotEmpty()) {
             val crisis = CrisisDetector.detect(caption)
             if (crisis.isNotEmpty()) {
-                emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(parseSafety(crisis.first()))))
+                emit(StreamEvent.Analysis(UiMappers.toCoachCard(parseSafety(crisis.first()))))
                 emit(StreamEvent.Done)
                 return@flow
             }
@@ -339,10 +320,10 @@ class RealChatRepository(
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
-                    val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(analysis)))
+                        emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                     }
                     emit(StreamEvent.Done)
                 }
@@ -424,7 +405,6 @@ class RealChatRepository(
             }
             is StreamEvent.Error -> _streamingState.update { it.copy(streaming = false, error = event.error) }
             StreamEvent.Done -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
-            StreamEvent.FreeTextDone -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
         }
     }
 
@@ -511,9 +491,9 @@ class RealChatRepository(
 
     /**
      * v1.3.1 通道 A（主模型直读图片）：支持图文同发。
-     * - 纯图：保持原提示（五步法 JSON 卡片）；
+     * - 纯图：保持原提示（四段结构 JSON 卡片）；
      * - 图文同发：mode=FIVE_STEP → buildUserText（聊天记录模板），其余 → buildUserReply（简短输入模板）；
-     * - responseMode 按 mode 映射（STRUCTURED/FREETEXT），FREETEXT 完成后直存直渲。
+     * - v1.6 全部统一 STRUCTURED，完成解析后落库直渲。
      */
     private suspend fun runVisionDirect(
         sid: Long,
@@ -528,17 +508,15 @@ class RealChatRepository(
             emit(StreamEvent.Error(noConfigError()))
             return@flow
         }
-        val responseMode =
-            if (mode == AnalysisMode.FIVE_STEP) ResponseMode.STRUCTURED else ResponseMode.FREETEXT
         val history = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER })
         val userText = when {
-            text.isBlank() -> "以下是用户聊天截图，请按五步法分析。"
+            text.isBlank() -> "以下是用户聊天截图，请按四段结构分析。"
             mode == AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
             else -> {
                 val recentContext = history.takeLast(6)
                     .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
                     .takeIf { it.isNotBlank() }
-                promptBuilder.buildUserReply(text, recentContext, responseMode, "")
+                promptBuilder.buildUserReply(text, recentContext)
             }
         }
         client.client.stream(
@@ -548,35 +526,27 @@ class RealChatRepository(
                 userText = userText,
                 imageDataUrl = dataUrl,
                 history = history,
-                responseMode = responseMode,
             )
         ).collect { event ->
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
                 is LlmEvent.Done -> {
-                    if (responseMode == ResponseMode.FREETEXT) {
-                        // 镜像 sendText：freetext 原文直存直渲，不走 JSON 解析
-                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = false) }
-                        emit(StreamEvent.FreeTextDone)
-                    } else {
-                        val analysis = runCatching { AnalysisParser.parse(event.fullText) }.getOrNull()
-                        if (analysis != null) {
-                            conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                            titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
-                            emit(StreamEvent.Analysis(UiMappers.toAnalysisCard(analysis)))
-                        }
-                        emit(StreamEvent.Done)
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
+                    if (analysis != null) {
+                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                     }
+                    emit(StreamEvent.Done)
                 }
                 is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
             }
         }
     }
 
-    private fun parseSafety(hit: String) = AnalysisParser.parse(
-        """{"steps":[],"reply":"","citations":[],"safety_override":true,"safety_message":"检测到可能涉及安全风险的表述（$hit）。请优先确保自己的人身安全：离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。","token_estimate":0}"""
+    private fun parseSafety(hit: String) = AnalysisParser.parseAny(
+        """{"input_kind":"user_question","empathy":"","reply":"","reply_timing":"","facts":{"known":[],"assumed":[],"unknown":[]},"advice":{"tag":"","core":"","reasons":[],"styles":[]},"actions":[],"citations":[],"safety_override":true,"safety_message":"检测到可能涉及安全风险的表述（$hit）。请优先确保自己的人身安全：离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。","token_estimate":0}"""
     )
 
     private fun noConfigError(): LlmError =
@@ -616,7 +586,6 @@ class RealChatRepository(
                         system = TITLE_SYSTEM_PROMPT,
                         userText = SessionTitle.buildTitlePrompt(userLine, replyLine),
                         temperature = 0.3,
-                        responseMode = ResponseMode.FREETEXT,
                     ),
                 ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
             }
@@ -630,15 +599,15 @@ class RealChatRepository(
         }
     }
 
-    // ===== v1.3 freetext 状态摘要辅助 =====
+    // ===== v1.6 对话状态摘要辅助（结构化来源） =====
 
     /**
      * 新话题时提炼话题摘要：取用户输入的前 24 字（足够模型对齐"在聊什么"）。
-     * 模型输出仅作补充——首句关键词追加在后面，总长控制在 40 字内。
+     * 模型输出仅作补充——empathy 首句（空则 advice.core）关键词追加在后面，总长控制在 40 字内。
      */
-    private fun summarizeTopic(userInput: String, modelOutput: String): String {
+    private fun summarizeTopic(userInput: String, analysis: CoachAnalysis): String {
         val base = userInput.replace(Regex("\\s+"), " ").take(24)
-        val firstSentence = modelOutput
+        val firstSentence = analysis.empathy.ifBlank { analysis.advice.core }
             .replace(Regex("[#*>`\\-]"), "")
             .split(Regex("[。！？\n]"))
             .firstOrNull { it.isNotBlank() }
@@ -649,29 +618,12 @@ class RealChatRepository(
     }
 
     /**
-     * 提炼本轮结论摘要：取模型输出的首个完整句（至多 40 字），作为"已给结论"记入状态。
+     * 提炼本轮结论摘要：advice.core（空则 empathy 首句，至多 40 字），作为"已给结论"记入状态。
      */
-    private fun summarizeConclusion(modelOutput: String): String =
-        modelOutput
-            .replace(Regex("[#*>`\\-]"), "")
-            .split(Regex("[。！？\n]"))
-            .firstOrNull { it.isNotBlank() }
-            ?.trim()
-            ?.take(40)
-            .orEmpty()
-
-    /**
-     * 从 freetext 输出中探测"可发送话术"段落（reply-on-demand 约定：
-     * 模型给话术时会单独成段，常以「可以发」「直接回」等引导）。
-     * 未探测到 → 空串，状态记为本轮未给话术。
-     */
-    private fun extractReplySection(modelOutput: String): String {
-        val marker = REPLY_SECTION_PATTERN.find(modelOutput) ?: return ""
-        val after = modelOutput.substring(marker.range.last + 1).trimStart('：', ':', ' ', '\n')
-        // 取引导词之后的引号内文本或首行，作为话术原文
-        val quoted = Regex("[\"「『](.{4,120}?)[\"」』]").find(after)?.groupValues?.get(1)
-        return (quoted ?: after.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()).take(120)
-    }
+    private fun summarizeConclusion(analysis: CoachAnalysis): String =
+        analysis.advice.core.ifBlank {
+            analysis.empathy.split(Regex("[。！？\n]")).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        }.replace(Regex("[#*>`\\-]"), "").take(40)
 
     private data class ResolvedClient(val model: String, val client: LlmClient)
 
@@ -685,8 +637,5 @@ class RealChatRepository(
         const val TITLE_TIMEOUT_MS = 20_000L
         /** v1.2.1：标题生成 system prompt，只输出标题本身 */
         const val TITLE_SYSTEM_PROMPT = "你是会话标题生成器。只输出标题本身，不要任何解释、引号、标点或表情。"
-
-        /** freetext 输出中"可发送话术"段落的引导词（reply-on-demand 约定） */
-        val REPLY_SECTION_PATTERN = Regex("(可以发|可以直接发|可以回|直接回|这样回|发这句|回这句|发这段话)")
     }
 }

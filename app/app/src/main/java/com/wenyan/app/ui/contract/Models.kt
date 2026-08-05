@@ -43,20 +43,37 @@ data class ChatMessageUi(
     val createdAt: Long,
 )
 
-/** 五步法单段（prompt-architecture.md §4 steps[]） */
-data class AnalysisStep(
-    val key: String,
-    val title: String,
-    val content: String,
-    val items: List<String> = emptyList(),
-)
-
-/** 输入语境（v1.2，与 llm FiveStepAnalysis.InputKind 对齐） */
+/** 输入语境（v1.2，与 llm InputKind 对齐） */
 enum class InputKindUi { USER_QUESTION, RELAYED_QUOTE, PASTED_CHAT, GREETING, UNCERTAIN, UNKNOWN }
 
-/** 五步法结果卡片（UI 渲染契约） */
-data class AnalysisCard(
-    val steps: List<AnalysisStep> = emptyList(),
+/** 话术风格（v1.6 三风格：稳健/会撩/强势；切换纯本地不重请求） */
+data class ScriptStyle(
+    val key: String,
+    val label: String,
+    val text: String,
+)
+
+/** 行动清单项（v1.6：小动作/观察窗口/停止条件） */
+data class ActionItemUi(
+    val label: String,
+    val text: String,
+)
+
+/** v1.6 四段结构回答卡（UI 渲染契约，prompt-architecture.md §4 schema v2） */
+data class CoachCard(
+    /** 接住你：共情段落 */
+    val empathy: String = "",
+    /** 先分清事实：事实/推测/未知 三组 */
+    val factsKnown: List<String> = emptyList(),
+    val factsAssumed: List<String> = emptyList(),
+    val factsUnknown: List<String> = emptyList(),
+    /** 军师建议：策略标签（可空）+ 核心建议句 + 编号理由 + 三风格话术 */
+    val adviceTag: String = "",
+    val adviceCore: String = "",
+    val reasons: List<String> = emptyList(),
+    val styles: List<ScriptStyle> = emptyList(),
+    /** 现在可以做什么：行动清单（纯展示） */
+    val actions: List<ActionItemUi> = emptyList(),
     val reply: String = "",
     val replyTiming: String = "",
     val citations: List<String> = emptyList(),
@@ -65,8 +82,6 @@ data class AnalysisCard(
     val tokenEstimate: Int = 0,
     val inputKind: InputKindUi = InputKindUi.UNKNOWN,
 ) {
-    val conclusion: String get() = steps.firstOrNull { it.key == "advice" }?.content.orEmpty()
-
     /** UNCERTAIN 时 reply 是反问句而非成品话术：前端据此隐藏"复制话术"按钮 */
     val isClarification: Boolean get() = inputKind == InputKindUi.UNCERTAIN
 }

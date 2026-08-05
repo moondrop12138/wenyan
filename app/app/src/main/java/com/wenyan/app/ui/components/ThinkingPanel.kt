@@ -40,12 +40,12 @@ import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 
 /**
- * 思考过程折叠面板（DeepSeek 客户端风格）：
- * - 默认收起，只显示一行 "思考过程" + 展开箭头
+ * 思考过程折叠面板（v1.5 便签样式，设计稿 WY-02 ThinkingPanel）：
+ * - 默认收起，只显示一行 "回顾了你们上周的对话记录…" + 展开箭头（向上）
  * - 展开后展示完整 reasoning_content（流式期间持续追加）
  * - 流式结束后默认收起，用户可点开回看
  *
- * 设计对齐 design-tokens：surface 底 / border 边 / muted 文字 / ExpandMore 90° 旋转
+ * 设计对齐：surface 底（浅色 #EFEAE1 灰绿便签感）+ r12 + muted 文字
  */
 @Composable
 fun ThinkingPanel(
@@ -61,11 +61,11 @@ fun ThinkingPanel(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = GtjShape.sm,
+        shape = GtjShape.md,
         color = p.surface,
         border = BorderStroke(1.dp, p.borderSoft),
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             Surface(
                 onClick = { expanded = !expanded },
                 color = p.surface,
@@ -85,9 +85,9 @@ fun ThinkingPanel(
                         modifier = Modifier.size(16.dp),
                         tint = p.muted,
                     )
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (streaming) "正在思考…" else "思考过程",
+                        text = if (streaming) "正在回顾对话…" else "回顾了你们之前的对话记录…",
                         style = GtjType.Caption,
                         color = p.muted,
                         modifier = Modifier.weight(1f),
@@ -98,7 +98,7 @@ fun ThinkingPanel(
                         modifier = Modifier
                             .size(16.dp)
                             .rotate(arrowRotation),
-                        tint = p.muted,
+                        tint = p.meta,
                     )
                 }
             }
@@ -108,7 +108,7 @@ fun ThinkingPanel(
                 exit = shrinkVertically() + fadeOut(),
             ) {
                 Column {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = thinking,
                         style = GtjType.Caption,

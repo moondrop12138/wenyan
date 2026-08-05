@@ -4,7 +4,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,12 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,14 +29,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.wenyan.app.ui.components.ExampleChip
-import com.wenyan.app.ui.components.GtjCard
+import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * v1.3.1 示例问题池扩充至 50 句（横向 LazyRow 可滚动，不再总是开头那几句）。
- * 覆盖：不回消息/冷淡/冷战/吵架/表白/约会/相亲/异地/见家长/分手复合/吃醋/前任/三观 等恋爱军师高频场景。
+ * v1.5 空状态重构（设计稿 WY-01，Arc/Things 温暖质感）：
+ * - 日期行 + 箴言（24sp Medium 主视觉）+ 副文案
+ * - 2×2 示例卡（173×56，r12，柔和投影感由 surfaceElevated + 边框承担）
+ * - 双引导卡（图标带 8% 底色圆形容器，粘贴=陶土棕 / 截图=赭石，暖色点缀）
+ * 示例问题池保持 50 句（v1.3.1 扩充），改为网格展示前 4 条。
  */
 private val EXAMPLE_QUESTIONS = listOf(
     "他三天没回消息，怎么开口",
@@ -89,7 +97,7 @@ private val EXAMPLE_QUESTIONS = listOf(
 )
 
 /**
- * 首启空状态引导（design-pages 页面1）：问候 + 示例 chips（点击填入输入框）+ 两个入口卡。
+ * 首启空状态引导（v1.5 WY-01）：日期 + 箴言 + 示例网格 + 双引导卡。
  * 绝不使用空洞欢迎语。
  */
 @Composable
@@ -109,46 +117,157 @@ fun ChatEmptyState(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(56.dp))
-        // UI 定稿：去掉顶部大标题 slogan，只保留一行说明 + 示例 chips + 入口卡
+        Spacer(Modifier.height(64.dp))
+        // v1.5：日期行（12sp Regular，muted）
         Text(
-            "把聊天记录粘进来，或直接说你的处境。数据只发往你配置的模型服务。",
+            text = formatToday(),
+            style = GtjType.Caption,
+            color = p.muted,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        // 箴言：24sp Medium 主视觉（设计稿 WY-01 核心文案）
+        Text(
+            text = "先接住情绪，再分清事实",
+            style = GtjType.Headline,
+            color = p.fg,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "把聊天记录粘进来，或直接说你的处境。\n数据只发往你配置的模型服务。",
             style = GtjType.BodySm,
             color = p.muted,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(20.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(EXAMPLE_QUESTIONS) { q ->
-                ExampleChip(text = q, onClick = { onExampleClick(q) })
+        Spacer(Modifier.height(32.dp))
+        // 2×2 示例卡网格（设计稿：173×56，r12）
+        val grid = EXAMPLE_QUESTIONS.take(4)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            grid.chunked(2).forEach { rowItems ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowItems.forEach { q ->
+                        ExampleGridCard(
+                            text = q,
+                            onClick = { onExampleClick(q) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            GtjCard(
+        // 双引导卡（v1.5：图标带 8% 底色圆角容器，粘贴=陶土棕 / 截图=赭石）
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            GuideEntryCard(
+                icon = {
+                    Icon(
+                        Icons.Outlined.ContentPaste,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = p.accent,
+                    )
+                },
+                iconBg = p.accent,
+                title = "粘贴聊天记录",
+                subtitle = "从剪贴板导入",
                 onClick = {
                     clipboard.getText()?.text?.toString()?.let(onPasteText)
                 },
                 modifier = Modifier.weight(1f),
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.ContentPaste, contentDescription = null, modifier = Modifier.size(24.dp), tint = p.accent)
-                    Spacer(Modifier.height(8.dp))
-                    Text("粘贴聊天记录", style = GtjType.Label, color = p.fg, textAlign = TextAlign.Center)
-                }
-            }
-            GtjCard(
+            )
+            GuideEntryCard(
+                icon = {
+                    Icon(
+                        Icons.Outlined.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = p.warm,
+                    )
+                },
+                iconBg = p.warm,
+                title = "选择截图分析",
+                subtitle = "自动识别图中对话",
                 onClick = {
                     imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
                 modifier = Modifier.weight(1f),
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(24.dp), tint = p.accent)
-                    Spacer(Modifier.height(8.dp))
-                    Text("选择截图分析", style = GtjType.Label, color = p.fg, textAlign = TextAlign.Center)
-                }
+            )
+        }
+    }
+}
+
+/** v1.5 示例卡：173×56 圆角 12，surfaceElevated 底 + borderSoft 边（温暖卡片感） */
+@Composable
+private fun ExampleGridCard(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalGtjColors.current
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(56.dp),
+        shape = GtjShape.md,
+        color = p.surfaceElevated,
+        border = BorderStroke(1.dp, p.borderSoft),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
+            Text(
+                text = text,
+                style = GtjType.BodySm,
+                color = p.fgSecondary,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+            )
+        }
+    }
+}
+
+/**
+ * v1.5 引导入口卡：173×64 圆角 12，图标 32dp 圆角 8 容器（8% 底色暖点缀）。
+ * iconBg 传 accent（陶土棕）或 warm（赭石），内部取 8% 透明度。
+ */
+@Composable
+private fun GuideEntryCard(
+    icon: @Composable () -> Unit,
+    iconBg: androidx.compose.ui.graphics.Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalGtjColors.current
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(64.dp),
+        shape = GtjShape.md,
+        color = p.surfaceElevated,
+        border = BorderStroke(1.dp, p.borderSoft),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
+            // 图标容器：8% 底色圆角 8（温暖质感关键细节）
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(iconBg.copy(alpha = 0.08f), GtjShape.sm),
+                contentAlignment = Alignment.Center,
+            ) { icon() }
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(title, style = GtjType.Label, color = p.fg, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Text(subtitle, style = GtjType.Caption, color = p.muted, maxLines = 1)
             }
         }
     }
 }
+
+private fun formatToday(): String =
+    SimpleDateFormat("M月d日 · EEE", Locale.CHINA).format(Date())
