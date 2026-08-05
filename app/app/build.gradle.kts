@@ -46,8 +46,10 @@ android {
         // v1.6.1 配色与启动图标对齐：墨绿×宣纸 → 陶土棕×暖米白（浅）/ 暖黑×杏棕（深），accent 取自图标气泡色
         // v1.6.1+ 多图发送（最多 10 张，一次 LLM 请求全量直读）+ 启动图标整稿（去水印原稿 66% 前景/白底/主题图标）
         // v1.6.1+ 长按菜单"选择文字"：部分选取复制（SelectionContainer 可选中模式，点空白/滚动退出）
-        versionCode = 12
-        versionName = "1.6.1"
+        // v1.6.2 "部分选择"完善：点菜单立即全选出选区（readOnly TextField 替代 SelectionContainer，微信式拖手柄）/
+        //  模型回复（分析卡）也可部分选择（四段拼接文本，含默认风格话术）/ 菜单项去图标并改名"部分选择"
+        versionCode = 13
+        versionName = "1.6.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

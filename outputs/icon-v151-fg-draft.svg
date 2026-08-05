@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="648" height="648" fill="none">
+  <!-- 「气泡焰」v1.5.1：气泡=言（宣纸白）、火苗=温（赭石，唯一暖色）、微笑弧（深松绿克制点缀）
+       设计对齐 v1.5.0 墨绿×宣纸 tokens：气泡 #FCFAF6→#F0EBDF、火苗 #D98A4E→#C0743F、弧 #3A5A4C -->
+  <defs>
+    <linearGradient id="bubbleG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FCFAF6"/>
+      <stop offset="1" stop-color="#F0EBDF"/>
+    </linearGradient>
+    <linearGradient id="flameG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D98A4E"/>
+      <stop offset="1" stop-color="#C0743F"/>
+    </linearGradient>
+  </defs>
+  <!-- 气泡主体：中心(54,47) rx22.5 ry19.5 -->
+  <ellipse cx="54" cy="47" rx="22.5" ry="19.5" fill="url(#bubbleG)"/>
+  <!-- 火苗：右下上翘勾玉，根部埋入气泡底部右缘 -->
+  <path d="M 64.5 66.5
+           C 69.5 64, 75.5 65.5, 79 70.5
+           C 81.5 74, 80.5 78, 75.5 78
+           C 71.5 78, 68.5 75, 67.5 71
+           C 66.8 68.5, 65.8 67.3, 64.5 66.5 Z" fill="url(#flameG)"/>
+  <!-- 微笑弧：克制、无嘴角外扩 -->
+  <path d="M 45 48.5 Q 51.5 53.5, 58 48.5" stroke="#3A5A4C" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+</svg>

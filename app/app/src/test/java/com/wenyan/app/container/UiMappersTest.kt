@@ -182,4 +182,46 @@ class UiMappersTest {
         assertTrue(card.actions.isEmpty())
         assertFalse(card.isClarification)
     }
+
+    // ---- v1.6.2 coachCardToSelectableText（"部分选择"模式可选文本拼接）----
+
+    @Test
+    fun `selectable text joins all sections with blank lines`() {
+        val card = UiMappers.parseCoachCard(v2Json)!!
+        val text = UiMappers.coachCardToSelectableText(card)
+        assertTrue(text.startsWith("这件事确实让人心里发堵\n\n【事实】"))
+        assertTrue(text.contains("【推测】\n· 她可能对你有好感"))
+        assertTrue(text.contains("【未知】\n· 她现在的真实想法"))
+        assertTrue(text.contains("【军师建议】\n策略：常规主动\n保持低强度主动\n1. 持续主动是真实信号"))
+        assertTrue(text.contains("【现在可以做什么】\n· 小动作：今晚8点前不发消息\n· 观察窗口：观察3天"))
+        assertTrue(text.contains("发送时机：明早回"))
+        assertTrue(text.contains("\n可以直接发：\n明天问一句"))
+    }
+
+    @Test
+    fun `selectable text keeps only first style`() {
+        val card = UiMappers.parseCoachCard(v2Json)!!
+        val text = UiMappers.coachCardToSelectableText(card)
+        assertTrue(text.contains("明天问一句"))
+        assertFalse(text.contains("会撩"))
+        assertFalse(text.contains("直接约"))
+    }
+
+    @Test
+    fun `selectable text omits empty sections`() {
+        val card = UiMappers.parseCoachCard("""{}""")!!
+        assertEquals("", UiMappers.coachCardToSelectableText(card))
+    }
+
+    @Test
+    fun `selectable text outputs safety message when overridden`() {
+        val card = UiMappers.parseCoachCard(v2Json)!!.copy(safetyOverride = true, safetyMessage = "立即联系紧急联系人")
+        assertEquals("立即联系紧急联系人", UiMappers.coachCardToSelectableText(card))
+    }
+
+    @Test
+    fun `selectable text falls back when safety message blank`() {
+        val card = UiMappers.parseCoachCard(v2Json)!!.copy(safetyOverride = true, safetyMessage = "")
+        assertEquals("先处理安全，再处理关系", UiMappers.coachCardToSelectableText(card))
+    }
 }
