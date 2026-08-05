@@ -1,9 +1,7 @@
 package com.wenyan.app.ui.settings
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,7 +14,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -151,7 +148,6 @@ fun ProviderEditScreen(
                     vm.models.forEach { model ->
                         ModelManageRow(
                             model = model,
-                            connected = vm.connectionStatus == "ok",
                             onSheetVisibleChange = { vm.toggleSheetVisible(model.id) },
                             onVisionChange = { vm.setVision(model.id, it) },
                             onDelete = { vm.deleteModel(model.id) },
@@ -171,18 +167,6 @@ fun ProviderEditScreen(
                                 unfocusedBorderColor = p.border,
                                 focusedContainerColor = p.surface,
                                 unfocusedContainerColor = p.surface,
-                            ),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Switch(
-                            checked = vm.newModelVision,
-                            onCheckedChange = { vm.newModelVision = it },
-                            // 无障碍：Switch 显式关联 label
-                            modifier = Modifier.semantics { contentDescription = "新模型支持视觉" },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = p.accentOn,
-                                checkedTrackColor = p.accent,
-                                uncheckedTrackColor = p.borderSoft,
                             ),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -266,47 +250,47 @@ private fun EditField(
 @Composable
 private fun ModelManageRow(
     model: ModelInfo,
-    connected: Boolean,
     onSheetVisibleChange: () -> Unit,
     onVisionChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
     val p = LocalGtjColors.current
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        // v1.6.3 可见性开关（替代原"设为默认"单选）：控制是否在主页"选择模型"弹层展示
-        Switch(
-            checked = model.showInSheet,
-            onCheckedChange = { onSheetVisibleChange() },
-            // 无障碍：Switch 显式关联 label
-            modifier = Modifier.semantics { contentDescription = "在主页模型选择中显示：${model.name}" },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = p.accentOn,
-                checkedTrackColor = p.accent,
-                uncheckedTrackColor = p.borderSoft,
-            ),
-        )
-        Spacer(Modifier.width(6.dp))
-        // v1.6.3 红绿灯（2D 平面圆点）：厂商连接成功亮绿灯，未测/失败亮红灯（保存提供商后自动测试）
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .background(if (connected) p.success else p.danger, CircleShape)
-                .semantics { contentDescription = if (connected) "${model.name} 已连接" else "${model.name} 未连接" },
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(model.name, style = GtjType.Body, color = p.fg, modifier = Modifier.weight(1f))
-        Text("视觉", style = GtjType.Caption, color = p.muted)
-        Switch(
-            checked = model.supportsVision,
-            onCheckedChange = onVisionChange,
-            // 无障碍：Switch 显式关联 label
-            modifier = Modifier.semantics { contentDescription = "${model.name} 支持视觉" },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = p.accentOn,
-                checkedTrackColor = p.accent,
-                uncheckedTrackColor = p.borderSoft,
-            ),
-        )
-        GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除模型", onClick = onDelete, tint = p.muted, iconSize = 20.dp)
+    // v1.6.3 两行式排布：第一行模型名+删除；第二行缩进"主页/视觉"两个带标签开关（红绿灯移至设置页提供商列表）
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(model.name, style = GtjType.Body, color = p.fg, modifier = Modifier.weight(1f))
+            GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除模型", onClick = onDelete, tint = p.muted, iconSize = 20.dp)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("主页", style = GtjType.Caption, color = p.muted)
+            Switch(
+                checked = model.showInSheet,
+                onCheckedChange = { onSheetVisibleChange() },
+                // 无障碍：Switch 显式关联 label
+                modifier = Modifier.semantics { contentDescription = "在主页模型选择中显示：${model.name}" },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = p.accentOn,
+                    checkedTrackColor = p.accent,
+                    uncheckedTrackColor = p.borderSoft,
+                ),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("视觉", style = GtjType.Caption, color = p.muted)
+            Switch(
+                checked = model.supportsVision,
+                onCheckedChange = onVisionChange,
+                // 无障碍：Switch 显式关联 label
+                modifier = Modifier.semantics { contentDescription = "${model.name} 支持视觉" },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = p.accentOn,
+                    checkedTrackColor = p.accent,
+                    uncheckedTrackColor = p.borderSoft,
+                ),
+            )
+        }
     }
 }

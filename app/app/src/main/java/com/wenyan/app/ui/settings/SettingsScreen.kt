@@ -2,7 +2,9 @@ package com.wenyan.app.ui.settings
 
 import com.wenyan.app.BuildConfig
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -36,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.components.GtjIconButton
@@ -273,6 +278,15 @@ private fun ProviderRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
         ) {
+            // v1.6.3 连接状态红绿灯（最左）：ok=绿灯，未测/失败=红灯（保存提供商后自动测试）
+            val connected = provider.connectionStatus == "ok"
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(if (connected) p.success else p.danger, CircleShape)
+                    .semantics { contentDescription = if (connected) "${provider.name} 已连接" else "${provider.name} 未连接" },
+            )
+            Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(provider.name, style = GtjType.Body, color = p.fg)
                 // 对比度：baseUrl 升到 muted 4.8:1

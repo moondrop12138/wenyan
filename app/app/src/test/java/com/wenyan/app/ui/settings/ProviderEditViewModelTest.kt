@@ -44,7 +44,6 @@ class ProviderEditViewModelTest {
         val vm = ProviderEditViewModel(repo, providerId = 0L) // isNew
         vm.apiKey = "sk-test"
         vm.newModelName = "gpt-test"
-        vm.newModelVision = true
 
         vm.addModel()
 
@@ -54,16 +53,14 @@ class ProviderEditViewModelTest {
         assertTrue(pending is ProviderEditViewModel.PendingAction.SaveAndAddModel)
         pending as ProviderEditViewModel.PendingAction.SaveAndAddModel
         assertEquals("gpt-test", pending.modelName)
-        assertEquals(true, pending.supportsVision)
 
         vm.acceptPrivacy()
         advanceUntilIdle()
 
-        // 先持久化 ack，再按原意图：存 provider + 加模型
+        // 先持久化 ack，再按原意图：存 provider + 加模型（v1.6.3 新增默认非视觉）
         assertEquals(true, repo.privacyAckValue)
-        assertEquals(listOf(Triple(1L, "gpt-test", true)), repo.addedModels)
+        assertEquals(listOf(Triple(1L, "gpt-test", false)), repo.addedModels)
         assertEquals("", vm.newModelName)
-        assertFalse(vm.newModelVision)
     }
 
     @Test
@@ -89,7 +86,6 @@ class ProviderEditViewModelTest {
         val vm = ProviderEditViewModel(repo, providerId = 0L)
         vm.privacyAck = true // 已确认过
         vm.newModelName = "gpt-fast"
-        vm.newModelVision = false
 
         vm.addModel()
         advanceUntilIdle()
