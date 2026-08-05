@@ -35,10 +35,6 @@ class ProviderEditViewModel(
 
     var models by mutableStateOf<List<ModelInfo>>(emptyList())
     var newModelName by mutableStateOf("")
-    var newModelVision by mutableStateOf(false)
-
-    /** v1.6.3 提供商连接状态（红绿灯）："ok"=绿灯，""=未测试/失败红灯 */
-    var connectionStatus by mutableStateOf("")
 
     var testing by mutableStateOf(false)
     var testResult by mutableStateOf<TestResult?>(null)
@@ -56,7 +52,6 @@ class ProviderEditViewModel(
         /** 隐私确认后先存 provider 再续加模型（保存原始添加意图，避免确认后丢失） */
         data class SaveAndAddModel(
             val modelName: String,
-            val supportsVision: Boolean,
         ) : PendingAction
     }
 
@@ -70,7 +65,6 @@ class ProviderEditViewModel(
                     providers.firstOrNull { it.id == providerId }?.let { p ->
                         name = p.name
                         baseUrl = p.baseUrl
-                        connectionStatus = p.connectionStatus // v1.6.3 红绿灯
                     }
                 }
             }
@@ -126,7 +120,7 @@ class ProviderEditViewModel(
             when (action) {
                 PendingAction.Save -> doSave()
                 PendingAction.Test -> doTestConnection()
-                is PendingAction.SaveAndAddModel -> doSaveAndAddModel(action.modelName, action.supportsVision)
+                is PendingAction.SaveAndAddModel -> doSaveAndAddModel(action.modelName)
                 null -> Unit
             }
             pendingAction = null
@@ -151,35 +145,34 @@ class ProviderEditViewModel(
         if (nameTrim.isEmpty()) return
         // AC-18：填写了 API Key 但未确认隐私声明 → 先弹确认（新建场景），确认后仍续加模型
         if (isNew && apiKey.isNotBlank() && !privacyAck) {
-            pendingAction = PendingAction.SaveAndAddModel(nameTrim, newModelVision)
+            pendingAction = PendingAction.SaveAndAddModel(nameTrim)
             showPrivacyDialog = true
             return
         }
-        doAddModel(nameTrim, newModelVision)
+        doAddModel(nameTrim)
     }
 
-    private fun doAddModel(nameTrim: String, supportsVision: Boolean) {
+    /** v1.6.3 新增模型默认非视觉（supportsVision=false），需要时在模型行第二行再开"视觉"开关 */
+    private fun doAddModel(nameTrim: String) {
         viewModelScope.launch {
             val id = if (isNew) {
                 repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
             } else providerId
-            repo.addModel(id, nameTrim, supportsVision)
+            repo.addModel(id, nameTrim, supportsVision = false)
             newModelName = ""
-            newModelVision = false
         }
     }
 
     /** 隐私确认后：先保存 provider，再按原意图添加模型（AC-18 意图保留） */
-    private fun doSaveAndAddModel(modelName: String, supportsVision: Boolean) {
+    private fun doSaveAndAddModel(modelName: String) {
         if (saving) return
         saving = true
         viewModelScope.launch {
             val id = if (isNew) {
                 repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
             } else providerId
-            repo.addModel(id, modelName, supportsVision)
+            repo.addModel(id, modelName, supportsVision = false)
             newModelName = ""
-            newModelVision = false
             saving = false
         }
     }
