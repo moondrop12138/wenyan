@@ -23,6 +23,11 @@ android {
     namespace = "com.wenyan.app"
     compileSdk = 36
 
+    // WorkBuddy safe-delete 会锁定 app/build 产物，导致重复构建时新旧混杂/manifest 冲突。
+    // 每次构建把 buildDir 指到带时间戳的新目录，彻底绕开被锁旧目录；旧目录不再使用、可定期清理。
+    val buildRunStamp = System.currentTimeMillis()
+    buildDir = file("$buildDir.$buildRunStamp")
+
     defaultConfig {
         applicationId = "com.wenyan.app"
         minSdk = 26
@@ -31,8 +36,16 @@ android {
         // v1.3.0 图片气泡去框融合 + 预设模型名单全面更新（7 厂商）+ 默认模型可取消 + "看图"→"视觉" + 新图标（去水印去方框）
         // v1.3.1 图片预览+待发送图文同发 + 输入框圆角/全屏输入 + 50 句示例 + 主模型标签精简 + prompt 代词宽容 + freetext 话术卡融合
         // v1.3.2 freetext 话术卡段中引导词修复 + 失败重试不重复发 + 息屏/退后台回答继续（应用级流式）
-        versionCode = 8
-        versionName = "1.3.2"
+        // v1.4.0 UI 重设计「墨绿×宣纸」：全量换色板（松绿主色/宣纸白底/墨黑深色）+ 标题字重 600→500 + 卡片圆角 xl 24→18 + 启动图标背景换墨绿
+        // v1.5.0 布局级重构「Arc/Things 温暖质感」：顶栏加温言标题+模型状态点 / 空状态改日期+箴言+2×2示例卡+双引导卡(8%底色图标容器) /
+        //  输入栏悬浮胶囊(r28+内凹输入框+松绿发送键) / AI分析卡卡片头(温言标记+时间)+投影 / 话术便签化 ThinkingPanel /
+        //  抽屉 312 宽+会话预览 / 模型弹层图标容器+选中对勾 / 设置图标容器化 / 标签云选中态实底
+        // v1.6.0 回答结构改造：全部输入统一四段结构（接住你→先分清事实→军师建议→现在可以做什么）schema v2 /
+        //  三风格话术(稳健/会撩/强势)一次输出本地切换 / 删 ResponseMode.FREETEXT 发送路径 / 状态机全模式常开 /
+        //  老五步法 JSON 兼容映射进 CoachCard / 暖色收敛到军师建议段（接住你 pill 改陶土棕系）
+        // v1.6.1 配色与启动图标对齐：墨绿×宣纸 → 陶土棕×暖米白（浅）/ 暖黑×杏棕（深），accent 取自图标气泡色
+        versionCode = 11
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

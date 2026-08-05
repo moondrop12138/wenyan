@@ -2,14 +2,13 @@ package com.wenyan.app.prompt
 
 import com.wenyan.app.data.db.ProfileEntity
 import com.wenyan.app.data.db.TargetEntity
-import com.wenyan.app.llm.ResponseMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.json.JSONObject
 
 /**
- * PromptBuilder 测试（prompt-architecture 三层拼装 + 五步法结构）
+ * PromptBuilder 测试（prompt-architecture 三层拼装 + v1.6 四段结构）
  */
 class PromptBuilderTest {
 
@@ -49,7 +48,7 @@ class PromptBuilderTest {
     @Test
     fun `user text wraps raw chat in markers`() {
         val user = builder.buildUserText("你好\n在吗")
-        assertTrue(user.startsWith("以下是用户粘贴的聊天记录，请按五步法分析："))
+        assertTrue(user.startsWith("以下是用户粘贴的聊天记录，请按四段结构分析："))
         assertTrue(user.contains("【聊天记录开始】\n你好\n在吗\n【聊天记录结束】"))
     }
 
@@ -61,56 +60,59 @@ class PromptBuilderTest {
     }
 
     @Test
-    fun `user reply structured variant keeps json contract`() {
-        // structured 变体（v1.2 契约保留）：emotion 单步 + reply-on-demand + reply_timing
-        val user = builder.buildUserReply("周末有空吗", null, ResponseMode.STRUCTURED)
+    fun `user reply is light four-section json contract`() {
+        // v1.6 轻量四段变体：input_kind 判断 + empathy + reply-on-demand + advice 精简
+        val user = builder.buildUserReply("周末有空吗", null)
         assertTrue(user.contains("用户输入：周末有空吗"))
         assertTrue(user.contains("input_kind"))
-        assertTrue(user.contains("reply_timing"))
-        assertTrue(user.contains("发送时机"))
-        // 仍保留"这句怎么回"的场景识别
+        assertTrue(user.contains("轻量四段"))
+        assertTrue(user.contains("advice"))
         assertTrue(user.contains("这句怎么回"))
-    }
-
-    @Test
-    fun `user reply freetext variant is natural language first`() {
-        // v1.3 freetext 变体：自由文本直出，不提 JSON Schema，带禁复读规则
-        val user = builder.buildUserReply("周末有空吗", null, ResponseMode.FREETEXT)
-        assertTrue(user.contains("用户输入：周末有空吗"))
-        assertTrue(user.contains("自由文本，不输出 JSON"))
-        assertTrue(user.contains("严格不重复"))
-        // freetext 不应出现 structured 契约字段
-        assertTrue(!user.contains("input_kind"))
-        assertTrue(!user.contains("reply_timing"))
+        // 不应再有五步法 steps 契约字眼
+        assertTrue(!user.contains("steps 数组"))
     }
 
     @Test
     fun `user reply state prefix injected when provided`() {
         val prefix = "【对话状态】当前话题：她划清朋友边界；已给话术：无；这是同一话题的第 2 轮。\n规则：禁止重复。"
-        val user = builder.buildUserReply("那我还该追她吗", null, ResponseMode.FREETEXT, prefix)
+        val user = builder.buildUserReply("那我还该追她吗", null, prefix)
         assertTrue(user.startsWith("【对话状态】"))
         assertTrue(user.contains("她划清朋友边界"))
         assertTrue(user.contains("那我还该追她吗"))
     }
 
     @Test
-    fun `buildSystem appends mode specific output block`() {
-        val freetext = builder.buildSystem(null, null, "", ResponseMode.FREETEXT)
-        val structured = builder.buildSystem(null, null, "", ResponseMode.STRUCTURED)
-        // 两种模式三层骨架一致，输出要求段不同
-        assertTrue(freetext.contains("【system-核心】") && structured.contains("【system-核心】"))
-        assertTrue(freetext != structured)
+    fun `buildSystem always appends structured output block`() {
+        val system = builder.buildSystem(null, null, "")
+        assertTrue(system.contains("【system-核心】"))
+        // v1.6 固定内嵌四段 schema：empathy / styles / actions
+        assertTrue(system.contains("\"empathy\""))
+        assertTrue(system.contains("\"styles\""))
+        assertTrue(system.contains("\"actions\""))
+        assertTrue(system.contains("schema_version"))
     }
 
     @Test
-    fun `five step keys present in core prompt`() {
-        // 五步法结构（AC-04）：核心模板含五个步骤
+    fun `freetext output removed`() {
+        // v1.6 删除 freetext 输出要求
         val core = CorePrompt.text
-        assertTrue(core.contains("情绪落地"))
-        assertTrue(core.contains("事实拆分"))
-        assertTrue(core.contains("利益判断"))
-        assertTrue(core.contains("明确建议"))
-        assertTrue(core.contains("行动收束"))
+        assertTrue(!core.contains("自由对话"))
+        // 无独立 freetextOutput 常量
+        assertTrue(!CorePrompt::class.java.methods.any { it.name == "getFreetextOutput" })
+    }
+
+    @Test
+    fun `four section structure present in core prompt`() {
+        val core = CorePrompt.text
+        assertTrue(core.contains("接住你"))
+        assertTrue(core.contains("先分清事实"))
+        assertTrue(core.contains("军师建议"))
+        assertTrue(core.contains("现在可以做什么"))
+        // 三档风格惯例引用知识库
+        assertTrue(core.contains("00-导读与使用分级"))
+        // 原五步法标题不再出现
+        assertTrue(!core.contains("五个步骤"))
+        assertTrue(!core.contains("利益判断："))
     }
 
     @Test

@@ -59,8 +59,8 @@ fun ThickDivider(modifier: Modifier = Modifier) {
     }
 }
 
-/** 能力/状态标签（component.tag）：neutral / warm / danger 三色，文字+色双通道 */
-enum class TagKind { NEUTRAL, WARM, DANGER }
+/** 能力/状态标签（component.tag）：accent / neutral / warm / danger 四色，文字+色双通道 */
+enum class TagKind { ACCENT, NEUTRAL, WARM, DANGER }
 
 @Composable
 fun Tag(
@@ -71,6 +71,8 @@ fun Tag(
 ) {
     val p = LocalGtjColors.current
     val (bg, fg) = when (kind) {
+        // v1.6 ACCENT 绿系 pill（"接住你"段；暖色留给"军师建议"段，遵守每屏 ≤1 处暖色）
+        TagKind.ACCENT -> p.accentSoft to p.accent
         TagKind.NEUTRAL -> p.borderSoft to p.muted
         TagKind.WARM -> p.warmSoft to p.warmOn
         TagKind.DANGER -> p.dangerSoft to p.danger

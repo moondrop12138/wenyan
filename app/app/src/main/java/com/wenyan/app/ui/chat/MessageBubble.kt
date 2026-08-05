@@ -239,17 +239,17 @@ fun StreamingPlaceholderBubble(
 private fun bubbleShape(isUser: Boolean): RoundedCornerShape =
     if (isUser) {
         RoundedCornerShape(
-            topStart = CornerSize(GtjShape.lgRadius),
-            topEnd = CornerSize(GtjShape.lgRadius),
-            bottomStart = CornerSize(GtjShape.lgRadius),
+            topStart = CornerSize(GtjShape.xlRadius),
+            topEnd = CornerSize(GtjShape.xlRadius),
+            bottomStart = CornerSize(GtjShape.xlRadius),
             bottomEnd = CornerSize(GtjShape.bubbleTailSmRadius),
         )
     } else {
         RoundedCornerShape(
-            topStart = CornerSize(GtjShape.lgRadius),
-            topEnd = CornerSize(GtjShape.lgRadius),
+            topStart = CornerSize(GtjShape.xlRadius),
+            topEnd = CornerSize(GtjShape.xlRadius),
             bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
-            bottomEnd = CornerSize(GtjShape.lgRadius),
+            bottomEnd = CornerSize(GtjShape.xlRadius),
         )
     }
 

@@ -109,4 +109,89 @@ class AnalysisParserDefensiveTest {
         val raw = "```json\n{\"steps\":[]}\n```"
         assertEquals("{\"steps\":[]}", AnalysisParser.stripFence(raw))
     }
+
+    // ---- v1.6 四段结构（schema v2）防御 ----
+
+    @Test
+    fun `v2 advice non-object yields empty advice`() {
+        val c = AnalysisParser.parseV2("""{"advice":"not-an-object","empathy":"e"}""")
+        assertTrue(c.advice.core.isEmpty())
+        assertTrue(c.advice.reasons.isEmpty())
+        assertTrue(c.advice.styles.isEmpty())
+    }
+
+    @Test
+    fun `v2 advice missing entirely yields empty advice`() {
+        val c = AnalysisParser.parseV2("""{"empathy":"e","reply":"r"}""")
+        assertEquals("e", c.empathy)
+        assertEquals("r", c.reply)
+        assertTrue(c.advice.core.isEmpty())
+    }
+
+    @Test
+    fun `v2 facts missing groups yield empty groups`() {
+        val c = AnalysisParser.parseV2("""{"facts":{}}""")
+        assertTrue(c.facts.known.isEmpty())
+        assertTrue(c.facts.assumed.isEmpty())
+        assertTrue(c.facts.unknown.isEmpty())
+    }
+
+    @Test
+    fun `v2 facts non-object yields empty groups`() {
+        val c = AnalysisParser.parseV2("""{"facts":["a","b"]}""")
+        assertTrue(c.facts.known.isEmpty())
+    }
+
+    @Test
+    fun `v2 styles skip blank text entries`() {
+        val c = AnalysisParser.parseV2(
+            """{"advice":{"styles":[{"key":"steady","label":"稳健","text":""},{"key":"charming","label":"会撩","text":"有效话术"}]}}"""
+        )
+        assertEquals(1, c.advice.styles.size)
+        assertEquals("会撩", c.advice.styles[0].label)
+    }
+
+    @Test
+    fun `v2 styles non-object entries skipped`() {
+        val c = AnalysisParser.parseV2(
+            """{"advice":{"styles":["garbage",123,{"key":"assertive","label":"强势","text":"直接约"}]}}"""
+        )
+        assertEquals(1, c.advice.styles.size)
+        assertEquals("assertive", c.advice.styles[0].key)
+    }
+
+    @Test
+    fun `v2 actions skip blank text and non-object entries`() {
+        val c = AnalysisParser.parseV2(
+            """{"actions":["x",{"label":"观察窗口","text":""},{"label":"小动作","text":"今晚别发"}]}"""
+        )
+        assertEquals(1, c.actions.size)
+        assertEquals("小动作", c.actions[0].label)
+    }
+
+    @Test
+    fun `v2 parseAny with both steps and v2 keys prefers legacy`() {
+        val json = """{"steps":[{"key":"emotion","title":"t","content":"c","items":[]}],"advice":{"core":"x"}}"""
+        val c = AnalysisParser.parseAny(json)
+        // 有 steps → 按老五步法走；advice.core 不会被读
+        assertEquals("c", c.empathy)
+        assertTrue(c.advice.core.isEmpty())
+    }
+
+    @Test
+    fun `v2 empty input throws parse exception`() {
+        try {
+            AnalysisParser.parseV2("")
+            throw AssertionError("空输入应抛 AnalysisParseException")
+        } catch (e: AnalysisParser.AnalysisParseException) {
+            // 期望路径
+        }
+    }
+
+    @Test
+    fun `v2 empty array citations token default`() {
+        val c = AnalysisParser.parseV2("""{"citations":[],"token_estimate":0}""")
+        assertTrue(c.citations.isEmpty())
+        assertEquals(0, c.tokenEstimate)
+    }
 }

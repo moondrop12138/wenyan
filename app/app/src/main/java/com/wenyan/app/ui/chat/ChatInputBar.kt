@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,11 +99,12 @@ fun ChatInputBar(
     val canSend = input.isNotBlank() || pendingImage != null
 
     // edge-to-edge：bottomBar 不自动处理 insets，手动下移导航栏高度（手势条/三键自适应）
+    // v1.5：悬浮胶囊形态——外层无底，内层 r28 圆角 + 投影 + surfaceElevated 底（设计稿 WY-01 输入栏）
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars),
-        color = p.bg,
+        color = Color.Transparent,
     ) {
         Column {
             // v1.3.1 待发送图片预览区：选完照片点确认后图片停在这里，不直接发出
@@ -148,9 +150,18 @@ fun ChatInputBar(
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = p.surfaceElevated,
+                border = BorderStroke(1.dp, p.borderSoft),
+                shadowElevation = 8.dp,
+            ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
             ) {
             Box {
                 GtjIconButton(
@@ -158,6 +169,7 @@ fun ChatInputBar(
                     contentDescription = "添加聊天记录",
                     onClick = { menuExpanded = true },
                     tint = p.muted,
+                    iconSize = 20.dp,
                 )
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     DropdownMenuItem(
@@ -178,18 +190,19 @@ fun ChatInputBar(
                     )
                 }
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
+            // v1.5：内凹输入框——浅沙色 #EFEAE1 内底（surface token），圆角 20 胶囊
             TextField(
                 value = input,
                 onValueChange = onInputChange,
-                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 40.dp),
                 placeholder = { Text("说点什么，或粘贴聊天记录…", style = GtjType.BodySm, color = p.meta) },
-                textStyle = GtjType.Body,
+                textStyle = GtjType.BodySm,
                 // v1.3.1 固定圆角（20dp）：多行变高时圆角不再随高度膨胀成胶囊
                 shape = GtjShape.input,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = p.surfaceElevated,
-                    unfocusedContainerColor = p.surfaceElevated,
+                    focusedContainerColor = p.surface,
+                    unfocusedContainerColor = p.surface,
                     focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     cursorColor = p.accent,
@@ -201,28 +214,30 @@ fun ChatInputBar(
                         icon = Icons.Outlined.OpenInFull,
                         contentDescription = "全屏输入",
                         onClick = { showFullScreen = true },
-                        tint = p.muted,
+                        tint = p.meta,
+                        iconSize = 18.dp,
                     )
                 },
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             if (streaming) {
                 Surface(
                     onClick = onStop,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(40.dp),
                     shape = GtjShape.pill,
-                    color = p.surfaceElevated,
+                    color = p.surface,
                     border = androidx.compose.foundation.BorderStroke(1.dp, p.border),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.Stop, contentDescription = "停止生成", modifier = Modifier.size(22.dp), tint = p.fgSecondary)
+                        Icon(Icons.Outlined.Stop, contentDescription = "停止生成", modifier = Modifier.size(20.dp), tint = p.fgSecondary)
                     }
                 }
             } else {
+                // v1.5：陶土棕圆形发送键 40dp（设计稿 WY-01/02 发送按钮）
                 Surface(
                     onClick = onSend,
                     enabled = canSend,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(40.dp),
                     shape = GtjShape.pill,
                     color = if (canSend) p.accent else p.borderSoft,
                 ) {
@@ -230,11 +245,12 @@ fun ChatInputBar(
                         Icon(
                             Icons.Outlined.Send,
                             contentDescription = "发送",
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = if (canSend) p.accentOn else p.meta,
                         )
                     }
                 }
+            }
             }
             }
         }

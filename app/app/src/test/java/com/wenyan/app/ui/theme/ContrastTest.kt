@@ -70,4 +70,35 @@ class ContrastTest {
         val r = GtjContrast.ratio(LightPalette.warn, LightPalette.bg)
         assertTrue("warn 浅色白底 ${GtjContrast.format(r)} 应 < 4.5（故正文改用 warmOn）", r < 4.5)
     }
+
+    // ---- v1.6 CoachCard 新增组合：军师建议段（策略 tag warmSoft 底 + 核心句 warmOn 字）、接住你 pill（accentSoft 底 + accent 字）----
+    @Test
+    fun lightWarmOn_onWarmSoft_passesAa() {
+        assertRatio(LightPalette.warmOn, LightPalette.warmSoft, 4.5, "浅色 warmOn/warmSoft（策略标签）")
+    }
+
+    @Test
+    fun darkWarmOn_onWarmSoft_passesAa() {
+        assertRatio(DarkPalette.warmOn, DarkPalette.warmSoft, 4.5, "深色 warmOn/warmSoft（策略标签）")
+    }
+
+    @Test
+    fun lightWarmOn_onSurfaceElevated_passesAa() {
+        assertRatio(LightPalette.warmOn, LightPalette.surfaceElevated, 4.5, "浅色 warmOn/surfaceElevated（核心句）")
+    }
+
+    @Test
+    fun darkWarmOn_onSurfaceElevated_passesAa() {
+        assertRatio(DarkPalette.warmOn, DarkPalette.surfaceElevated, 4.5, "深色 warmOn/surfaceElevated（核心句）")
+    }
+
+    @Test
+    fun lightAccent_onAccentSoft_passesAa() {
+        assertRatio(LightPalette.accent, LightPalette.accentSoft, 4.5, "浅色 accent/accentSoft（接住你 pill）")
+    }
+
+    @Test
+    fun darkAccent_onAccentSoft_passesAa() {
+        assertRatio(DarkPalette.accent, DarkPalette.accentSoft, 4.5, "深色 accent/accentSoft（接住你 pill）")
+    }
 }

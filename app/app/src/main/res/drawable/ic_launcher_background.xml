@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 「温言」启动图标背景：深夜暖棕（对齐 C3 设计稿与 design-tokens 深色家族）
-     采样 C3 底色 #180F09，略提亮到 #1E130B 避免死黑；
-     中心微亮、四周略沉的径向微渐变，模拟烛光在深色里的呼吸感 -->
+<!-- 「温言」启动图标背景：v1.4 深夜墨绿（对齐墨绿×宣纸主题的深色家族）
+     底色 #131713，中心微亮、四周略沉的径向微渐变，保留深色里的呼吸感 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <gradient
@@ -9,7 +8,7 @@
         android:gradientRadius="78dp"
         android:centerX="0.5"
         android:centerY="0.46"
-        android:startColor="#2A1A0F"
-        android:centerColor="#211510"
-        android:endColor="#17100A" />
+        android:startColor="#1C241E"
+        android:centerColor="#131713"
+        android:endColor="#0E120F" />
 </shape>

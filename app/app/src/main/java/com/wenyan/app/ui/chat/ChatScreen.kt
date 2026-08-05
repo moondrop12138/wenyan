@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -55,8 +57,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.wenyan.app.container.UiMappers
-import com.wenyan.app.ui.components.AnalysisCard
+import com.wenyan.app.ui.components.CoachCard
 import com.wenyan.app.ui.components.CrisisCard
 import com.wenyan.app.ui.components.ErrorCard
 import com.wenyan.app.ui.components.GtjIconButton
@@ -154,6 +157,7 @@ fun ChatScreen(
         topBar = {
             ChatTopBar(
                 modelName = modelName,
+                thinking = streaming,
                 onModelClick = { showModelSheet = true },
                 onSettings = onOpenSettings,
                 onMenu = { scope.launch { drawerState.open() } },
@@ -194,15 +198,17 @@ fun ChatScreen(
                     items(messages, key = { it.id }) { msg ->
                         when (msg.type) {
                             MessageType.ANALYSIS -> {
-                                val card = UiMappers.parseAnalysisCard(msg.content)
+                                // v1.6 统一 CoachCard：新四段 schema 与老五步法 JSON 均经 parseCoachCard 兼容映射
+                                val card = UiMappers.parseCoachCard(msg.content)
                                 when {
                                     card?.safetyOverride == true -> CrisisCard(
                                         onAcknowledge = {},
                                         safetyMessage = card.safetyMessage,
                                         onLongClick = { offset -> openMessageMenu(msg, offset) },
                                     )
-                                    card != null -> AnalysisCard(
+                                    card != null -> CoachCard(
                                         card = card,
+                                        messageId = msg.id,
                                         onCopy = ::copy,
                                         onLongClick = { offset -> openMessageMenu(msg, offset) },
                                     )
@@ -264,16 +270,16 @@ fun ChatScreen(
                             }
                         }
                         item(key = "streaming") {
-                            // v1.3 混合渲染：
-                            // - freetext 模式：模型直出自然中文，流式文本直接打字机上屏；
-                            // - structured 模式：模型输出 JSON，流式期间只抽取 reply 字段预览，
-                            //   避免把 {"steps":[{"key":"emotion",... 这种原始 JSON 糊在气泡里。
-                            // 判据：累积文本一旦呈现 JSON 起始形态就按 structured 处理，否则按 freetext。
+                            // v1.6 统一 structured：模型输出四段 JSON，流式期间只抽取有意义的字段预览，
+                            // 避免把 {"empathy":"...","facts":{... 这种原始 JSON 糊在气泡里。
+                            // 判据：累积文本一旦呈现 JSON 起始形态就按 structured 处理。
                             val trimmed = streamingText.trimStart()
                             val looksStructured = trimmed.startsWith("{") || trimmed.startsWith("```")
                             when {
                                 looksStructured -> {
+                                    // 优先成品话术 reply；未出现时退回共情段 empathy（字段顺序靠前，预览尽早出现）
                                     val replyPreview = StreamingPreview.extractReplyPreview(streamingText)
+                                        ?: StreamingPreview.extractEmpathyPreview(streamingText)
                                     when {
                                         replyPreview != null -> StreamingBubble(text = replyPreview)
                                         streamingThinking.isNotBlank() -> StreamingPlaceholderBubble()
@@ -337,9 +343,9 @@ fun ChatScreen(
                 DropdownMenuItem(
                     text = { Text(if (msg.type == MessageType.FREETEXT) "复制全文" else "复制") },
                     onClick = {
-                        // v1.2.1：分析卡复制成品话术（reply）而非原始 JSON
+                        // v1.6：分析卡复制成品话术（reply，新老 JSON 均兼容）而非原始 JSON
                         val copyText = when (msg.type) {
-                            MessageType.ANALYSIS -> UiMappers.parseAnalysisCard(msg.content)
+                            MessageType.ANALYSIS -> UiMappers.parseCoachCard(msg.content)
                                 ?.reply?.takeIf { it.isNotBlank() } ?: msg.content
                             else -> msg.content
                         }
@@ -428,6 +434,7 @@ fun ChatScreen(
 @Composable
 private fun ChatTopBar(
     modelName: String,
+    thinking: Boolean,
     onModelClick: () -> Unit,
     onSettings: () -> Unit,
     onMenu: () -> Unit,
@@ -450,20 +457,36 @@ private fun ChatTopBar(
                     onClick = onMenu,
                     tint = p.fgSecondary,
                 )
-                // 顶栏不显示产品名（UI 定稿：极简，少装饰性文案）
+                // v1.5：顶栏标题"温言"（克制的中文字标，不喧宾夺主）
+                Text(
+                    text = "温言",
+                    style = GtjType.Title.copy(fontSize = 17.sp, lineHeight = 24.sp),
+                    color = p.fg,
+                    modifier = Modifier.padding(start = 2.dp),
+                )
                 Spacer(Modifier.weight(1f))
                 Surface(
                     onClick = onModelClick,
                     shape = GtjShape.pill,
-                    color = p.surface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, p.border),
+                    color = p.surfaceElevated,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, p.borderSoft),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                     ) {
-                        Text(modelName, style = GtjType.Label, color = p.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Icon(Icons.Outlined.ExpandMore, contentDescription = "切换模型", modifier = Modifier.size(16.dp), tint = p.muted)
+                        // v1.5：状态点——思考中赭石，空闲陶土棕
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    if (thinking) p.warm else p.accent,
+                                    CircleShape,
+                                ),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(modelName, style = GtjType.Label, color = p.fgSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Outlined.ExpandMore, contentDescription = "切换模型", modifier = Modifier.size(16.dp), tint = p.meta)
                     }
                 }
                 Spacer(Modifier.width(4.dp))

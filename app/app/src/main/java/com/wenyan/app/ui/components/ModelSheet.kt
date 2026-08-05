@@ -1,8 +1,8 @@
 package com.wenyan.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -35,6 +37,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -117,38 +120,70 @@ private fun ModelRow(
     onClick: () -> Unit,
 ) {
     val p = LocalGtjColors.current
+    // v1.5：图标缩写（前两位字母，如 DS / GPT），40dp 陶土棕底 r12 容器（设计稿 WY-05）
+    val abbrev = model.name.take(2).uppercase()
     Surface(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
+            .heightIn(min = 72.dp)
             .semantics {
                 role = Role.RadioButton
                 this.selected = selected
             },
-        shape = GtjShape.md,
+        shape = GtjShape.lg,
         color = if (selected) p.accentSoft else p.surface,
-        border = BorderStroke(1.dp, if (selected) p.accent.copy(alpha = 0.4f) else p.borderSoft),
+        border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) p.accent else p.borderSoft),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(
-                model.name,
-                style = GtjType.Body,
-                color = if (selected) p.accent else p.fg,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (model.supportsVision) {
-                Tag(text = "视觉", kind = TagKind.NEUTRAL, icon = Icons.Outlined.Image)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            // 模型图标容器：40dp r12，选中陶土棕实底 / 未选中灰
+            Surface(
+                shape = GtjShape.md,
+                color = if (selected) p.accent else p.borderSoft,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        abbrev,
+                        style = GtjType.Label.copy(fontSize = 13.sp),
+                        color = if (selected) p.accentOn else p.muted,
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    model.name,
+                    style = GtjType.Body,
+                    color = p.fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                // 描述行：提供商 + 能力徽标（v1.5 副标题）
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(model.providerName, style = GtjType.Caption, color = p.muted, maxLines = 1)
+                    if (model.supportsVision) {
+                        Spacer(Modifier.width(6.dp))
+                        Tag(text = "视觉", kind = TagKind.NEUTRAL, icon = Icons.Outlined.Image)
+                    }
+                }
             }
             if (model.isDefault) {
                 Spacer(Modifier.width(6.dp))
                 Tag(text = "默认", kind = TagKind.NEUTRAL)
             }
+            // v1.5：选中态——24dp 陶土棕实心圆 + 白对勾（设计稿 WY-05 选中标记）
             if (selected) {
-                Spacer(Modifier.width(6.dp))
-                Icon(Icons.Outlined.Check, contentDescription = "已选择", modifier = Modifier.size(20.dp), tint = p.accent)
+                Spacer(Modifier.width(8.dp))
+                Surface(shape = CircleShape, color = p.accent, modifier = Modifier.size(24.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Check, contentDescription = "已选择", modifier = Modifier.size(14.dp), tint = p.accentOn)
+                    }
+                }
             }
         }
     }

@@ -36,57 +36,59 @@ data class GtjPalette(
     val scrim: Color,
 )
 
-/** 浅色 Token（design-tokens.json color.light，v1.2 P1 暖橙系） */
+/** 浅色 Token（design-tokens.json color.light，v1.6.1 陶土棕×暖米白，与启动图标配色对齐） */
 val LightPalette = GtjPalette(
-    bg = Color(0xFFFAF5EF),
-    surface = Color(0xFFF4EDE4),
-    surfaceElevated = Color(0xFFFFFFFF),
+    bg = Color(0xFFF6F0E6),
+    surface = Color(0xFFEFE6D8),
+    surfaceElevated = Color(0xFFFDFAF3),
     fg = Color(0xFF2B2118),
-    fgSecondary = Color(0xFF4A3D30),
-    // 对比度：muted 在 bg(#FAF5EF)/surface(#F4EDE4) 上须 ≥4.5:1（WCAG AA 正文）
-    muted = Color(0xFF6E5F4C),
-    meta = Color(0xFFB3A48F),
-    border = Color(0xFFE8DFD2),
-    borderSoft = Color(0xFFF1E9DC),
-    // 对比度：accent 白字须 ≥3:1（大字号 AA 例外，ContrastTest 记录性断言）
-    accent = Color(0xFFCC6A2B),
+    fgSecondary = Color(0xFF4B4032),
+    // 对比度：muted 在 bg(#F6F0E6)/surface(#EFE6D8) 上 ≈4.9-5.7:1（WCAG AA 正文 ≥4.5:1）
+    muted = Color(0xFF6E6050),
+    meta = Color(0xFFA49785),
+    border = Color(0xFFE3D8C5),
+    borderSoft = Color(0xFFEFE6D6),
+    // 对比度：accent 白字 ≈5.4:1（远超 AA）；accent on accentSoft ≈4.6:1（接住你 pill 小字达标）
+    accent = Color(0xFFA4551C),
     accentOn = Color(0xFFFFFFFF),
-    accentHover = Color(0xFFB85F26),
-    accentPressed = Color(0xFFA8541F),
-    accentSoft = Color(0xFFFCEFE3),
+    accentHover = Color(0xFF934A14),
+    accentPressed = Color(0xFF7F400F),
+    accentSoft = Color(0xFFF7ECE0),
     success = Color(0xFF16A34A),
     warn = Color(0xFFD97706),
     danger = Color(0xFFDC2626),
-    dangerSoft = Color(0xFFFDECEC),
-    warm = Color(0xFFCC6A2B),
-    warmSoft = Color(0xFFFCEFE3),
-    warmOn = Color(0xFFA8541F),
+    dangerSoft = Color(0xFFFBEAE3),
+    warm = Color(0xFFC0743F),
+    warmSoft = Color(0xFFF7EADC),
+    warmOn = Color(0xFF8F4F24),
     scrim = Color(0x732B2118),
 )
 
-/** 深色 Token（design-tokens.json color.dark，v1.2 P1 暖橙系） */
+/** 深色 Token（design-tokens.json color.dark，v1.6.1 暖黑×杏棕，与启动图标配色对齐） */
 val DarkPalette = GtjPalette(
-    bg = Color(0xFF191411),
-    surface = Color(0xFF211A16),
-    surfaceElevated = Color(0xFF2A211B),
-    fg = Color(0xFFF5EEE6),
-    fgSecondary = Color(0xFFD8C9B8),
-    muted = Color(0xFF9C8B78),
-    meta = Color(0xFF6E6050),
-    border = Color(0xFF382E25),
-    borderSoft = Color(0xFF2E2620),
-    accent = Color(0xFFEB8B4D),
-    accentOn = Color(0xFFFFFFFF),
-    accentHover = Color(0xFFF09A60),
-    accentPressed = Color(0xFFCC6A2B),
-    accentSoft = Color(0xFF3D2A1B),
+    bg = Color(0xFF17120E),
+    surface = Color(0xFF211A13),
+    surfaceElevated = Color(0xFF2B221A),
+    fg = Color(0xFFF1EAE0),
+    fgSecondary = Color(0xFFCFC3B1),
+    // 对比度：muted 在 bg(#17120E) 上 ≈6.4:1（WCAG AA 正文 ≥4.5:1）
+    muted = Color(0xFFAC9D8A),
+    meta = Color(0xFF6E6153),
+    border = Color(0xFF3A3026),
+    borderSoft = Color(0xFF2E261D),
+    // 深色主色为杏棕：onAccent 用深棕黑字（M3 深色惯例），对比度 ≈6.4:1
+    accent = Color(0xFFCE8A56),
+    accentOn = Color(0xFF221104),
+    accentHover = Color(0xFFDB9C6B),
+    accentPressed = Color(0xFFBE7A45),
+    accentSoft = Color(0xFF332417),
     success = Color(0xFF16A34A),
     warn = Color(0xFFD97706),
     danger = Color(0xFFDC2626),
     dangerSoft = Color(0xFF2A1717),
-    warm = Color(0xFFEB8B4D),
-    warmSoft = Color(0xFF3D2A1B),
-    warmOn = Color(0xFFF09A60),
+    warm = Color(0xFFDFA678),
+    warmSoft = Color(0xFF3A2A1C),
+    warmOn = Color(0xFFF2CBA9),
     scrim = Color(0x99000000),
 )
 

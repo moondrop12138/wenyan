@@ -3,14 +3,13 @@ package com.wenyan.app.ui.chat
 /**
  * v1.3.1 freetext 话术拆分器（纯函数，无 UI 依赖，可单测）。
  *
+ * v1.6 起新回复全部走四段 JSON，本拆分器仅服务**老数据**（升级前落库的 freetext 消息）渲染。
+ *
  * 把 freetext 回复拆成「话术 + 正文」两部分：
  * - 模型输出中以引导词（可以发/可以直接发/可以回/直接回/这样回/发这句/回这句/发这段话，
  *   及可以+引导词的组合）引出的话术段 → reply（完整内容，不截断）；
  * - 其余文本 → body（正文/解释）。
  * 无话术段时 reply 为空串，调用方退化为纯文本渲染。
- *
- * 与 RealChatRepository.extractReplySection（服务对话状态机，截 120 字）语义同源，
- * 引导词表一致（REPLY_SECTION_PATTERN），但这里额外加了前后汉字边界防正文嵌句误命中。
  */
 internal data class FreetextSplit(
     val reply: String,

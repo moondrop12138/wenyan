@@ -105,14 +105,11 @@ sealed interface StreamEvent {
     /** 深度思考模型的推理增量（reasoning_content）；UI 折叠展示，不拼入正文 */
     data class Thinking(val text: String) : StreamEvent
 
-    /** 五步法完整解析结果（流结束后整卡渲染；防御性解析见 prompt-architecture.md §6） */
-    data class Analysis(val card: AnalysisCard) : StreamEvent
+    /** 四段结构完整解析结果（v1.6 统一卡片；流结束后整卡渲染；防御性解析见 prompt-architecture.md §6） */
+    data class Analysis(val card: CoachCard) : StreamEvent
 
     /** 通道 B 转述文本（UI 渲染"AI 从截图中读出了这些内容"确认卡） */
     data class Transcription(val text: String) : StreamEvent
-
-    /** v1.3 freetext 自由对话完成：全文已持久化为 freetext 消息，UI 清空流式预览即可 */
-    data object FreeTextDone : StreamEvent
 
     /** 错误（LlmError 已归一，UI 只认文案+可重试标记） */
     data class Error(val error: LlmError) : StreamEvent

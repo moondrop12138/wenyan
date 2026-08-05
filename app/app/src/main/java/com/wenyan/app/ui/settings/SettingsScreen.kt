@@ -224,10 +224,19 @@ private fun SettingsRow(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             if (icon != null) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.fgSecondary)
+                // v1.5：图标带 8% 底色圆角容器（设计稿 WY-06，温暖质感细节）
+                Surface(
+                    shape = com.wenyan.app.ui.theme.GtjShape.sm,
+                    color = p.accent.copy(alpha = 0.08f),
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = p.accent)
+                    }
+                }
                 Spacer(Modifier.width(12.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
