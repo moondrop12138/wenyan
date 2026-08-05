@@ -16,10 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -28,9 +32,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -178,23 +188,44 @@ fun ImageMessageBubble(
 }
 
 /**
- * v1.6.1 文本选择模式气泡（长按菜单"选择文字"进入）：
- * 消息文本置于 SelectionContainer 中变为可选中——用户长按文字弹出选择手柄，
- * 拖动选取部分内容后由系统工具栏复制；点气泡外空白处（上层 Box 手势）退出选择模式。
- * 渲染样式与 MessageBubble 一致，只是去掉了长按菜单手势（选择手势由 SelectionContainer 接管）。
+ * v1.6.2 文本选择模式气泡（长按菜单"部分选择"进入）：
+ * readOnly BasicTextField 承载消息文本，进入即聚焦并全选——立即出现选区高亮 + 两端可拖手柄 + 系统工具栏，
+ * 拖动两端手柄调整范围后由系统工具栏复制（微信"部分选中"同款交互）；点气泡外空白（上层 Box 手势）或滚动退出。
+ * 渲染样式与 MessageBubble 一致，只是去掉长按菜单手势（拖选由文本字段接管）。
+ * v1.6.1 曾用 SelectionContainer（点菜单后需二次长按文字才出手柄，反馈弱），v1.6.2 弃用；
+ * Compose 1.8 无程序化选区 API（TextSelectionSession 已移除），此为唯一"进入即选中"的公开方案。
+ * text 参数供 ANALYSIS/FREETEXT 传入拼好的可选文本（默认取消息原文）。
  */
 @Composable
 fun SelectableMessageContent(
     message: ChatMessageUi,
     modifier: Modifier = Modifier,
+    text: String = message.content,
 ) {
     val p = LocalGtjColors.current
     val isUser = message.role == ChatRole.USER
+    // 受控 TextFieldValue：初始全选；onValueChange 必须回写，否则拖动手柄无响应
+    var tfv by remember(message.id) { mutableStateOf(TextFieldValue(text, selection = TextRange(0, text.length))) }
+    val focusRequester = remember { FocusRequester() }
+    // 组合完成后自动聚焦 → 立即显示选区手柄与系统工具栏（readOnly 聚焦不弹 IME）
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
-        SelectionContainer {
+        // 选区品牌化：气泡底是陶土棕/米白，系统默认蓝色手柄不可见——手柄/高亮改用主题色
+        val selectionColors = if (isUser) {
+            TextSelectionColors(
+                handleColor = p.accentOn,
+                backgroundColor = p.accentOn.copy(alpha = 0.25f),
+            )
+        } else {
+            TextSelectionColors(
+                handleColor = p.accent,
+                backgroundColor = p.accent.copy(alpha = 0.25f),
+            )
+        }
+        CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
             Surface(
                 modifier = Modifier.widthIn(max = if (isUser) 300.dp else 340.dp),
                 shape = bubbleShape(isUser),
@@ -202,10 +233,16 @@ fun SelectableMessageContent(
                 contentColor = if (isUser) p.accentOn else p.fg,
                 border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
             ) {
-                Text(
-                    text = message.content,
-                    style = GtjType.Body,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                BasicTextField(
+                    value = tfv,
+                    onValueChange = { tfv = it },
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .focusRequester(focusRequester),
+                    readOnly = true,
+                    // Surface contentColor 不自动作用于 BasicTextField，需显式上色
+                    textStyle = GtjType.Body.copy(color = if (isUser) p.accentOn else p.fg),
+                    cursorBrush = SolidColor(Color.Transparent),
                 )
             }
         }

@@ -101,4 +101,43 @@ object UiMappers {
         message = code.userMessage,
         retryable = code.retryable,
     )
+
+    /**
+     * v1.6.2 分析卡 → 可选择的纯文本（"部分选择"模式渲染用，纯函数可单测）：
+     * 四段结构按【段落】拼接为连续文本，段落间空行；styles 只取默认（第一个）风格话术——
+     * 三风格是 UI 互斥切换项，全拼会造成三份冗余；safetyOverride 时只输出安全指引。
+     */
+    fun coachCardToSelectableText(card: CoachCard): String = buildString {
+        if (card.safetyOverride) {
+            append(card.safetyMessage.ifBlank { "先处理安全，再处理关系" })
+            return@buildString
+        }
+        if (card.empathy.isNotBlank()) {
+            append(card.empathy)
+            append("\n\n")
+        }
+        listOf("事实" to card.factsKnown, "推测" to card.factsAssumed, "未知" to card.factsUnknown)
+            .filter { it.second.isNotEmpty() }
+            .forEach { (label, items) ->
+                append("【$label】\n")
+                items.forEach { append("· $it\n") }
+                append("\n")
+            }
+        if (card.adviceTag.isNotBlank() || card.adviceCore.isNotBlank() || card.reasons.isNotEmpty()) {
+            append("【军师建议】\n")
+            if (card.adviceTag.isNotBlank()) append("策略：${card.adviceTag}\n")
+            if (card.adviceCore.isNotBlank()) append(card.adviceCore).append("\n")
+            card.reasons.forEachIndexed { index, reason -> append("${index + 1}. $reason\n") }
+            append("\n")
+        }
+        if (card.actions.isNotEmpty()) {
+            append("【现在可以做什么】\n")
+            card.actions.forEach { append("· ${it.label}：${it.text}\n") }
+            append("\n")
+        }
+        if (card.replyTiming.isNotBlank()) append("发送时机：${card.replyTiming}\n")
+        card.styles.firstOrNull()?.text?.takeIf { it.isNotBlank() }?.let {
+            append("\n可以直接发：\n$it\n")
+        }
+    }.trim()
 }

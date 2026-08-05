@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
@@ -224,6 +223,11 @@ fun ChatScreen(
                                 // v1.6 统一 CoachCard：新四段 schema 与老五步法 JSON 均经 parseCoachCard 兼容映射
                                 val card = UiMappers.parseCoachCard(msg.content)
                                 when {
+                                    // v1.6.2 部分选择：分析卡整体切为可选中文本（四段拼接，解析失败兜底原文）
+                                    textSelectForId == msg.id -> SelectableMessageContent(
+                                        msg,
+                                        text = card?.let { UiMappers.coachCardToSelectableText(it) } ?: msg.content,
+                                    )
                                     card?.safetyOverride == true -> CrisisCard(
                                         onAcknowledge = {},
                                         safetyMessage = card.safetyMessage,
@@ -249,8 +253,14 @@ fun ChatScreen(
                                 // v1.3.1 freetext 融合：话术段提升为上方可复制话术卡，下方正文气泡；
                                 // 无话术段退化为纯文本气泡
                                 if (textSelectForId == msg.id) {
-                                    // v1.6.1 选择模式：整条原文（含话术段）可拖选部分复制
-                                    SelectableMessageContent(msg)
+                                    // v1.6.2 选择模式：整条原文可拖选，文本为话术+正文拼接（去掉引导词）
+                                    val split = remember(msg.id) { FreetextSplitter.split(msg.content) }
+                                    val selectableText = if (split.reply.isBlank()) {
+                                        msg.content
+                                    } else {
+                                        split.reply + "\n\n" + split.body
+                                    }
+                                    SelectableMessageContent(msg, text = selectableText)
                                 } else {
                                     val split = remember(msg.id) { FreetextSplitter.split(msg.content) }
                                     if (split.reply.isBlank()) {
@@ -267,7 +277,7 @@ fun ChatScreen(
                             }
                             MessageType.TEXT, MessageType.TRANSCRIPTION ->
                                 if (textSelectForId == msg.id) {
-                                    // v1.6.1 选择模式：长按文字拖选手柄部分复制
+                                    // v1.6.2 选择模式：进入即全选，拖两端手柄部分复制
                                     SelectableMessageContent(msg)
                                 } else {
                                     MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
@@ -386,20 +396,18 @@ fun ChatScreen(
                         menuFor = null
                     },
                 )
-                // v1.6.1 部分选取复制：进入文本选择模式，长按文字拖动手柄选取部分内容后复制
+                // v1.6.2 部分选取复制：进入文本选择模式——立即全选，拖动两端手柄选取部分内容后复制
                 if (msg.type == MessageType.TEXT ||
                     msg.type == MessageType.TRANSCRIPTION ||
-                    msg.type == MessageType.FREETEXT
+                    msg.type == MessageType.FREETEXT ||
+                    msg.type == MessageType.ANALYSIS
                 ) {
                     DropdownMenuItem(
-                        text = { Text("选择文字") },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.TextFields, contentDescription = null, modifier = Modifier.size(18.dp))
-                        },
+                        text = { Text("部分选择") },
                         onClick = {
                             textSelectForId = msg.id
                             menuFor = null
-                            Toast.makeText(context, "长按消息文字拖动选取，点空白处完成", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "拖动两端手柄选取文字，点空白处完成", Toast.LENGTH_SHORT).show()
                         },
                     )
                 }
