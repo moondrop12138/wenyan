@@ -104,14 +104,15 @@ private val EXAMPLE_QUESTIONS = listOf(
 fun ChatEmptyState(
     onExampleClick: (String) -> Unit,
     onPasteText: (String) -> Unit,
-    onImagePicked: (Uri) -> Unit,
+    onImagesPicked: (List<Uri>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
     val clipboard = LocalClipboardManager.current
+    // v1.6.1 多图选择器：一次最多 10 张
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri -> uri?.let(onImagePicked) },
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = ChatViewModel.MAX_PENDING_IMAGES),
+        onResult = { uris -> if (uris.isNotEmpty()) onImagesPicked(uris) },
     )
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),

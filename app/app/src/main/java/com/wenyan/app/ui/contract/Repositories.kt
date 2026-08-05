@@ -33,10 +33,11 @@ interface ChatRepository {
      * 截图分析（双通道分流，AC-07/AC-08）：后端内部做压缩管线（≤1568px/85%）后，
      * 主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述（转述结果经 TranscriptionEvent 回传）。
      * v1.3.1 图文同发：text 非空时图片与配文一起落库、一起进 LLM 请求（先图后文）；
+     * v1.6.1 多图：uris 最多 10 张，逐张压缩落库后一次 LLM 请求（content 数组多 image_url）；
      * mode 决定通道 A 的回复形态（FIVE_STEP→五步法卡片，其余→freetext 自由文本）。
      */
-    fun analyzeImage(
-        uri: Uri,
+    fun analyzeImages(
+        uris: List<Uri>,
         text: String = "",
         mode: AnalysisMode = AnalysisMode.FIVE_STEP,
     ): Flow<StreamEvent>
@@ -47,8 +48,8 @@ interface ChatRepository {
     /** v1.3.1 后台续跑发送族：应用级 scope 内收集流式事件并推送 streamingState，返回即不阻塞 */
     fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true)
 
-    fun analyzeImageAsync(
-        uri: Uri,
+    fun analyzeImagesAsync(
+        uris: List<Uri>,
         text: String = "",
         mode: AnalysisMode = AnalysisMode.FIVE_STEP,
         persistUser: Boolean = true,

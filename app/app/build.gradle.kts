@@ -44,8 +44,10 @@ android {
         //  三风格话术(稳健/会撩/强势)一次输出本地切换 / 删 ResponseMode.FREETEXT 发送路径 / 状态机全模式常开 /
         //  老五步法 JSON 兼容映射进 CoachCard / 暖色收敛到军师建议段（接住你 pill 改陶土棕系）
         // v1.6.1 配色与启动图标对齐：墨绿×宣纸 → 陶土棕×暖米白（浅）/ 暖黑×杏棕（深），accent 取自图标气泡色
-        versionCode = 11
-        versionName = "1.6.0"
+        // v1.6.1+ 多图发送（最多 10 张，一次 LLM 请求全量直读）+ 启动图标整稿（去水印原稿 66% 前景/白底/主题图标）
+        // v1.6.1+ 长按菜单"选择文字"：部分选取复制（SelectionContainer 可选中模式，点空白/滚动退出）
+        versionCode = 12
+        versionName = "1.6.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

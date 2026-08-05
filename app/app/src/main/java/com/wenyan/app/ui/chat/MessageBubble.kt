@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -170,6 +171,41 @@ fun ImageMessageBubble(
                     modifier = Modifier
                         .clip(bubbleShape(isUser))
                         .padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * v1.6.1 文本选择模式气泡（长按菜单"选择文字"进入）：
+ * 消息文本置于 SelectionContainer 中变为可选中——用户长按文字弹出选择手柄，
+ * 拖动选取部分内容后由系统工具栏复制；点气泡外空白处（上层 Box 手势）退出选择模式。
+ * 渲染样式与 MessageBubble 一致，只是去掉了长按菜单手势（选择手势由 SelectionContainer 接管）。
+ */
+@Composable
+fun SelectableMessageContent(
+    message: ChatMessageUi,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalGtjColors.current
+    val isUser = message.role == ChatRole.USER
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+    ) {
+        SelectionContainer {
+            Surface(
+                modifier = Modifier.widthIn(max = if (isUser) 300.dp else 340.dp),
+                shape = bubbleShape(isUser),
+                color = if (isUser) p.accent else p.surfaceElevated,
+                contentColor = if (isUser) p.accentOn else p.fg,
+                border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
+            ) {
+                Text(
+                    text = message.content,
+                    style = GtjType.Body,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }
         }

@@ -50,7 +50,7 @@ import kotlinx.coroutines.withTimeout
  * 对话 Repository 真实实现（AC-04/05/06/07/08/13/14/15）
  *
  * sendText 编排：危机预检 → 知识路由 → prompt 三层拼装 → LLM 流 → 持久化 → 五步法解析。
- * analyzeImage 双通道：主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述。
+ * analyzeImages 双通道（v1.6.1 多图）：主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述。
  * v1.3.1：async 发送族在应用级 appScope 收集（Activity 销毁/息屏不中断），
  * 流式增量经 streamingState 推送；persistUser=false 供失败重试（用户消息不重复落库）。
  */
@@ -216,15 +216,15 @@ class RealChatRepository(
         }
     }
 
-    override fun analyzeImage(
-        uri: Uri,
+    override fun analyzeImages(
+        uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
-    ): Flow<StreamEvent> = analyzeImageFlow(uri, text, mode, persistUser = true)
+    ): Flow<StreamEvent> = analyzeImagesFlow(uris, text, mode, persistUser = true)
 
     /** v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库 */
-    private fun analyzeImageFlow(
-        uri: Uri,
+    private fun analyzeImagesFlow(
+        uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
         persistUser: Boolean,
@@ -240,25 +240,30 @@ class RealChatRepository(
             }
         }
 
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: run {
-                emit(StreamEvent.Error(LlmError("READ_FAILED", "图片读取失败，请重试", false)))
+        // v1.6.1 多图：全部压缩成功才进入落库（任一失败 → 整体报错，未写任何消息，ViewModel 恢复整批待发送）
+        val dataUrls = mutableListOf<String>()
+        for (uri in uris) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: run {
+                    emit(StreamEvent.Error(LlmError("READ_FAILED", "图片读取失败，请重试", false)))
+                    return@flow
+                }
+            val dataUrl = try {
+                imageCompressor.compressToDataUrl(bytes)
+            } catch (e: ImageCompressor.ImageTooLargeException) {
+                emit(StreamEvent.Error(LlmError("TOO_LARGE", e.message ?: "图片过大", false)))
+                return@flow
+            } catch (e: Exception) {
+                emit(StreamEvent.Error(LlmError("COMPRESS_FAILED", "图片处理失败，请重试", false)))
                 return@flow
             }
-        val dataUrl = try {
-            imageCompressor.compressToDataUrl(bytes)
-        } catch (e: ImageCompressor.ImageTooLargeException) {
-            emit(StreamEvent.Error(LlmError("TOO_LARGE", e.message ?: "图片过大", false)))
-            return@flow
-        } catch (e: Exception) {
-            emit(StreamEvent.Error(LlmError("COMPRESS_FAILED", "图片处理失败，请重试", false)))
-            return@flow
+            dataUrls.add(dataUrl)
         }
 
         val sid = ensureSession()
-        // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻两条用户气泡）；重试跳过
+        // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻多条用户气泡）；重试跳过
         if (persistUser) {
-            conversationRepository.addMessage(sid, "USER", "image", dataUrl)
+            dataUrls.forEach { conversationRepository.addMessage(sid, "USER", "image", it) }
             if (caption.isNotEmpty()) {
                 conversationRepository.addMessage(sid, "USER", "text", caption)
             }
@@ -267,7 +272,7 @@ class RealChatRepository(
         // 主模型是否支持视觉 → 通道 A 直读
         val mainModel = resolveModel()
         if (mainModel?.supportsVision == true) {
-            runVisionDirect(sid, dataUrl, caption, mode).collect { emit(it) }
+            runVisionDirect(sid, dataUrls, caption, mode).collect { emit(it) }
         } else {
             // 通道 B：先调视觉模型转述（配文已作为独立消息在历史里，确认转述后模型可见）
             val vision = resolveVisionClient()
@@ -280,8 +285,8 @@ class RealChatRepository(
                 ChatRequest(
                     model = vision.model,
                     system = "你是截图文字提取器。只输出截图中的文字，尽量保留说话人、顺序与间隔，不添加任何解释。",
-                    userText = "请提取这张聊天截图中的全部文字。",
-                    imageDataUrl = dataUrl,
+                    userText = "请提取这几张聊天截图中的全部文字，按截图顺序输出。",
+                    imageDataUrls = dataUrls,
                 )
             ).collect { event ->
                 when (event) {
@@ -369,8 +374,8 @@ class RealChatRepository(
         }
     }
 
-    override fun analyzeImageAsync(
-        uri: Uri,
+    override fun analyzeImagesAsync(
+        uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
         persistUser: Boolean,
@@ -378,7 +383,7 @@ class RealChatRepository(
         if (_streamingState.value.streaming) return
         _streamingState.value = StreamingState(streaming = true)
         streamJob = appScope.launch {
-            analyzeImageFlow(uri, text, mode, persistUser).collect { event ->
+            analyzeImagesFlow(uris, text, mode, persistUser).collect { event ->
                 applyStreamEvent(event)
             }
         }
@@ -493,11 +498,12 @@ class RealChatRepository(
      * v1.3.1 通道 A（主模型直读图片）：支持图文同发。
      * - 纯图：保持原提示（四段结构 JSON 卡片）；
      * - 图文同发：mode=FIVE_STEP → buildUserText（聊天记录模板），其余 → buildUserReply（简短输入模板）；
-     * - v1.6 全部统一 STRUCTURED，完成解析后落库直渲。
+     * - v1.6 全部统一 STRUCTURED，完成解析后落库直渲；
+     * - v1.6.1 多图：dataUrls 一次请求全量直读（content 数组多 image_url）。
      */
     private suspend fun runVisionDirect(
         sid: Long,
-        dataUrl: String,
+        dataUrls: List<String>,
         text: String,
         mode: AnalysisMode,
     ): Flow<StreamEvent> = flow {
@@ -524,7 +530,7 @@ class RealChatRepository(
                 model = client.model,
                 system = system,
                 userText = userText,
-                imageDataUrl = dataUrl,
+                imageDataUrls = dataUrls,
                 history = history,
             )
         ).collect { event ->
