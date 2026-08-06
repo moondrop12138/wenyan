@@ -95,9 +95,10 @@ fun ModelSheet(
                 },
             )
         }
-        // 由 sheet 状态（currentValue）驱动：显示中→渐强，Hidden（关闭动画）→渐弱
-        LaunchedEffect(sheetState.currentValue) {
-            if (sheetState.currentValue == SheetValue.Hidden) {
+        // v1.7.1-10：用 targetValue 驱动——动画开始瞬间即变，模糊与弹层滑入/滑出同步（跟手）。
+        // 此前用 currentValue 要等动画结束才变化 → 模糊永远晚一拍（迟滞感）
+        LaunchedEffect(sheetState.targetValue) {
+            if (sheetState.targetValue == SheetValue.Hidden) {
                 blurRadius.animateTo(0f, tween(200))
             } else {
                 blurRadius.animateTo(24f, tween(250))

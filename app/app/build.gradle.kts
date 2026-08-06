@@ -68,7 +68,8 @@ android {
         // v1.7.1-8：弹层退出渐弱动画（Animatable 双向 24→0f 200ms，currentValue 驱动）/
         //  空状态文案排版升级（箴言两行断句+字距、温柔引导语、锁图标隐私行）
         // v1.7.1-9：空状态去箴言去隐私说明，重排布局（日期→引导语→大留白→示例卡→引导卡，功能导向）
-        versionCode = 24
+        // v1.7.1-10：弹层模糊改 targetValue 驱动——与弹层动画同步（跟手），消除迟滞感
+        versionCode = 25
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
