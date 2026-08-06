@@ -31,6 +31,25 @@ object GtjShape {
     /** 气泡右上/左下小圆角半径（用户/AI 气泡用） */
     val bubbleTailSmRadius = 4.dp
     val bubbleTailSm = RoundedCornerShape(bubbleTailSmRadius)
+    /**
+     * v1.7.0 液态玻璃：气泡主圆角 20（原型 border-radius 20），尾部小圆角仍 4。
+     * 用户气泡 20/20/6/20（右下尾）；AI 气泡 20/20/20/6（左下尾）。
+     */
+    val bubbleRadius = 20.dp
+    val bubbleUser = RoundedCornerShape(
+        topStart = bubbleRadius, topEnd = bubbleRadius,
+        bottomEnd = bubbleTailSmRadius, bottomStart = bubbleRadius,
+    )
+    val bubbleAi = RoundedCornerShape(
+        topStart = bubbleRadius, topEnd = bubbleRadius,
+        bottomEnd = bubbleRadius, bottomStart = bubbleTailSmRadius,
+    )
+    /** v1.7.0 弹层顶部大圆角 28（原型 sheet radius 28px） */
+    val sheetTopRadius = 28.dp
+    val sheetTop = RoundedCornerShape(topStart = sheetTopRadius, topEnd = sheetTopRadius)
+    /** v1.7.0 输入胶囊圆角 28（原型 inbar radius 28px，悬浮形态） */
+    val inputBarRadius = 28.dp
+    val inputBar = RoundedCornerShape(inputBarRadius)
 }
 
 /** Material3 Shapes 映射。注意：extraLarge 不可用 pill（CircleShape）——

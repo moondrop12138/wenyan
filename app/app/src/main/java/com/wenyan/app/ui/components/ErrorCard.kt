@@ -1,6 +1,5 @@
 package com.wenyan.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -57,11 +57,10 @@ fun ErrorCard(
 ) {
     val p = LocalGtjColors.current
     val ui = errorUi(error.code, error.message)
-    Surface(
+    // v1.7.0：错误卡 = 玻璃材质
+    GlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = GtjShape.md,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.border),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

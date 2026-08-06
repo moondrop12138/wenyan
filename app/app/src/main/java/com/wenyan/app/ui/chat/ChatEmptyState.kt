@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -198,7 +197,7 @@ fun ChatEmptyState(
     }
 }
 
-/** v1.5 示例卡：173×56 圆角 12，surfaceElevated 底 + borderSoft 边（温暖卡片感） */
+/** v1.7.0 示例卡：玻璃材质（glassFill + 顶高光 + 描边 + 软影），圆角 18（原型 ecard radius 18） */
 @Composable
 private fun ExampleGridCard(
     text: String,
@@ -206,12 +205,10 @@ private fun ExampleGridCard(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
-    Surface(
+    GlassSurface(
         onClick = onClick,
+        shape = GtjShape.xl,
         modifier = modifier.height(56.dp),
-        shape = GtjShape.md,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.borderSoft),
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -229,7 +226,7 @@ private fun ExampleGridCard(
 }
 
 /**
- * v1.5 引导入口卡：173×64 圆角 12，图标 32dp 圆角 8 容器（8% 底色暖点缀）。
+ * v1.7.0 引导入口卡：玻璃材质，图标 32dp 圆角 8 容器（8% 底色暖点缀）。
  * iconBg 传 accent（陶土棕）或 warm（赭石），内部取 8% 透明度。
  */
 @Composable
@@ -242,12 +239,10 @@ private fun GuideEntryCard(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
-    Surface(
+    GlassSurface(
         onClick = onClick,
+        shape = GtjShape.xl,
         modifier = modifier.height(64.dp),
-        shape = GtjShape.md,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.borderSoft),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

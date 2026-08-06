@@ -1,6 +1,5 @@
 package com.wenyan.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -49,11 +49,10 @@ fun TranscriptionCard(
 ) {
     val p = LocalGtjColors.current
     var isEditing by remember { mutableStateOf(false) }
-    Surface(
+    // v1.7.0：转述确认卡 = 玻璃材质
+    GlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = GtjShape.md,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.border),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

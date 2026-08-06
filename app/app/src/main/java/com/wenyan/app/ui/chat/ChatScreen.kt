@@ -1,6 +1,13 @@
 package com.wenyan.app.ui.chat
 
 import android.widget.Toast
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -51,7 +58,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +80,9 @@ import com.wenyan.app.ui.components.ModelSheet
 import com.wenyan.app.ui.components.ThinkingPanel
 import com.wenyan.app.ui.components.TranscriptionCard
 import com.wenyan.app.ui.components.TypingIndicator
+import com.wenyan.app.ui.components.glass.GlassSurface
+import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.MessageType
@@ -78,6 +91,8 @@ import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.rememberReducedMotion
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -142,10 +157,28 @@ fun ChatScreen(
             .collect { scrolling -> if (scrolling) textSelectForId = null }
     }
 
+    // ── v1.7.0 顶栏状态点四态（原型 sdot：已连接绿 / 连接中杏棕呼吸 / 思考中赭石呼吸 / 失败灰）──
+    // 最小侵入状态机（零改 ViewModel）：切模型 → Connecting 900ms → Idle；streaming 覆盖为 Thinking；
+    // 有 lastError 且未在流式 → Failure（错误卡消失自动回 Idle）。
+    var pendingSwitch by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingSwitch) {
+        if (pendingSwitch) {
+            delay(900)
+            pendingSwitch = false
+        }
+    }
+    val dotState = when {
+        streaming -> DotState.Thinking
+        pendingSwitch -> DotState.Connecting
+        lastError != null -> DotState.Failure
+        else -> DotState.Idle
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
+                // v1.7.1：抽屉面板改回实底（用户反馈半透明影响阅读），玻璃质感由内部会话行承担
                 drawerContainerColor = p.bg,
             ) {
                 SessionDrawerContent(
@@ -164,12 +197,15 @@ fun ChatScreen(
             }
         },
     ) {
+    // v1.7.1：根 Box 加主题背景（防 App 内主题与系统主题脱节时透明 Scaffold 露出暗色 windowBackground）；光斑画在背景之上
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        GlowBackground()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         topBar = {
             ChatTopBar(
                 modelName = modelName,
-                thinking = streaming,
+                dotState = dotState,
                 onModelClick = { showModelSheet = true },
                 onSettings = onOpenSettings,
                 onMenu = { scope.launch { drawerState.open() } },
@@ -355,7 +391,8 @@ fun ChatScreen(
             }
         }
     }
-    }
+    } // Box（GlowBackground + Scaffold）
+    } // ModalNavigationDrawer
 
     // 长按消息操作菜单：文本类可复制/删除，图片仅删除。
     // v1.2.1：offset 跟随长按触点（窗口坐标），菜单出现在手指处而非固定左下角。
@@ -470,6 +507,8 @@ fun ChatScreen(
             currentModelId = currentId,
             onSelect = { id ->
                 scope.launch { container.settingsRepository.setCurrentModel(id) }
+                // v1.7.0：切模型 → 状态点"连接中"杏棕呼吸 900ms → 已连接
+                pendingSwitch = true
                 showModelSheet = false
             },
             onDismiss = { showModelSheet = false },
@@ -489,67 +528,105 @@ fun ChatScreen(
     }
 }
 
+/** v1.7.0 顶栏状态点四态（原型 sdot，色值跨主题恒定于 GtjPalette.dot*） */
+enum class DotState { Idle, Connecting, Thinking, Failure }
+
 @Composable
 private fun ChatTopBar(
     modelName: String,
-    thinking: Boolean,
+    dotState: DotState,
     onModelClick: () -> Unit,
     onSettings: () -> Unit,
     onMenu: () -> Unit,
 ) {
     val p = LocalGtjColors.current
-    Surface(color = p.bg) {
-        // edge-to-edge：顶栏整体下移状态栏高度（insets 自适应，不同机型高度不同）
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars),
+    val reduced = rememberReducedMotion()
+    // 呼吸动画：Connecting 0.8s / Thinking 1.2s（原型 breathe），reducedMotion 时静态全亮
+    val pulse = if (!reduced) rememberInfiniteTransition(label = "dotPulse") else null
+    val pulseAlpha by if (pulse != null) {
+        pulse.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = if (dotState == DotState.Connecting) 800 else 1200,
+                    easing = FastOutSlowInEasing,
+                ),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "dotPulse",
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
+    val breathing = dotState == DotState.Connecting || dotState == DotState.Thinking
+    val coreAlpha = if (breathing) pulseAlpha else 1f
+    val coreColor = when (dotState) {
+        DotState.Idle -> p.dotConnected
+        DotState.Connecting -> p.dotConnecting
+        DotState.Thinking -> p.dotThinking
+        DotState.Failure -> p.dotFailure
+    }
+
+    // v1.7.0：顶栏 = 48dp 玻璃条（glassFill + 顶高光 + 描边 + 软影），edge-to-edge 状态栏内边距
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(shape = RectangleShape)
+            .windowInsetsPadding(WindowInsets.statusBars),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 4.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+            GtjIconButton(
+                icon = Icons.Outlined.Menu,
+                contentDescription = "打开历史会话",
+                onClick = onMenu,
+                tint = p.fgSecondary,
+            )
+            // v1.5：顶栏标题"温言"（克制的中文字标，不喧宾夺主）
+            Text(
+                text = "温言",
+                style = GtjType.Title.copy(fontSize = 17.sp, lineHeight = 24.sp),
+                color = p.fg,
+                modifier = Modifier.padding(start = 2.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            // 模型 pill：玻璃胶囊（radius 99 / maxWidth 158 / 内 padding 5,11），内含微型玻璃状态点
+            GlassSurface(
+                onClick = onModelClick,
+                shape = GtjShape.pill,
+                modifier = Modifier.widthIn(max = 158.dp),
             ) {
-                GtjIconButton(
-                    icon = Icons.Outlined.Menu,
-                    contentDescription = "打开历史会话",
-                    onClick = onMenu,
-                    tint = p.fgSecondary,
-                )
-                // v1.5：顶栏标题"温言"（克制的中文字标，不喧宾夺主）
-                Text(
-                    text = "温言",
-                    style = GtjType.Title.copy(fontSize = 17.sp, lineHeight = 24.sp),
-                    color = p.fg,
-                    modifier = Modifier.padding(start = 2.dp),
-                )
-                Spacer(Modifier.weight(1f))
-                Surface(
-                    onClick = onModelClick,
-                    shape = GtjShape.pill,
-                    color = p.surfaceElevated,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, p.borderSoft),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    // 微型玻璃状态点：11dp 玻璃壳（同款 glass 材质）+ 5dp 状态色内芯（呼吸）
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(11.dp).liquidGlass(shape = CircleShape),
                     ) {
-                        // v1.5：状态点——思考中赭石，空闲陶土棕
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
-                                .background(
-                                    if (thinking) p.warm else p.accent,
-                                    CircleShape,
-                                ),
+                                .size(5.dp)
+                                .background(coreColor.copy(alpha = coreAlpha), CircleShape),
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(modelName, style = GtjType.Label, color = p.fgSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Icon(Icons.Outlined.ExpandMore, contentDescription = "切换模型", modifier = Modifier.size(16.dp), tint = p.meta)
                     }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        modelName,
+                        style = GtjType.Label,
+                        color = p.accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Icon(Icons.Outlined.ExpandMore, contentDescription = "切换模型", modifier = Modifier.size(16.dp), tint = p.meta)
                 }
-                Spacer(Modifier.width(4.dp))
-                GtjIconButton(icon = Icons.Outlined.Settings, contentDescription = "设置", onClick = onSettings, tint = p.fgSecondary)
             }
+            Spacer(Modifier.width(4.dp))
+            GtjIconButton(icon = Icons.Outlined.Settings, contentDescription = "设置", onClick = onSettings, tint = p.fgSecondary)
         }
     }
 }

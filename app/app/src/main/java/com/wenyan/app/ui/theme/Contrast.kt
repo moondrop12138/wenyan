@@ -32,6 +32,22 @@ object GtjContrast {
         return (hi + 0.05) / (lo + 0.05)
     }
 
+    /**
+     * v1.7.0 玻璃合成：over 半透明层叠在 under 之上的结果色（标准 alpha 合成）。
+     * 用于纯 JVM 断言玻璃填充 / 用户气泡 tint 合成后的对比度。
+     */
+    fun composite(over: Color, under: Color): Color {
+        val a = over.alpha
+        val aOut = a + under.alpha * (1 - a)
+        if (aOut <= 0f) return Color.Transparent
+        return Color(
+            (over.red * a + under.red * under.alpha * (1 - a)) / aOut,
+            (over.green * a + under.green * under.alpha * (1 - a)) / aOut,
+            (over.blue * a + under.blue * under.alpha * (1 - a)) / aOut,
+            aOut,
+        )
+    }
+
     /** 格式化保留两位小数（测试断言输出友好）。 */
     fun format(ratio: Double): String = String.format("%.2f", ratio)
 }

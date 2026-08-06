@@ -6,6 +6,7 @@ import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
 import com.wenyan.app.llm.ChatRequest
 import com.wenyan.app.llm.LlmClient
+import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.llm.LlmEvent
 import com.wenyan.app.log.AppLogger
 import com.wenyan.app.ui.contract.LlmError
@@ -64,20 +65,28 @@ class RealSettingsRepository(
         if (ack) AppLogger.i("privacy_ack_confirm")
     }
 
+    /**
+     * v1.6.3 测试连接：挨个测试该提供商模型列表里的**所有**模型，任一模型成功（无 Failed）→ 返回 null（绿灯）；
+     * 全部失败 → 返回最后一个错误（红灯）。无模型/无 API Key 显式返回错误（不再误判为成功）。
+     */
     override suspend fun testConnection(providerId: Long): LlmError? {
-        val provider = providerRepository.getProvider(providerId) ?: return null
-        val apiKey = providerRepository.decryptApiKey(providerId) ?: return null
-        val model = providerRepository.listModels(providerId).firstOrNull() ?: return null
-        val client = LlmClient(provider.baseUrl, apiKey)
-        val events = client.stream(
-            ChatRequest(
-                model = model.name,
-                system = "你好",
-                userText = "ping",
-            )
-        ).toList()
-        return events.filterIsInstance<LlmEvent.Failed>().firstOrNull()?.let {
-            UiMappers.toLlmError(it.error)
+        val provider = providerRepository.getProvider(providerId)
+            ?: return LlmError("no_provider", "提供商不存在", false)
+        val apiKey = providerRepository.decryptApiKey(providerId)
+            ?: return UiMappers.toLlmError(LlmErrorCode.UNAUTHORIZED)
+        val models = providerRepository.listModels(providerId)
+        if (models.isEmpty()) return LlmError("no_model", "该提供商还没有模型，请先添加模型", false)
+        return testAllModels(models.map { it.name }) { name ->
+            val events = LlmClient(provider.baseUrl, apiKey).stream(
+                ChatRequest(
+                    model = name,
+                    system = "你好",
+                    userText = "ping",
+                )
+            ).toList()
+            events.filterIsInstance<LlmEvent.Failed>().firstOrNull()?.let {
+                UiMappers.toLlmError(it.error)
+            }
         }
     }
 
@@ -134,4 +143,19 @@ class RealSettingsRepository(
         dataStore.clearAll()
         AppLogger.i("privacy_wipe_all")
     }
+}
+
+/**
+ * v1.6.3 遍历所有模型测试连接（纯函数，可单测）：
+ * 任一模型返回 null（成功）→ 整体 null（绿灯，提前返回）；全部失败 → 返回最后一个错误。
+ */
+internal suspend fun testAllModels(
+    models: List<String>,
+    testOne: suspend (String) -> LlmError?,
+): LlmError? {
+    var last: LlmError? = null
+    for (m in models) {
+        last = testOne(m) ?: return null
+    }
+    return last
 }

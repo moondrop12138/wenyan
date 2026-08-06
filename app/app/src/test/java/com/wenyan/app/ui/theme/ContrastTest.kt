@@ -101,4 +101,53 @@ class ContrastTest {
     fun darkAccent_onAccentSoft_passesAa() {
         assertRatio(DarkPalette.accent, DarkPalette.accentSoft, 4.5, "深色 accent/accentSoft（接住你 pill）")
     }
+
+    // ---- v1.7.0 液态玻璃：玻璃合成底（fill 与 bg 混合后的实色）上文字须 ≥4.5 ----
+    private fun blend(fg: Color, bg: Color): Color {
+        val a = fg.alpha
+        return Color(
+            fg.red * a + bg.red * (1 - a),
+            fg.green * a + bg.green * (1 - a),
+            fg.blue * a + bg.blue * (1 - a),
+        )
+    }
+
+    private fun glassStrongBottom(bg: Color): Color = blend(LightPalette.glassFillStrong, bg)
+
+    private fun glassStrongDarkBottom(bg: Color): Color = blend(DarkPalette.glassFillStrong, bg)
+
+    @Test
+    fun lightFg_onGlassStrong_passesAa() {
+        assertRatio(LightPalette.fg, glassStrongBottom(LightPalette.bg), 4.5, "浅色 fg/glassFillStrong 合成底")
+    }
+
+    @Test
+    fun lightMuted_onGlassStrong_passesAa() {
+        assertRatio(LightPalette.muted, glassStrongBottom(LightPalette.bg), 4.5, "浅色 muted/glassFillStrong 合成底")
+    }
+
+    @Test
+    fun darkFg_onGlassStrong_passesAa() {
+        assertRatio(DarkPalette.fg, glassStrongDarkBottom(DarkPalette.bg), 4.5, "深色 fg/glassFillStrong 合成底")
+    }
+
+    @Test
+    fun darkMuted_onGlassStrong_passesAa() {
+        assertRatio(DarkPalette.muted, glassStrongDarkBottom(DarkPalette.bg), 4.5, "深色 muted/glassFillStrong 合成底")
+    }
+
+    // 用户气泡：tint 渐变最浓停靠点叠在 glassFill 合成底之上（取最坏点验证 ink 文字）
+    @Test
+    fun lightInk_onUserBubbleTintMax_passesAa() {
+        val glassBottom = blend(LightPalette.glassFill, LightPalette.bg)
+        val tintMax = LightUserBubbleTint.first().second // 0.48 停靠点
+        assertRatio(LightPalette.fg, blend(tintMax, glassBottom), 4.5, "浅色 fg/用户气泡 tint 最浓点")
+    }
+
+    @Test
+    fun darkInk_onUserBubbleTintMax_passesAa() {
+        val glassBottom = blend(DarkPalette.glassFill, DarkPalette.bg)
+        val tintMax = DarkUserBubbleTint.first().second // 0.50 停靠点
+        assertRatio(DarkPalette.fg, blend(tintMax, glassBottom), 4.5, "深色 fg/用户气泡 tint 最浓点")
+    }
 }
