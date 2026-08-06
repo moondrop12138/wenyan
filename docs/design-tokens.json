@@ -34,7 +34,7 @@
       "scrim": "rgba(43,33,24,0.45)",
       "glass": {
         "fill": "rgba(253,249,242,0.55)",
-        "fillStrong": "rgba(253,248,240,0.82)",
+        "fillStrong": "rgba(253,248,240,0.72)",
         "border": "rgba(255,255,255,0.75)",
         "edgeHighlight": "rgba(255,255,255,0.95)",
         "shadow": "rgba(110,70,30,0.18)"
@@ -76,7 +76,7 @@
       "scrim": "rgba(0,0,0,0.60)",
       "glass": {
         "fill": "rgba(46,36,28,0.45)",
-        "fillStrong": "rgba(34,26,20,0.82)",
+        "fillStrong": "rgba(34,26,20,0.74)",
         "border": "rgba(255,255,255,0.12)",
         "edgeHighlight": "rgba(255,255,255,0.35)",
         "shadow": "rgba(0,0,0,0.50)"

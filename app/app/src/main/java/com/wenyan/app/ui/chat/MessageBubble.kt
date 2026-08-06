@@ -96,13 +96,14 @@ fun MessageBubble(
                         true
                     }
                 }
-                // v1.7.0 玻璃气泡：clip 管内容，liquidGlass 管玻璃（用户侧叠 tint + 棕描边）
-                .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi)
+                // v1.7.0 玻璃气泡：liquidGlass 管玻璃（用户侧叠 tint + 棕描边），
+                // v1.7.1 二改：clip 置后（此前投影被 clip 裁掉→气泡无层次）
                 .liquidGlass(
                     shape = if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi,
                     tint = if (isUser) rememberUserBubbleTint() else null,
                     borderColor = if (isUser) rememberUserBubbleBorder() else null,
-                ),
+                )
+                .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
         ) {
             Text(
                 text = message.content,
@@ -235,12 +236,13 @@ fun SelectableMessageContent(
             Box(
                 modifier = Modifier
                     .widthIn(max = if (isUser) 300.dp else 340.dp)
-                    .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi)
+                    // v1.7.1 二改：clip 置后，软投影不被裁
                     .liquidGlass(
                         shape = if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi,
                         tint = if (isUser) rememberUserBubbleTint() else null,
                         borderColor = if (isUser) rememberUserBubbleBorder() else null,
-                    ),
+                    )
+                    .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
             ) {
                 BasicTextField(
                     value = tfv,
@@ -269,8 +271,9 @@ fun StreamingBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 340.dp)
-                .clip(GtjShape.bubbleAi)
-                .liquidGlass(shape = GtjShape.bubbleAi),
+                // v1.7.1 二改：clip 置后，软投影不被裁
+                .liquidGlass(shape = GtjShape.bubbleAi)
+                .clip(GtjShape.bubbleAi),
         ) {
             Text(
                 text = text,
@@ -295,8 +298,9 @@ fun StreamingPlaceholderBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 340.dp)
-                .clip(GtjShape.bubbleAi)
-                .liquidGlass(shape = GtjShape.bubbleAi),
+                // v1.7.1 二改：clip 置后，软投影不被裁
+                .liquidGlass(shape = GtjShape.bubbleAi)
+                .clip(GtjShape.bubbleAi),
         ) {
             Text(
                 text = "正在组织语言…",

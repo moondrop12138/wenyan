@@ -75,10 +75,10 @@ val LightPalette = GtjPalette(
     warmSoft = Color(0xFFF7EADC),
     warmOn = Color(0xFF8F4F24),
     scrim = Color(0x732B2118),
-    // 玻璃（原型浅色值）：fill rgba(253,249,242,.55) / strong rgba(253,248,240,.82) /
+    // 玻璃（原型浅色值）：fill rgba(253,249,242,.55) / strong rgba(253,248,240,.72)（v1.7.1 二改降透明度去纯色感）/
     // border rgba(255,255,255,.75) / edge rgba(255,255,255,.95) / shadow rgba(110,70,30,.18)
     glassFill = Color(0x8CFDF9F2),
-    glassFillStrong = Color(0xD1FDF8F0),
+    glassFillStrong = Color(0xB8FDF8F0), // 0.72 × 255 ≈ 184 = 0xB8
     glassBorder = Color(0xBFFFFFFF),
     glassEdgeHighlight = Color(0xF2FFFFFF),
     glassShadow = Color(0x2E6E461E),
@@ -119,10 +119,10 @@ val DarkPalette = GtjPalette(
     warmSoft = Color(0xFF3A2A1C),
     warmOn = Color(0xFFF2CBA9),
     scrim = Color(0x99000000),
-    // 玻璃（原型深色值）：fill rgba(46,36,28,.45) / strong rgba(34,26,20,.82) /
+    // 玻璃（原型深色值）：fill rgba(46,36,28,.45) / strong rgba(34,26,20,.74)（v1.7.1 二改降透明度）/
     // border rgba(255,255,255,.12) / edge rgba(255,255,255,.35) / shadow rgba(0,0,0,.5)
     glassFill = Color(0x732E241C),
-    glassFillStrong = Color(0xD1221A14),
+    glassFillStrong = Color(0xBD221A14), // 0.74 × 255 ≈ 189 = 0xBD
     glassBorder = Color(0x1FFFFFFF),
     glassEdgeHighlight = Color(0x59FFFFFF),
     glassShadow = Color(0x80000000),

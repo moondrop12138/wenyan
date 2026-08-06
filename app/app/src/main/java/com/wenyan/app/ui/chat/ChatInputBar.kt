@@ -197,8 +197,9 @@ fun ChatInputBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .clip(GtjShape.inputBar)
-                    .liquidGlass(shape = GtjShape.inputBar, strong = true),
+                    // v1.7.1 二改：clip 在 liquidGlass 之后，软投影不被裁（此前投影丢失→纯色平台感）
+                    .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                    .clip(GtjShape.inputBar),
             ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

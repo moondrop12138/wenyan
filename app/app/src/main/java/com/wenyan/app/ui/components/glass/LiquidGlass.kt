@@ -30,8 +30,10 @@ import com.wenyan.app.ui.theme.LocalGtjColors
  * v1.7.0 液态玻璃 · 自包含玻璃绘制（Compose 无 backdrop-filter，用"半透明填充 + 顶部高光 +
  * 细描边 + 柔和投影"四要素模拟玻璃质感，参数固化自 outputs/liquid-glass-prototype.html）。
  *
- * 用法：`.clip(shape).liquidGlass(shape)` 或直接用 [GlassSurface]。
- * 关键：liquidGlass 自身**不裁剪**（投影需要溢出圆角），由外层 clip 负责内容裁剪；
+ * 用法：`.liquidGlass(shape).clip(shape)` 或直接用 [GlassSurface]。
+ * **顺序坑（v1.7.1 二改）**：clip 必须放在 liquidGlass **之后**——liquidGlass 的软投影
+ * 溢出圆角，若 clip 在前会把投影裁掉（输入胶囊/气泡变成无层次的"纯色平台"）。
+ * 关键：liquidGlass 自身**不裁剪**（投影需要溢出圆角），由后置 clip 负责内容裁剪；
  * 不拦截任何手势，长按菜单 / readOnly 部分选择 / 滚动全部兼容。
  *
  * @param shape 玻璃形状（决定 fill/stroke/highlight 的路径）
