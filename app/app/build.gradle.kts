@@ -73,8 +73,11 @@ android {
         //  网络安全配置 localhost 明文豁免（本地模型可连）+ dataExtractionRules 禁换机迁移备份 /
         //  UNSUPPORTED_URL 错误码（公网明文地址明确提示）/
         //  顺带修 ModelSheet 缩进 lint / ViewModelExt RestrictedApi suppress
-        versionCode = 26
-        versionName = "1.7.1"
+        // v1.7.2 跨会话记忆：target 表多行化（note 记忆正文）+ session.targetId 档案归属（DB v5）/
+        //  设置页「记忆」分组 CRUD + 激活切换 Toast + 自动记忆开关 /
+        //  会话归属档案优先注入 + 新话题自动提炼（MemoryExtractor，20s 超时静默）/ 抽屉会话档案 Tag
+        versionCode = 27
+        versionName = "1.7.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

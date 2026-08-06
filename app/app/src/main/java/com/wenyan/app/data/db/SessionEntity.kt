@@ -18,4 +18,6 @@ data class SessionEntity(
     val stateJson: String = "",
     /** v1.2.1 会话标题（首轮回复完成后由主模型拟定）；空串 = 未生成，抽屉回退首句截断；DB v3 新增 */
     val title: String = "",
+    /** v1.7.2 所属记忆档案 id（可空；老会话 null = 未关联 = 注入空档案）；DB v5 新增 */
+    val targetId: Long? = null,
 )

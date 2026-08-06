@@ -101,12 +101,23 @@
 | 表名 | 核心字段 | 索引 | 关联 |
 |------|----------|------|------|
 | profile | id / mbti / score / strengths / weaknesses / createdAt | PK | - |
-| target | id / codeName / mbti / score / relationStatus / timeline(JSON) / createdAt | PK | - |
-| session | id / createdAt / scenarioTag / refDocs(JSON) | PK | - |
+| target | id / codeName / mbti / score / relationStatus / timeline(JSON) / note(记忆正文) / createdAt | PK | - |
+| session | id / createdAt / scenarioTag / refDocs(JSON) / targetId(档案归属) | PK | - |
 | message | id / sessionId / role / content / type[text,image,analysis] / createdAt | sessionId | FK→session |
 | provider | id / name / baseUrl / apiKeyEncrypted / isPreset / sortOrder | PK | - |
 | model | id / providerId / name / supportsVision / isDefault / sortOrder | providerId | FK→provider |
-| DataStore | currentModelId / visionModelId / theme / onboardingCompleted / privacyAck | - | - |
+| DataStore | currentModelId / visionModelId / theme / onboardingCompleted / privacyAck / activeTargetId / memoryAutoEnabled | - | - |
+
+> v1.7.2（DB v5）：target 表多行化 = 多记忆档案，`note` 存记忆正文（默认空串）；session 加 `targetId` 会话档案归属（可空，老会话 null = 未关联）；DataStore 加 `active_target_id`（激活档案）与 `memory_auto_enabled`（自动记忆，默认开）。MIGRATION_4_5 仅加列，老数据不丢；隐私清除（wipeAll）自动覆盖新 key 与新表数据。
+
+## 6.1 记忆功能（v1.7.2 新增章节）
+
+- **记忆档案**：target 表多行 = 多记忆档案，每行含 `note` 记忆正文（跨会话记忆，上限 2000 字）。
+- **会话归属**：session.targetId 绑定档案；新会话创建时写入当前激活档案 id；聊天注入 = 会话归属档案优先；老会话（null）注入空档案 = 现状行为。
+- **自动提炼**：回复完成（新话题/首话题）后由主模型提炼新事实写入档案（`MemoryExtractor`：buildPrompt/parseFacts/mergeNote，去重幂等、防御性解析、20s 超时静默）；`memory_auto_enabled` 开关默认开。
+- **Prompt 注入**：`buildProfileJson` target 加 `memory` 字段（=note）；档案确有记忆时追加 `CorePrompt.memoryRule` 使用规则（保持一致、不矛盾、不编造）。
+- **设置页**：「记忆」分组（模型服务之后、外观之前）：档案 CRUD + 激活切换（Toast「已切换到「X」的记忆」）+ 自动记忆开关；删激活项自动激活剩余第一个，无剩余 → null。
+- **隐私清除**：wipeAll 清 DataStore 全部 key + target/session 表，记忆与档案全部消失，零额外改动。
 
 ## 7. 页面清单（锁定）
 
@@ -201,3 +212,4 @@
 |------|----------|------|----------|
 | 2026-08-02 | v1.0 初版生成 | 三文档用户确认 | 全部 |
 | 2026-08-02 | OpenAI 预设更新为 GPT-5.6 系（Sol/Terra/Luna） | 用户指正最新模型 | 4.1/PRD 模型表 |
+| 2026-08-06 | v1.7.2 记忆迭代：target 多档案 + note + session.targetId（DB v5）+ DataStore 2 key + 设置页「记忆」分组 + 自动提炼 + Prompt memory 注入 | 迭代计划 v2 确认 | 6/7/§6.1 新增 |

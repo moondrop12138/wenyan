@@ -4,12 +4,14 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
+import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.image.ImageCompressor
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
 import com.wenyan.app.domain.ConversationState
 import com.wenyan.app.domain.ConversationStateTracker
+import com.wenyan.app.domain.MemoryExtractor
 import com.wenyan.app.knowledge.CrisisDetector
 import com.wenyan.app.knowledge.KnowledgeEngine
 import com.wenyan.app.llm.AnalysisParser
@@ -73,6 +75,9 @@ class RealChatRepository(
     /** v1.2.1 会话标题生成 scope：独立于发送流，发射即返回不阻塞 UI；失败静默 */
     private val titleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** v1.7.2 自动记忆提炼 scope：独立于发送流，不阻塞主流程；失败静默（仿 titleScope） */
+    private val memoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     /**
      * v1.3.1 应用级发送 scope：不随 Activity/ViewModel 销毁，息屏/退后台回答继续完成并落库。
      * 进程被杀则无法续跑（系统回收，除非前台服务——MVP 不做）。
@@ -103,8 +108,11 @@ class RealChatRepository(
         combine(
             conversationRepository.observeAllSessions(),
             conversationRepository.observeFirstUserMessages(),
-        ) { sessions, firstMessages ->
+            // v1.7.2 第三路：全档案 → 会话归属档案名（抽屉 Tag）
+            profileRepository.observeTargets(),
+        ) { sessions, firstMessages, targets ->
             val firstBySession = firstMessages.associateBy { it.sessionId }
+            val targetNameById = targets.associate { it.id to it.codeName }
             sessions.mapNotNull { s ->
                 val first = firstBySession[s.id]
                 // v1.2.1 三级回退：DB 标题（主模型拟定）> 首条 USER 前 30 字 > "新会话"
@@ -113,6 +121,7 @@ class RealChatRepository(
                     id = s.id,
                     title = title,
                     createdAt = s.createdAt,
+                    targetName = s.targetId?.let { targetNameById[it] },
                 )
             }
         }
@@ -159,7 +168,8 @@ class RealChatRepository(
 
         val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
         val profile = profileRepository.getProfile()
-        val target = profileRepository.getTarget()
+        // v1.7.2 会话归属档案优先（老会话 targetId=null → 空档案 = 现状行为）
+        val target = resolveTarget(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val history = buildHistory(sid, text)
         val user = when (mode) {
@@ -194,6 +204,10 @@ class RealChatRepository(
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
                         // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
                         titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        // v1.7.2：新话题自动提炼记忆（仅 persistUser=true 首轮；开关关/无档案/同题追问跳过）
+                        if (persistUser && shouldExtractMemory(sid, state, text)) {
+                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText) }
+                        }
                         // v1.6 状态回填走卡片字段：结论摘要=advice.core（空则 empathy 首句），话术=reply
                         val newState = stateTracker.onModelReply(
                             state = state,
@@ -311,7 +325,8 @@ class RealChatRepository(
 
         val (knowledge, _) = knowledgeEngine.buildInjection(transcription)
         val profile = profileRepository.getProfile()
-        val target = profileRepository.getTarget()
+        // v1.7.2 会话归属档案优先
+        val target = resolveTarget(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val user = promptBuilder.buildUserTranscription(transcription)
         val history = buildHistory(sid, transcription)
@@ -328,6 +343,11 @@ class RealChatRepository(
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        // v1.7.2 转述确认同样自动提炼（素材取 transcription）
+                        val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
+                        if (shouldExtractMemory(sid, stateNow, transcription)) {
+                            memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText) }
+                        }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                     }
                     emit(StreamEvent.Done)
@@ -472,10 +492,22 @@ class RealChatRepository(
 
     private suspend fun ensureSession(): Long {
         sessionId.value?.let { return it }
-        val id = conversationRepository.createSession(null, emptyList())
+        val id = conversationRepository.createSession(
+            scenarioTag = null,
+            refDocs = emptyList(),
+            // v1.7.2：新会话绑定当前激活档案（切档案只影响新会话）
+            targetId = dataStore.getActiveTargetId(),
+        )
         sessionId.value = id
         return id
     }
+
+    /**
+     * v1.7.2 解析会话归属档案：会话 targetId → 档案（含 note 记忆正文）；
+     * 老会话 targetId=null → 返回 null（空档案 = 现状行为，不报错）。
+     */
+    private suspend fun resolveTarget(sid: Long): TargetEntity? =
+        conversationRepository.getSession(sid)?.targetId?.let { profileRepository.getTarget(it) }
 
     private suspend fun resolveClient(): ResolvedClient? {
         val model = resolveModel() ?: return null
@@ -508,7 +540,8 @@ class RealChatRepository(
         mode: AnalysisMode,
     ): Flow<StreamEvent> = flow {
         val profile = profileRepository.getProfile()
-        val target = profileRepository.getTarget()
+        // v1.7.2 会话归属档案优先
+        val target = resolveTarget(sid)
         val system = promptBuilder.buildSystem(profile, target, "")
         val client = resolveClient() ?: run {
             emit(StreamEvent.Error(noConfigError()))
@@ -541,7 +574,11 @@ class RealChatRepository(
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        // v1.7.2 通道 A 直读同样自动提炼（素材取 transcription 转述文本）
+                        val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
+                        if (shouldExtractMemory(sid, stateNow, text)) {
+                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText) }
+                        }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                     }
                     emit(StreamEvent.Done)
@@ -631,6 +668,47 @@ class RealChatRepository(
             analysis.empathy.split(Regex("[。！？\n]")).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
         }.replace(Regex("[#*>`\\-]"), "").take(40)
 
+    // ===== v1.7.2 自动记忆提炼辅助 =====
+
+    /**
+     * 自动提炼节流判定（纯判定，不写状态）：
+     * - 开关关闭 → 跳过
+     * - 会话无归属档案 / 档案不存在 → 跳过（老会话 null 不提炼）
+     * - 首话题或新话题（!isSameTopic）→ 提炼；同题追问 → 跳过（避免每轮都调 LLM）
+     */
+    private suspend fun shouldExtractMemory(sid: Long, state: ConversationState, userInput: String): Boolean {
+        if (!dataStore.memoryAutoEnabled.first()) return false
+        val targetId = conversationRepository.getSession(sid)?.targetId ?: return false
+        if (profileRepository.getTarget(targetId) == null) return false
+        return !state.hasActiveTopic || !stateTracker.isSameTopic(state, userInput)
+    }
+
+    /**
+     * 执行一次记忆提炼（独立 scope + 幂等 + 失败静默 + 20s 超时，仿 generateTitleOnce）：
+     * 调主模型（temperature=0.3）→ parseFacts 防御解析 → mergeNote 去重追加（≤2000 字）→ updateTarget。
+     * 失败静默 Log.w；重复触发因 mergeNote 去重不会重复追加。
+     */
+    private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String) {
+        runCatching {
+            withTimeout(MEMORY_TIMEOUT_MS) {
+                val targetId = conversationRepository.getSession(sid)?.targetId ?: return@withTimeout
+                val target = profileRepository.getTarget(targetId) ?: return@withTimeout
+                val reply = runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault(replyFullText)
+                val prompt = MemoryExtractor.buildPrompt(userInput, reply, target.note)
+                val client = resolveClient() ?: return@withTimeout
+                val json = client.client.stream(
+                    ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
+                ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
+                val facts = MemoryExtractor.parseFacts(json ?: "")
+                val merged = MemoryExtractor.mergeNote(target.note, facts)
+                if (merged != target.note) {
+                    profileRepository.updateTarget(target.copy(note = merged))
+                    Log.i("RealChatRepository", "memory extracted: +${facts.size} facts for target $targetId")
+                }
+            }
+        }.onFailure { Log.w("RealChatRepository", "memory extraction failed", it) }
+    }
+
     private data class ResolvedClient(val model: String, val client: LlmClient)
 
     private companion object {
@@ -643,5 +721,10 @@ class RealChatRepository(
         const val TITLE_TIMEOUT_MS = 20_000L
         /** v1.2.1：标题生成 system prompt，只输出标题本身 */
         const val TITLE_SYSTEM_PROMPT = "你是会话标题生成器。只输出标题本身，不要任何解释、引号、标点或表情。"
+
+        /** v1.7.2：记忆提炼超时（毫秒），超时静默不追加 */
+        const val MEMORY_TIMEOUT_MS = 20_000L
+        /** v1.7.2：记忆提炼 system prompt，只输出 JSON */
+        const val MEMORY_SYSTEM_PROMPT = "你是记忆提炼器。只输出 JSON，不加解释。"
     }
 }

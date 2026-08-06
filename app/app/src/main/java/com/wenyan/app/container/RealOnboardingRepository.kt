@@ -35,7 +35,7 @@ class RealOnboardingRepository(
             )
         )
         if (draft.targetCodeName.isNotBlank()) {
-            profileRepository.saveTarget(
+            val targetId = profileRepository.saveTarget(
                 TargetEntity(
                     codeName = draft.targetCodeName,
                     mbti = draft.targetMbti,
@@ -45,6 +45,10 @@ class RealOnboardingRepository(
                     createdAt = now,
                 )
             )
+            // v1.7.2：首个档案自动激活（当前无激活档案时，新会话默认归属它）
+            if (dataStore.getActiveTargetId() == null) {
+                dataStore.setActiveTargetId(targetId)
+            }
         }
         dataStore.setOnboardingCompleted(true)
         AppLogger.i("onboarding_completed", "mode" to "submit")

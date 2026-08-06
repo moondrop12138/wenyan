@@ -1,8 +1,10 @@
 package com.wenyan.app.ui.settings
 
 import com.wenyan.app.BuildConfig
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,17 +25,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +65,7 @@ import com.wenyan.app.ui.components.glass.GlowBackground
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ProviderInfo
+import com.wenyan.app.ui.contract.TargetUi
 import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -83,8 +92,23 @@ fun SettingsScreen(
     val themeMode by vm.themeMode.collectAsState()
     val showPrivacy by vm.showPrivacyDialog.collectAsState()
     val showWipe by vm.showWipeDialog.collectAsState()
+    val targets by vm.targets.collectAsState()
+    val memoryAutoEnabled by vm.memoryAutoEnabled.collectAsState()
+    val toastMessage by vm.toastMessage.collectAsState()
+    val showNameDialog by vm.showNameDialog.collectAsState()
+    val editTarget by vm.editTarget.collectAsState()
+    val deleteTarget by vm.deleteTarget.collectAsState()
     val p = LocalGtjColors.current
+    val context = LocalContext.current
     var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
+
+    // v1.7.2 切换激活档案 Toast（一次性事件，消费后清空）
+    LaunchedEffect(toastMessage) {
+        toastMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            vm.consumeToast()
+        }
+    }
 
     // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
     Box(Modifier.fillMaxSize().background(p.bg)) {
@@ -161,6 +185,71 @@ fun SettingsScreen(
                     ProviderRow(provider = provider, onClick = { onEditProvider(provider.id) })
                 }
             }
+            // ===== v1.7.2 「记忆」分组（模型服务之后、外观之前） =====
+            item { ThickDivider() }
+            item { SettingsSectionHeader("记忆") }
+            if (targets.isEmpty()) {
+                item {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("还没有记忆档案，添加一个开始使用", style = GtjType.BodySm, color = p.muted)
+                    }
+                }
+            } else {
+                items(targets, key = { it.id }) { target ->
+                    MemoryTargetRow(
+                        target = target,
+                        onClick = { vm.setActiveTarget(target) },
+                        onEdit = { vm.requestEditTarget(target) },
+                        onDelete = { vm.requestDeleteTarget(target) },
+                    )
+                }
+            }
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text("添加记忆", style = GtjType.Label, color = p.accent, modifier = Modifier.weight(1f))
+                    GtjIconButton(icon = Icons.Outlined.Add, contentDescription = "添加记忆", onClick = vm::requestCreateTarget, tint = p.accent, iconSize = 20.dp)
+                }
+            }
+            item {
+                // v1.7.2 自动记忆开关行（玻璃行 + Switch，默认开）
+                GlassSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RectangleShape,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("自动记忆", style = GtjType.Body, color = p.fg)
+                            Text("回复后自动提炼新事实写入当前档案", style = GtjType.Caption, color = p.muted)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = memoryAutoEnabled,
+                            onCheckedChange = vm::setMemoryAutoEnabled,
+                            // 无障碍：Switch 显式关联 label
+                            modifier = Modifier.semantics { contentDescription = "自动记忆" },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = p.accentOn,
+                                checkedTrackColor = p.accent,
+                                uncheckedTrackColor = p.borderSoft,
+                            ),
+                        )
+                    }
+                }
+            }
+            item {
+                Text(
+                    "选择本次咨询对象的记忆，不同对象互不干扰",
+                    style = GtjType.Caption,
+                    color = p.muted,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
             item { ThickDivider() }
             item { SettingsSectionHeader("外观") }
             item {
@@ -220,6 +309,25 @@ fun SettingsScreen(
     }
     if (showWipe) {
         WipeDialog(onDismiss = vm::dismissWipe, onConfirm = { vm.confirmWipe(onBack) })
+    }
+    // ===== v1.7.2 记忆弹窗 =====
+    if (showNameDialog) {
+        MemoryNameDialog(onDismiss = vm::dismissCreateTarget, onConfirm = vm::createTarget)
+    }
+    editTarget?.let { t ->
+        MemoryEditDialog(
+            initialName = t.name,
+            initialNote = t.note,
+            onDismiss = vm::dismissEditTarget,
+            onSave = { name, note -> vm.updateTarget(t.id, name, note) },
+        )
+    }
+    deleteTarget?.let { t ->
+        MemoryDeleteDialog(
+            targetName = t.name,
+            onDismiss = vm::dismissDeleteTarget,
+            onConfirm = { vm.deleteTarget(t.id) },
+        )
     }
 }
 
@@ -322,6 +430,59 @@ private fun ProviderRow(
             Tag(text = status, kind = TagKind.NEUTRAL)
             Spacer(Modifier.width(4.dp))
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.meta)
+        }
+    }
+}
+
+/**
+ * v1.7.2 记忆档案行（玻璃行）：
+ * 左侧激活标识 = accent 实心对勾 / 未激活空心圆；中部名称 + caption；右侧编辑/删除 20dp 图标按钮。
+ * 点行主体 = 切换激活档案（Toast 在 VM 内触发）。
+ */
+@Composable
+private fun MemoryTargetRow(
+    target: TargetUi,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    GlassSurface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = GtjShape.md,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            if (target.isActive) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "使用中",
+                    modifier = Modifier.size(20.dp),
+                    tint = p.accent,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .border(2.dp, p.muted, CircleShape),
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(target.name, style = GtjType.Body, color = p.fg)
+                // caption：激活 =「使用中」/「使用中 · 已记住 N 字」；未激活 =「未使用」
+                val caption = when {
+                    target.isActive && target.note.isNotEmpty() -> "使用中 · 已记住 ${target.note.length} 字"
+                    target.isActive -> "使用中"
+                    else -> "未使用"
+                }
+                Text(caption, style = GtjType.Caption, color = p.muted)
+            }
+            GtjIconButton(icon = Icons.Outlined.Edit, contentDescription = "编辑记忆", onClick = onEdit, iconSize = 20.dp)
+            GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除记忆", onClick = onDelete, tint = p.danger, iconSize = 20.dp)
         }
     }
 }

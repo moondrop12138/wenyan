@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
+import com.wenyan.app.ui.contract.TargetUi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 设置页状态（AC-09/11/12/18）：提供商列表、主/视觉模型、主题、隐私清除。
+ * v1.7.2 新增「记忆」分组：记忆档案列表 / 激活档案 / 自动记忆开关 / Toast / 三个弹窗状态。
  * 纯状态装配；读写全部经 SettingsRepository（后端实现）。
  */
 class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
@@ -40,6 +42,30 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _showWipeDialog = MutableStateFlow(false)
     val showWipeDialog: StateFlow<Boolean> = _showWipeDialog.asStateFlow()
 
+    // ===== v1.7.2 记忆档案 =====
+
+    private val _targets = MutableStateFlow<List<TargetUi>>(emptyList())
+    val targets: StateFlow<List<TargetUi>> = _targets.asStateFlow()
+
+    private val _activeTargetId = MutableStateFlow<Long?>(null)
+    val activeTargetId: StateFlow<Long?> = _activeTargetId.asStateFlow()
+
+    private val _memoryAutoEnabled = MutableStateFlow(true)
+    val memoryAutoEnabled: StateFlow<Boolean> = _memoryAutoEnabled.asStateFlow()
+
+    /** v1.7.2 一次性 Toast（消费后清空，防重组重复弹） */
+    private val _toastMessage = MutableStateFlow<String?>(null)
+    val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
+
+    private val _showNameDialog = MutableStateFlow(false)
+    val showNameDialog: StateFlow<Boolean> = _showNameDialog.asStateFlow()
+
+    private val _editTarget = MutableStateFlow<TargetUi?>(null)
+    val editTarget: StateFlow<TargetUi?> = _editTarget.asStateFlow()
+
+    private val _deleteTarget = MutableStateFlow<TargetUi?>(null)
+    val deleteTarget: StateFlow<TargetUi?> = _deleteTarget.asStateFlow()
+
     init {
         viewModelScope.launch { repo.providers.collect { _providers.value = it } }
         viewModelScope.launch { repo.models.collect { _models.value = it } }
@@ -47,6 +73,9 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.visionModelId.collect { _visionModelId.value = it } }
         viewModelScope.launch { repo.themeMode.collect { _themeMode.value = it } }
         viewModelScope.launch { repo.privacyAck.collect { _privacyAck.value = it } }
+        viewModelScope.launch { repo.targets.collect { _targets.value = it } }
+        viewModelScope.launch { repo.activeTargetId.collect { _activeTargetId.value = it } }
+        viewModelScope.launch { repo.memoryAutoEnabled.collect { _memoryAutoEnabled.value = it } }
     }
 
     fun setTheme(mode: String) {
@@ -90,5 +119,65 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
             repo.wipeAll()
             onWiped()
         }
+    }
+
+    // ===== v1.7.2 记忆档案操作 =====
+
+    /** 新建记忆档案（空白名称 UI 已禁，仍防御） */
+    fun createTarget(name: String) {
+        _showNameDialog.value = false
+        viewModelScope.launch { repo.createTarget(name) }
+    }
+
+    /** 改名 + 编辑记忆正文 */
+    fun updateTarget(id: Long, name: String, note: String) {
+        _editTarget.value = null
+        viewModelScope.launch { repo.updateTarget(id, name, note) }
+    }
+
+    /** 删除记忆档案（确认后；删激活项自动回退在 repo 内完成） */
+    fun deleteTarget(id: Long) {
+        _deleteTarget.value = null
+        viewModelScope.launch { repo.deleteTarget(id) }
+    }
+
+    /** 切换激活档案 + Toast「已切换到「X」的记忆」 */
+    fun setActiveTarget(target: TargetUi) {
+        viewModelScope.launch {
+            repo.setActiveTarget(target.id)
+            _toastMessage.value = "已切换到「${target.name}」的记忆"
+        }
+    }
+
+    fun setMemoryAutoEnabled(enabled: Boolean) {
+        viewModelScope.launch { repo.setMemoryAutoEnabled(enabled) }
+    }
+
+    fun requestCreateTarget() {
+        _showNameDialog.value = true
+    }
+
+    fun dismissCreateTarget() {
+        _showNameDialog.value = false
+    }
+
+    fun requestEditTarget(target: TargetUi) {
+        _editTarget.value = target
+    }
+
+    fun dismissEditTarget() {
+        _editTarget.value = null
+    }
+
+    fun requestDeleteTarget(target: TargetUi) {
+        _deleteTarget.value = target
+    }
+
+    fun dismissDeleteTarget() {
+        _deleteTarget.value = null
+    }
+
+    fun consumeToast() {
+        _toastMessage.value = null
     }
 }

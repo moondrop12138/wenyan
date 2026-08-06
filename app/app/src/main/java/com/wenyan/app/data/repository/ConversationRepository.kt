@@ -14,11 +14,16 @@ class ConversationRepository(
     private val sessionDao: SessionDao,
     private val messageDao: MessageDao,
 ) {
-    suspend fun createSession(scenarioTag: String?, refDocs: List<String>): Long =
+    /**
+     * v1.7.2 新增 targetId 参数：新会话绑定当前激活档案（切档案只影响新会话）；
+     * 老会话/未配置档案时 null = 未关联（注入空档案 = 现状行为）
+     */
+    suspend fun createSession(scenarioTag: String?, refDocs: List<String>, targetId: Long? = null): Long =
         sessionDao.insert(
             SessionEntity(
                 scenarioTag = scenarioTag,
                 refDocs = refDocs.toJson(),
+                targetId = targetId,
             )
         )
 

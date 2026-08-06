@@ -1,0 +1,192 @@
+classDiagram
+    direction LR
+
+    class TargetEntity {
+        +Long id
+        +String codeName
+        +String? mbti
+        +Int? score
+        +String? relationStatus
+        +String timeline
+        +String note  "v1.7.2 新增：记忆正文，默认空串"
+        +Long createdAt
+    }
+
+    class SessionEntity {
+        +Long id
+        +Long createdAt
+        +String? scenarioTag
+        +String refDocs
+        +String stateJson
+        +String title
+        +Long? targetId  "v1.7.2 新增：所属档案，可空"
+    }
+
+    class TargetDao {
+        <<interface>>
+        +observeAll() Flow~List~TargetEntity~~
+        +getById(id) TargetEntity?
+        +insert(entity) Long
+        +update(entity)
+        +deleteById(id)
+        +clear()
+    }
+
+    class SessionDao {
+        <<interface>>
+        +insert(entity) Long
+        +getById(id) SessionEntity?
+        +observeAll() Flow~List~SessionEntity~~
+        +recent(limit) List~SessionEntity~
+        +deleteById(id)
+        +clear()
+        +updateState(id, stateJson)
+        +updateTitle(id, title)
+    }
+
+    class ProfileRepository {
+        +observeProfile() Flow~ProfileEntity?~
+        +getProfile() ProfileEntity?
+        +saveProfile(entity) Long
+        +observeTargets() Flow~List~TargetEntity~~
+        +getTarget(id) TargetEntity?
+        +saveTarget(entity) Long
+        +updateTarget(entity)
+        +deleteTarget(id)
+        +clearAll()
+    }
+
+    class ConversationRepository {
+        +createSession(scenarioTag, refDocs, targetId) Long
+        +getSession(id) SessionEntity?
+        +observeAllSessions() Flow~List~SessionEntity~~
+        +getSessionState(id) String
+        +updateSessionState(id, stateJson)
+        +updateSessionTitle(id, title)
+        +clearAll()
+    }
+
+    class SettingsRepository {
+        <<data/datastore>>
+        +activeTargetId Flow~Long?~
+        +memoryAutoEnabled Flow~Boolean~
+        +setActiveTargetId(id)
+        +getActiveTargetId() Long?
+        +setMemoryAutoEnabled(enabled)
+        +clearAll()
+    }
+
+    class SettingsRepositoryContract {
+        <<ui/contract interface>>
+        +targets Flow~List~TargetUi~~
+        +activeTargetId Flow~Long?~
+        +memoryAutoEnabled Flow~Boolean~
+        +createTarget(name) Long
+        +updateTarget(id, name, note)
+        +deleteTarget(id)
+        +setActiveTarget(id)
+        +setMemoryAutoEnabled(enabled)
+        +wipeAll()
+    }
+
+    class RealSettingsRepository {
+        +targets Flow~List~TargetUi~~
+        +createTarget(name) Long
+        +updateTarget(id, name, note)
+        +deleteTarget(id)
+        +setActiveTarget(id)
+        +setMemoryAutoEnabled(enabled)
+        +wipeAll()
+    }
+
+    class TargetUi {
+        +Long id
+        +String name
+        +String note
+        +Long createdAt
+        +Boolean isActive
+    }
+
+    class SessionSummaryUi {
+        +Long id
+        +String title
+        +Long createdAt
+        +String? targetName
+    }
+
+    class UiMappers {
+        <<object>>
+        +toTargetUi(e, isActive) TargetUi
+    }
+
+    class MemoryExtractor {
+        <<object>>
+        +DEFAULT_NOTE_LIMIT Int = 2000
+        +buildPrompt(userInput, replyText, existingNote) String
+        +parseFacts(json) List~String~
+        +mergeNote(existingNote, facts, limit) String
+    }
+
+    class RealChatRepository {
+        -memoryScope CoroutineScope
+        +sessions Flow~List~SessionSummaryUi~~
+        -ensureSession() Long
+        -resolveTarget(sid) TargetEntity?
+        -shouldExtractMemory(sid, state, userInput) Boolean
+        -extractMemoryOnce(sid, userInput, replyFullText)
+    }
+
+    class RealOnboardingRepository {
+        +submit(draft)
+        -buildTimeline(draft) String
+    }
+
+    class PromptBuilder {
+        +buildSystem(profile, target, knowledge) String
+        +buildProfileJson(profile, target) String
+    }
+
+    class CorePrompt {
+        <<object>>
+        +text String
+        +structuredOutput String
+        +memoryRule String  "v1.7.2 新增：记忆使用规则"
+    }
+
+    class ConversationState {
+        +topicSummary String
+        +conclusionGiven String
+        +lastReplyText String
+        +replyAlreadyGiven Boolean
+        +turnCount Int
+        +hasActiveTopic Boolean
+        +fromJson(raw) ConversationState
+    }
+
+    class ConversationStateTracker {
+        +isSameTopic(state, userInput) Boolean
+        +onUserInput(state, userInput) ConversationState
+        +onModelReply(state, topicSummary, conclusion, reply) ConversationState
+    }
+
+    TargetDao --> TargetEntity : CRUD
+    SessionDao --> SessionEntity : CRUD
+    ProfileRepository --> TargetDao
+    ProfileRepository --> ProfileDao
+    ConversationRepository --> SessionDao
+    RealSettingsRepository ..|> SettingsRepositoryContract : implements
+    RealSettingsRepository --> SettingsRepository : dataStore
+    RealSettingsRepository --> ProfileRepository
+    RealSettingsRepository --> UiMappers : toTargetUi
+    SettingsRepositoryContract --> TargetUi
+    RealChatRepository --> ConversationRepository
+    RealChatRepository --> ProfileRepository : resolveTarget / updateTarget
+    RealChatRepository --> SettingsRepository : activeTargetId / memoryAutoEnabled
+    RealChatRepository --> MemoryExtractor : 提炼
+    RealChatRepository --> ConversationStateTracker : isSameTopic
+    RealChatRepository --> PromptBuilder : buildSystem
+    RealChatRepository --> SessionSummaryUi : sessions
+    RealOnboardingRepository --> ProfileRepository : saveTarget
+    RealOnboardingRepository --> SettingsRepository : 自动激活
+    PromptBuilder --> CorePrompt : text / memoryRule
+    ConversationState --> ConversationStateTracker : 输入快照

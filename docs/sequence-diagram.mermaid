@@ -1,0 +1,64 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant VM as ChatViewModel
+    participant CR as RealChatRepository
+    participant DS as DataStoreSettings
+    participant Conv as ConversationRepository
+    participant Prof as ProfileRepository
+    participant PB as PromptBuilder
+    participant LLM as LlmClient
+
+    U->>VM: 发送文本
+    VM->>CR: sendTextAsync(text, mode)
+    CR->>CR: ensureSession()
+    CR->>DS: getActiveTargetId()
+    DS-->>CR: activeId(Long?)
+    CR->>Conv: createSession(null, [], activeId)
+    Conv-->>CR: sid
+    CR->>Conv: getSession(sid)
+    Conv-->>CR: session.targetId
+    alt targetId != null
+        CR->>Prof: getTarget(targetId)
+        Prof-->>CR: target（档案含 note）
+    else targetId == null（老会话）
+        CR-->>CR: target = null（空档案 = 现状行为）
+    end
+    CR->>PB: buildSystem(profile, target, knowledge)
+    PB-->>CR: system（target.memory = note + memoryRule）
+    CR->>LLM: stream(ChatRequest(...))
+    LLM-->>CR: LlmEvent.Done(fullText)
+    CR->>CR: AnalysisParser.parseAny(fullText)
+    CR->>Conv: addMessage(ASSISTANT, analysis)
+    CR->>Conv: updateSessionState(sid, newState)
+    CR-->>VM: StreamEvent.Analysis / Done
+
+    Note over CR: ===== 时序图② 回复完成 → 自动提炼 =====
+
+    CR->>CR: shouldExtractMemory(sid, state, userInput)
+    CR->>DS: memoryAutoEnabled.first()
+    DS-->>CR: true（默认开）
+    CR->>Conv: getSession(sid)?.targetId
+    CR->>CR: ConversationStateTracker.isSameTopic(state, userInput)
+    CR-->>CR: false（首话题/新话题 → 提炼；同题追问 → 跳过）
+    CR->>CR: memoryScope.launch { extractMemoryOnce(...) }  // 不阻塞主流程
+    CR->>Conv: getSession(sid) → targetId
+    CR->>Prof: getTarget(targetId)
+    Prof-->>CR: target（含现有 note）
+    CR->>CR: MemoryExtractor.buildPrompt(userInput, reply, note)
+    CR->>LLM: stream(ChatRequest(提炼, temperature=0.3))
+    LLM-->>CR: Done.json（{"facts":[...]}）
+    CR->>CR: MemoryExtractor.parseFacts(json)
+    CR->>CR: MemoryExtractor.mergeNote(note, facts, 2000)
+    alt merged != note
+        CR->>Prof: updateTarget(target.copy(note=merged))
+    end
+    Note over CR: 失败静默 Log.w / 20s 超时 / 开关关=跳过 / 无档案=跳过
+
+    Note over CR: ===== 时序图③ 设置页记忆 CRUD =====
+
+    U->>CR: （另起：SettingsScreen / SettingsViewModel / RealSettingsRepository）
+    Note over CR: 新建 → createTarget(name)：saveTarget + 无激活则 setActiveTargetId
+    Note over CR: 切换激活 → setActiveTarget(id) + Toast「已切换到「X」的记忆」
+    Note over CR: 编辑 → updateTarget(id, name, note)
+    Note over CR: 删除 → deleteTarget(id)：删激活项 → setActiveTargetId(剩余第一个/null)

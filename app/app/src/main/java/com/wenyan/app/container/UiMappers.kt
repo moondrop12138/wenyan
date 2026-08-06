@@ -3,6 +3,7 @@ package com.wenyan.app.container
 import com.wenyan.app.data.db.MessageEntity
 import com.wenyan.app.data.db.ModelEntity
 import com.wenyan.app.data.db.ProviderEntity
+import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.llm.AnalysisParser
 import com.wenyan.app.llm.CoachAnalysis
 import com.wenyan.app.llm.InputKind
@@ -17,6 +18,7 @@ import com.wenyan.app.ui.contract.MessageType
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.ScriptStyle
+import com.wenyan.app.ui.contract.TargetUi
 
 /**
  * data 层实体 → UI 契约模型映射（container 装配层职责，纯函数）。
@@ -42,6 +44,15 @@ object UiMappers {
         isDefault = m.isDefault,
         sortOrder = m.sortOrder,
         showInSheet = m.showInSheet,
+    )
+
+    /** v1.7.2 TargetEntity → TargetUi（isActive 由调用方比对激活档案 id 注入） */
+    fun toTargetUi(e: TargetEntity, isActive: Boolean): TargetUi = TargetUi(
+        id = e.id,
+        name = e.codeName,
+        note = e.note,
+        createdAt = e.createdAt,
+        isActive = isActive,
     )
 
     fun toChatMessage(e: MessageEntity): ChatMessageUi = ChatMessageUi(

@@ -52,6 +52,17 @@ object CorePrompt {
     """.trimIndent()
 
     /**
+     * v1.7.2 记忆使用规则（target.memory 为已记住的关于咨询对象的信息）：
+     * 仅当档案确有记忆（note 非空）时由 PromptBuilder 追加，保持 prompt 精简。
+     */
+    val memoryRule: String = """
+记忆使用规则（target.memory 为已记住的关于咨询对象的信息）：
+- 基于其中已记住的信息与用户保持前后一致，回答不得与已记住信息矛盾；
+- 用户本轮未提到、且记忆中也没有的信息，不得编造成记忆内容或当作事实输出；
+- 记忆与用户新提供信息冲突时，以新信息为准并温和指出差异。
+    """.trimIndent()
+
+    /**
      * structured 模式的输出要求（v1.6 四段结构 JSON schema v2，全部输入统一）。
      * schema 原文内嵌于此，与 docs/prompt-architecture.md §4 保持同步。
      */

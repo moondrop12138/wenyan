@@ -38,6 +38,32 @@ interface SettingsRepository {
 
     val privacyAck: Flow<Boolean>
     suspend fun setPrivacyAck(ack: Boolean)
+
+    // ===== v1.7.2 记忆档案 =====
+
+    /** 全记忆档案 + isActive 标记（combine targetDao.observeAll + dataStore.activeTargetId） */
+    val targets: Flow<List<TargetUi>>
+
+    /** 激活记忆档案 id（null = 无激活档案） */
+    val activeTargetId: Flow<Long?>
+
+    /** 自动记忆开关（默认开） */
+    val memoryAutoEnabled: Flow<Boolean>
+
+    /** 创建档案；当前无激活档案 → 自动激活该档案 */
+    suspend fun createTarget(name: String): Long
+
+    /** 改名 + 编辑记忆正文 */
+    suspend fun updateTarget(id: Long, name: String, note: String)
+
+    /** 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条），无剩余 → null */
+    suspend fun deleteTarget(id: Long)
+
+    /** 切换激活档案 */
+    suspend fun setActiveTarget(id: Long)
+
+    /** 自动记忆开关 */
+    suspend fun setMemoryAutoEnabled(enabled: Boolean)
 }
 
 /**

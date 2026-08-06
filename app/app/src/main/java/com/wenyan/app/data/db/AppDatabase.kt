@@ -9,10 +9,11 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room 数据库（v4，6 表 + 索引 + 外键）
+ * Room 数据库（v5，6 表 + 索引 + 外键）
  * v1→v2：session 表加 stateJson（v1.3 对话状态跟踪）
  * v2→v3：session 表加 title（v1.2.1 主模型拟定会话标题）
  * v3→v4：model 表加 showInSheet（v1.6.3 主页弹层可见性）+ provider 表加 connectionStatus（连接状态灯）
+ * v4→v5：target 表加 note（v1.7.2 记忆正文）+ session 表加 targetId（会话档案归属）
  * exportSchema=true，schema JSON 提交入库（app/schemas/）
  */
 @Database(
@@ -24,7 +25,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderEntity::class,
         ModelEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -61,6 +62,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v4→v5：target 加 note（默认空串，老数据不丢）+ session 加 targetId（可空，无 DEFAULT） */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE target ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE session ADD COLUMN targetId INTEGER")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -71,7 +80,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }

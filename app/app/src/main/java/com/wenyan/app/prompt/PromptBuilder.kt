@@ -27,6 +27,10 @@ class PromptBuilder {
     ): String = buildString {
         append("【system-核心】\n").append(CorePrompt.text)
         append("\n\n【system-档案】\n").append(buildProfileJson(profile, target))
+        // v1.7.2：档案确有记忆时追加记忆使用规则（保持 prompt 精简）
+        if (!target?.note.isNullOrBlank()) {
+            append("\n\n").append(CorePrompt.memoryRule)
+        }
         if (knowledgeInjection.isNotBlank()) {
             append("\n\n【system-知识】\n").append(knowledgeInjection)
         }
@@ -50,6 +54,8 @@ class PromptBuilder {
         targetObj.put("score", target?.score ?: JSONObject.NULL)
         targetObj.put("relationStatus", target?.relationStatus ?: "")
         targetObj.put("timeline", parseTimeline(target?.timeline))
+        // v1.7.2：记忆正文（跨会话记忆；空串输出空串）
+        targetObj.put("memory", target?.note ?: "")
 
         val root = JSONObject()
         root.put("me", me)

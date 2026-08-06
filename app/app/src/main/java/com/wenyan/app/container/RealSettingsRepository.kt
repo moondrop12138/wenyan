@@ -1,6 +1,7 @@
 package com.wenyan.app.container
 
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
+import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
@@ -13,6 +14,7 @@ import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
+import com.wenyan.app.ui.contract.TargetUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -46,6 +48,44 @@ class RealSettingsRepository(
     override val themeMode: Flow<String> = dataStore.theme
 
     override val privacyAck: Flow<Boolean> = dataStore.privacyAck
+
+    // ===== v1.7.2 记忆档案 =====
+
+    override val targets: Flow<List<TargetUi>> =
+        combine(profileRepository.observeTargets(), dataStore.activeTargetId) { list, activeId ->
+            list.map { UiMappers.toTargetUi(it, isActive = it.id == activeId) }
+        }
+
+    override val activeTargetId: Flow<Long?> = dataStore.activeTargetId
+
+    override val memoryAutoEnabled: Flow<Boolean> = dataStore.memoryAutoEnabled
+
+    /** v1.7.2 创建档案；当前无激活档案 → 自动激活该档案（空白名称防御返回 -1） */
+    override suspend fun createTarget(name: String): Long {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return -1L
+        val id = profileRepository.saveTarget(TargetEntity(codeName = trimmed))
+        if (dataStore.getActiveTargetId() == null) dataStore.setActiveTargetId(id)
+        return id
+    }
+
+    /** v1.7.2 改名 + 编辑记忆正文（名称/正文 trim；档案不存在静默跳过） */
+    override suspend fun updateTarget(id: Long, name: String, note: String) {
+        val e = profileRepository.getTarget(id) ?: return
+        profileRepository.updateTarget(e.copy(codeName = name.trim(), note = note.trim()))
+    }
+
+    /** v1.7.2 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条，id DESC=最新）；无剩余 → null */
+    override suspend fun deleteTarget(id: Long) {
+        profileRepository.deleteTarget(id)
+        if (dataStore.getActiveTargetId() == id) {
+            dataStore.setActiveTargetId(profileRepository.observeTargets().first().firstOrNull()?.id)
+        }
+    }
+
+    override suspend fun setActiveTarget(id: Long) = dataStore.setActiveTargetId(id)
+
+    override suspend fun setMemoryAutoEnabled(enabled: Boolean) = dataStore.setMemoryAutoEnabled(enabled)
 
     override suspend fun setCurrentModel(id: Long) {
         dataStore.setCurrentModelId(id)

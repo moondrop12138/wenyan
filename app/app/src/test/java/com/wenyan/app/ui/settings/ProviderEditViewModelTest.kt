@@ -147,6 +147,10 @@ class ProviderEditViewModelTest {
         override val visionModelId = MutableStateFlow<Long?>(null)
         override val themeMode = MutableStateFlow("system")
         override val privacyAck = MutableStateFlow(false)
+        // v1.7.2 记忆契约（ProviderEditViewModel 不使用，给默认实现）
+        override val targets = MutableStateFlow<List<com.wenyan.app.ui.contract.TargetUi>>(emptyList())
+        override val activeTargetId = MutableStateFlow<Long?>(null)
+        override val memoryAutoEnabled = MutableStateFlow(true)
 
         val addedModels = mutableListOf<Triple<Long, String, Boolean>>()
         var privacyAckValue = false
@@ -178,5 +182,11 @@ class ProviderEditViewModelTest {
             privacyAckValue = ack
             privacyAck.value = ack
         }
+        // v1.7.2 记忆操作（本测试不使用，空实现）
+        override suspend fun createTarget(name: String): Long = 0L
+        override suspend fun updateTarget(id: Long, name: String, note: String) = Unit
+        override suspend fun deleteTarget(id: Long) = Unit
+        override suspend fun setActiveTarget(id: Long) = Unit
+        override suspend fun setMemoryAutoEnabled(enabled: Boolean) = Unit
     }
 }

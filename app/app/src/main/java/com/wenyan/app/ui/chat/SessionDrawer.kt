@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.Tag
+import com.wenyan.app.ui.components.TagKind
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.theme.GtjShape
@@ -188,6 +190,12 @@ private fun SessionItemContent(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                // v1.7.2 会话归属档案 Tag：name.trim().take(4)（≤4 字全显，>4 字截前 4 字）；
+                // targetName=null（老会话）不显示；空名称不显示
+                session.targetName?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+                    Spacer(Modifier.width(6.dp))
+                    Tag(text = name.take(4), kind = TagKind.NEUTRAL)
+                }
             }
             Spacer(Modifier.height(3.dp))
             Text(

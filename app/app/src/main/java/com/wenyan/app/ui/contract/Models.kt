@@ -37,6 +37,17 @@ data class SessionSummaryUi(
     val id: Long,
     val title: String,
     val createdAt: Long,
+    /** v1.7.2 会话归属记忆档案名；老会话（targetId=null）为 null，抽屉不显示 Tag */
+    val targetName: String? = null,
+)
+
+/** v1.7.2 记忆档案（设置页「记忆」分组） */
+data class TargetUi(
+    val id: Long,
+    val name: String,          // = codeName（档案名称，用户可编辑）
+    val note: String,          // 记忆正文（跨会话记忆内容）
+    val createdAt: Long,
+    val isActive: Boolean,     // id == 激活档案
 )
 
 data class ChatMessageUi(
