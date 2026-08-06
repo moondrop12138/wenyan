@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -168,7 +169,8 @@ private fun ModelRowContent(
     val abbrev = model.name.take(2).uppercase()
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            // v1.7.1 二改：fillMaxSize 让 72dp 最小行高内内容垂直居中（此前内容贴顶）
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             // 模型图标容器：40dp r12，选中陶土棕实底 / 未选中灰
             Surface(

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -210,9 +211,10 @@ private fun ExampleGridCard(
         shape = GtjShape.xl,
         modifier = modifier.height(56.dp),
     ) {
+        // v1.7.1 二改：fillMaxSize 让文字在固定 56dp 卡内垂直居中（此前内容贴顶）
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
         ) {
             Text(
                 text = text,
@@ -244,9 +246,10 @@ private fun GuideEntryCard(
         shape = GtjShape.xl,
         modifier = modifier.height(64.dp),
     ) {
+        // v1.7.1 二改：fillMaxSize 让整行在固定 64dp 卡内垂直居中（此前整行贴顶）
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
         ) {
             // 图标容器：8% 底色圆角 8（温暖质感关键细节）
             Box(
