@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
-import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -82,26 +83,30 @@ fun ModelSheet(
     val view = LocalView.current
     val activity = remember(view) { view.context.findActivity() }
     if (canBlur) {
-        // v1.7.1-7：模糊渐强动画（每帧更新 decorView RenderEffect 半径，弹层滑入同步）
-        LaunchedEffect(Unit) {
-            animate(
-                initialValue = 0f,
-                targetValue = 24f,
-                animationSpec = tween(durationMillis = 250),
-            ) { value, _ ->
-                activity?.window?.decorView?.setRenderEffect(
-                    if (value > 0.5f) {
-                        android.graphics.RenderEffect.createBlurEffect(value, value, android.graphics.Shader.TileMode.DECAL)
-                    } else {
-                        null
-                    },
-                )
+        // v1.7.1-8：模糊双向动画——进入渐强（0→24f 250ms），退出渐弱（24→0f 200ms），
+        // 由 sheet 可见性驱动；每帧应用 decorView RenderEffect 半径
+        val blurRadius = remember { Animatable(0f) }
+        LaunchedEffect(blurRadius.value) {
+            activity?.window?.decorView?.setRenderEffect(
+                if (blurRadius.value > 0.5f) {
+                    android.graphics.RenderEffect.createBlurEffect(blurRadius.value, blurRadius.value, android.graphics.Shader.TileMode.DECAL)
+                } else {
+                    null
+                },
+            )
+        }
+        // 由 sheet 状态（currentValue）驱动：显示中→渐强，Hidden（关闭动画）→渐弱
+        LaunchedEffect(sheetState.currentValue) {
+            if (sheetState.currentValue == SheetValue.Hidden) {
+                blurRadius.animateTo(0f, tween(200))
+            } else {
+                blurRadius.animateTo(24f, tween(250))
             }
         }
     }
     DisposableEffect(activity) {
         onDispose {
-            // 弹层关闭必须清除，否则主界面持续模糊
+            // 弹层销毁兜底清除，否则主界面持续模糊
             activity?.window?.decorView?.setRenderEffect(null)
         }
     }
