@@ -75,6 +75,12 @@ cd app
 cd app && ./gradlew testReleaseUnitTest
 ```
 
+## 联系与反馈
+
+- **Bug 报告 / 功能建议**：请到 [Issues](https://github.com/moondrop12138/wenyan/issues) 提交（提问前先搜索是否已有人提过）
+- **讨论 / 想法交流**：[Discussions](https://github.com/moondrop12138/wenyan/discussions)
+- **邮件**：2508266762@qq.com（合作或其他事务）
+
 ## 知识库来源与致谢
 
 知识库（`app/src/main/assets/knowledge/`）的 40 份文档衍生自开源项目 [goutoujunshi · 狗头军师](https://github.com/powerycy/goutoujunshi)（Copyright 2026 powerycy，[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)），其设计原则沿用：
