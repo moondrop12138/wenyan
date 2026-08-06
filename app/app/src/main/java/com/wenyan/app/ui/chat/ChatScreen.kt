@@ -1,5 +1,6 @@
 package com.wenyan.app.ui.chat
 
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -59,6 +60,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -174,12 +178,24 @@ fun ChatScreen(
         else -> DotState.Idle
     }
 
+    // v1.7.1-4：侧栏液态玻璃 + 高斯模糊——抽屉打开时对 content 层做 RenderEffect 模糊（API 31+），
+    // 抽屉面板用半透明玻璃透出模糊背景（真毛玻璃）；低版本无法模糊，回退实底保证可读
+    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val isDrawerOpen = drawerState.targetValue == DrawerValue.Open
+    val contentBlur = remember(canBlur, isDrawerOpen) {
+        if (canBlur && isDrawerOpen) {
+            // ui.graphics 顶层工厂：BlurEffect(radiusX, radiusY, edgeTreatment)
+            BlurEffect(radiusX = 18f, radiusY = 18f, edgeTreatment = TileMode.Decal)
+        } else {
+            null
+        }
+    }
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                // v1.7.1：抽屉面板改回实底（用户反馈半透明影响阅读），玻璃质感由内部会话行承担
-                drawerContainerColor = p.bg,
+                // v1.7.1-4：API31+ 半透明玻璃（背后被模糊，可读性由模糊保证）；低版本实底
+                drawerContainerColor = if (canBlur) p.glassFill else p.bg,
             ) {
                 SessionDrawerContent(
                     sessions = sessions,
@@ -231,6 +247,10 @@ fun ChatScreen(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .graphicsLayer {
+                    // v1.7.1-4：抽屉打开时 content 模糊（真毛玻璃效果）
+                    renderEffect = contentBlur
+                }
                 .pointerInput(textSelectForId) {
                     if (textSelectForId != null) {
                         detectTapGestures(onTap = { textSelectForId = null })
@@ -580,7 +600,8 @@ private fun ChatTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                // v1.7.1-4 沉浸式：顶栏改普通玻璃（透出光斑，不再像纯色块）
+                .liquidGlass(shape = GtjShape.inputBar)
                 .clip(GtjShape.inputBar),
         ) {
         Row(

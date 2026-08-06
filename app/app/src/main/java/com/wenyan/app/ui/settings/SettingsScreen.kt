@@ -103,7 +103,8 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                        // v1.7.1-4 沉浸式：顶栏改普通玻璃
+                        .liquidGlass(shape = GtjShape.inputBar)
                         .clip(GtjShape.inputBar),
                 ) {
                     Row(
@@ -127,6 +128,8 @@ fun SettingsScreen(
                 SettingsRow(
                     label = "主模型",
                     value = models.firstOrNull { it.id == currentId }?.name ?: "未选择",
+                    // v1.7.1-4：与视觉模型行等高（补 caption 成两行结构）
+                    caption = "对话与截图分析使用的默认模型",
                     onClick = { pickerTarget = PickerTarget.MAIN },
                 )
             }

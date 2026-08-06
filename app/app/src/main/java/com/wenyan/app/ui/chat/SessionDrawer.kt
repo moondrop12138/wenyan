@@ -73,11 +73,11 @@ fun SessionDrawerContent(
             Spacer(Modifier.height(2.dp))
             Text("恋爱决策支持", style = GtjType.Caption, color = p.meta)
         }
-        // 新建会话：陶土棕胶囊（设计稿 280×44 r22）
-        Surface(
+        // v1.7.1-4：新建会话 = 液态玻璃胶囊（strong 玻璃 + accent 字，与玻璃侧栏同材质）
+        GlassSurface(
             onClick = onNewSession,
             shape = RoundedCornerShape(22.dp),
-            color = p.accent,
+            strong = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
@@ -91,10 +91,10 @@ fun SessionDrawerContent(
                     imageVector = Icons.Outlined.Add,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = p.accentOn,
+                    tint = p.accent,
                 )
                 Spacer(Modifier.width(6.dp))
-                Text("新建会话", style = GtjType.Subtitle, color = p.accentOn)
+                Text("新建会话", style = GtjType.Subtitle, color = p.accent)
             }
         }
         Spacer(Modifier.height(16.dp))

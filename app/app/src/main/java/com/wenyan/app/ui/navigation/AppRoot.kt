@@ -1,12 +1,18 @@
 package com.wenyan.app.ui.navigation
 
+import android.app.Activity
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
 import com.wenyan.app.AppViewModel
 import com.wenyan.app.ui.chat.ChatScreen
 import com.wenyan.app.ui.contract.AppContainer
@@ -32,10 +38,22 @@ fun AppRoot(
             navigator.replaceAll(Route.Chat)
         }
     }
-    // 拦截系统返回键/手势：栈内还有页面时回退到上一页，而不是直接退出应用。
-    // 仅当栈底（Chat / Onboarding）时才放行系统默认行为（退出）。
-    BackHandler(enabled = navigator.stack.size > 1) {
-        navigator.pop()
+    // 拦截系统返回键/手势：栈内还有页面时回退到上一页；
+    // v1.7.1-4：栈底（主页面）时两次确认才退出（防边缘滑退误触）——2 秒内再次返回才退出
+    val context = LocalContext.current
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+    BackHandler {
+        if (navigator.stack.size > 1) {
+            navigator.pop()
+        } else {
+            val now = SystemClock.uptimeMillis()
+            if (now - lastBackAt < 2000) {
+                (context as? Activity)?.finish()
+            } else {
+                lastBackAt = now
+                Toast.makeText(context, "再按一次返回键退出", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     Crossfade(targetState = navigator.current, label = "nav") { route ->
         when (route) {

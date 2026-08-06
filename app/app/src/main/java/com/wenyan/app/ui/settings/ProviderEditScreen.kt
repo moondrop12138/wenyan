@@ -94,7 +94,8 @@ fun ProviderEditScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                        // v1.7.1-4 沉浸式：顶栏改普通玻璃
+                        .liquidGlass(shape = GtjShape.inputBar)
                         .clip(GtjShape.inputBar),
                 ) {
                     Row(

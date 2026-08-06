@@ -198,7 +198,8 @@ fun ChatInputBar(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
                     // v1.7.1 二改：clip 在 liquidGlass 之后，软投影不被裁（此前投影丢失→纯色平台感）
-                    .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                    // v1.7.1-4 沉浸式：顶栏/输入栏改普通玻璃（透出光斑，不再像纯色块）
+                    .liquidGlass(shape = GtjShape.inputBar)
                     .clip(GtjShape.inputBar),
             ) {
             Row(

@@ -1,5 +1,7 @@
 package com.wenyan.app.ui.components
 
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,9 +31,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -39,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogWindowProvider
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.theme.GtjShape
@@ -64,12 +69,26 @@ fun ModelSheet(
     val p = LocalGtjColors.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    // v1.7.1-4：液态玻璃 + 真高斯模糊（API 31+ 对弹层背后内容做系统级 blur，可读性由模糊保证；
+    // 低版本无法模糊，回退高不透明底保证可读）
+    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val sheetColor = if (canBlur) p.glassFillStrong else p.surfaceElevated
+    val view = LocalView.current
+    SideEffect {
+        if (canBlur) {
+            val dialogWindow = (view.parent as? DialogWindowProvider)?.window
+            if (dialogWindow != null) {
+                dialogWindow.setBackgroundBlurRadius(24)
+                dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            }
+        }
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         // v1.7.0：顶圆角 28 + 半透明玻璃容器（glassFillStrong 透出背后光斑）
         shape = GtjShape.sheetTop,
-        containerColor = p.glassFillStrong,
+        containerColor = sheetColor,
         dragHandle = { Surface(color = p.borderSoft, modifier = Modifier.size(width = 36.dp, height = 4.dp), shape = GtjShape.pill) {} },
     ) {
         Column(Modifier.padding(horizontal = 16.dp)) {
