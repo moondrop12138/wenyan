@@ -4,7 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
-import android.view.WindowManager
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -48,7 +49,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindowProvider
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.theme.GtjShape
@@ -74,25 +74,29 @@ fun ModelSheet(
     val p = LocalGtjColors.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    // v1.7.1-6：液态玻璃 + 真高斯模糊——窗口级 FLAG_BLUR_BEHIND 在部分 ROM 不生效，
-    // 兜底直接对 Activity decorView 设 RenderEffect（API 31+，最可靠），关闭时清理。
-    // **坑**：dialog window 的 context 是 ContextThemeWrapper 而非 Activity，`as? Activity`
-    // 必为 null → 必须沿 ContextWrapper 链 findActivity（v1.7.1-5 因此失效，本次修复）
+    // v1.7.1-7：液态玻璃 + 真高斯模糊（渐入）——直接对 Activity decorView 做 RenderEffect，
+    // 半径 0→24f 由弱渐强（250ms）；**坑**：dialog window context 是 ContextThemeWrapper，
+    // 必须沿 ContextWrapper 链 findActivity（as? Activity 必为 null）
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val sheetColor = if (canBlur) p.glassFillStrong else p.surfaceElevated
     val view = LocalView.current
-    val dialogWindow = remember(view) { (view.parent as? DialogWindowProvider)?.window }
     val activity = remember(view) { view.context.findActivity() }
-    SideEffect {
-        if (canBlur) {
-            if (dialogWindow != null) {
-                dialogWindow.setBackgroundBlurRadius(24)
-                dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+    if (canBlur) {
+        // v1.7.1-7：模糊渐强动画（每帧更新 decorView RenderEffect 半径，弹层滑入同步）
+        LaunchedEffect(Unit) {
+            animate(
+                initialValue = 0f,
+                targetValue = 24f,
+                animationSpec = tween(durationMillis = 250),
+            ) { value, _ ->
+                activity?.window?.decorView?.setRenderEffect(
+                    if (value > 0.5f) {
+                        android.graphics.RenderEffect.createBlurEffect(value, value, android.graphics.Shader.TileMode.DECAL)
+                    } else {
+                        null
+                    },
+                )
             }
-            // 兜底：整个 activity 内容模糊（窗口模糊不可用时仍生效）
-            activity?.window?.decorView?.setRenderEffect(
-                android.graphics.RenderEffect.createBlurEffect(24f, 24f, android.graphics.Shader.TileMode.DECAL),
-            )
         }
     }
     DisposableEffect(activity) {

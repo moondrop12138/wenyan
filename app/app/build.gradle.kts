@@ -63,7 +63,9 @@ android {
         //  模型弹层加 Activity decorView RenderEffect 兜底模糊（窗口 blur 部分 ROM 不生效）+ 关闭清理
         // v1.7.1-6：修复弹层 decorView 模糊失效——dialog window context 是 ContextThemeWrapper，
         //  as? Activity 必为 null → 改沿 ContextWrapper 链 findActivity
-        versionCode = 21
+        // v1.7.1-7：弹层模糊渐入动画（decorView RenderEffect 半径 0→24f 250ms）/
+        //  移除窗口级 FLAG_BLUR_BEHIND（避免与 decorView 双重模糊）
+        versionCode = 22
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
