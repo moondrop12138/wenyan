@@ -77,9 +77,7 @@ cd app && ./gradlew testReleaseUnitTest
 
 ## 联系与反馈
 
-- **Bug 报告 / 功能建议**：请到 [Issues](https://github.com/moondrop12138/wenyan/issues) 提交（提问前先搜索是否已有人提过）
-- **讨论 / 想法交流**：[Discussions](https://github.com/moondrop12138/wenyan/discussions)
-- **邮件**：2508266762@qq.com（合作或其他事务）
+欢迎任何 Bug 报告、功能建议或想法交流，请发送邮件至 **2508266762@qq.com**。
 
 ## 知识库来源与致谢
 
