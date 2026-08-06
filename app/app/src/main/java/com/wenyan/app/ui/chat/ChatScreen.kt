@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -178,14 +179,19 @@ fun ChatScreen(
         else -> DotState.Idle
     }
 
-    // v1.7.1-4：侧栏液态玻璃 + 高斯模糊——抽屉打开时对 content 层做 RenderEffect 模糊（API 31+），
-    // 抽屉面板用半透明玻璃透出模糊背景（真毛玻璃）；低版本无法模糊，回退实底保证可读
+    // v1.7.1-5：侧栏液态玻璃 + 高斯模糊（整个背景含顶栏/输入栏）——
+    // blur 半径由弱渐强（0→18f，250ms），关闭时渐弱；API 31+ 生效，低版本回退实底
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val isDrawerOpen = drawerState.targetValue == DrawerValue.Open
-    val contentBlur = remember(canBlur, isDrawerOpen) {
-        if (canBlur && isDrawerOpen) {
+    val blurRadius by animateFloatAsState(
+        targetValue = if (canBlur && isDrawerOpen) 18f else 0f,
+        animationSpec = tween(durationMillis = 250),
+        label = "drawerBlur",
+    )
+    val contentBlur = remember(blurRadius) {
+        if (blurRadius > 0.5f) {
             // ui.graphics 顶层工厂：BlurEffect(radiusX, radiusY, edgeTreatment)
-            BlurEffect(radiusX = 18f, radiusY = 18f, edgeTreatment = TileMode.Decal)
+            BlurEffect(radiusX = blurRadius, radiusY = blurRadius, edgeTreatment = TileMode.Decal)
         } else {
             null
         }
@@ -214,7 +220,15 @@ fun ChatScreen(
         },
     ) {
     // v1.7.1：根 Box 加主题背景（防 App 内主题与系统主题脱节时透明 Scaffold 露出暗色 windowBackground）；光斑画在背景之上
-    Box(Modifier.fillMaxSize().background(p.bg)) {
+    // v1.7.1-5：blur 提升到整个背景层（含顶栏/输入栏/消息区），抽屉打开时全部渐强模糊
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(p.bg)
+            .graphicsLayer {
+                renderEffect = contentBlur
+            },
+    ) {
         GlowBackground()
     Scaffold(
         containerColor = Color.Transparent,
@@ -247,10 +261,6 @@ fun ChatScreen(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .graphicsLayer {
-                    // v1.7.1-4：抽屉打开时 content 模糊（真毛玻璃效果）
-                    renderEffect = contentBlur
-                }
                 .pointerInput(textSelectForId) {
                     if (textSelectForId != null) {
                         detectTapGestures(onTap = { textSelectForId = null })

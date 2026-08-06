@@ -59,7 +59,9 @@ android {
         // v1.7.1 二改续：顶栏改悬浮胶囊（与输入栏同款 r28 strong 玻璃 + 软投影，聊天页/设置页/模型编辑页统一）
         // v1.7.1-4：顶栏/输入栏沉浸式（普通玻璃透出光斑）/ 模型弹层与侧栏液态玻璃+真高斯模糊（API31+ RenderEffect/window blur）/
         //  新建会话按钮玻璃化 / 主模型行与视觉模型行等高 / 主页面返回两次确认退出
-        versionCode = 19
+        // v1.7.1-5：侧栏模糊提升至整个背景层（含顶栏/输入栏）+ 半径渐强动画（0→18f 250ms）/
+        //  模型弹层加 Activity decorView RenderEffect 兜底模糊（窗口 blur 部分 ROM 不生效）+ 关闭清理
+        versionCode = 20
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
