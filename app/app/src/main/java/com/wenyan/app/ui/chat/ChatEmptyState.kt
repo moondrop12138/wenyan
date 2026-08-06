@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -128,47 +126,15 @@ fun ChatEmptyState(
             color = p.muted,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(20.dp))
-        // v1.7.1-8：箴言两行断句 + 字距（仪式感排版，去逗号）
-        Text(
-            text = "先接住情绪",
-            style = GtjType.Headline.copy(letterSpacing = 3.sp),
-            color = p.fg,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "再分清事实",
-            style = GtjType.Headline.copy(letterSpacing = 3.sp),
-            color = p.fg,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(20.dp))
-        // v1.7.1-8：引导语（温柔版文案）
+        Spacer(Modifier.height(24.dp))
+        // v1.7.1-9：去箴言/隐私后的唯一引导语（功能导向，页面重心下移到内容区）
         Text(
             "贴上你们的聊天记录，或慢慢说说你的心事。",
-            style = GtjType.BodySm,
+            style = GtjType.Body,
             color = p.fgSecondary,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(10.dp))
-        // v1.7.1-8：隐私说明独立行（锁图标 + 小字，弱化不喧宾）
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = p.meta,
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                "内容仅发往你配置的模型服务",
-                style = GtjType.Caption,
-                color = p.meta,
-                textAlign = TextAlign.Center,
-            )
-        }
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(44.dp))
         // 2×2 示例卡网格（设计稿：173×56，r12）
         val grid = EXAMPLE_QUESTIONS.take(4)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
