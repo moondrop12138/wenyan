@@ -1,6 +1,8 @@
 package com.wenyan.app.ui.components
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.foundation.BorderStroke
@@ -34,6 +36,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,27 +74,28 @@ fun ModelSheet(
     val p = LocalGtjColors.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    // v1.7.1-4/5：液态玻璃 + 真高斯模糊——窗口级 FLAG_BLUR_BEHIND 在部分 ROM/模拟器不生效，
-    // 兜底直接对 Activity decorView 设 RenderEffect（API 31+，最可靠），关闭时清理；
-    // 低版本无法模糊，回退高不透明底保证可读
+    // v1.7.1-6：液态玻璃 + 真高斯模糊——窗口级 FLAG_BLUR_BEHIND 在部分 ROM 不生效，
+    // 兜底直接对 Activity decorView 设 RenderEffect（API 31+，最可靠），关闭时清理。
+    // **坑**：dialog window 的 context 是 ContextThemeWrapper 而非 Activity，`as? Activity`
+    // 必为 null → 必须沿 ContextWrapper 链 findActivity（v1.7.1-5 因此失效，本次修复）
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val sheetColor = if (canBlur) p.glassFillStrong else p.surfaceElevated
     val view = LocalView.current
-    val dialogWindow = (view.parent as? DialogWindowProvider)?.window
-    val activity = dialogWindow?.context as? Activity
+    val dialogWindow = remember(view) { (view.parent as? DialogWindowProvider)?.window }
+    val activity = remember(view) { view.context.findActivity() }
     SideEffect {
         if (canBlur) {
             if (dialogWindow != null) {
                 dialogWindow.setBackgroundBlurRadius(24)
                 dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
             }
-            // v1.7.1-5 兜底：整个 activity 内容模糊（部分设备窗口模糊不可用）
+            // 兜底：整个 activity 内容模糊（窗口模糊不可用时仍生效）
             activity?.window?.decorView?.setRenderEffect(
                 android.graphics.RenderEffect.createBlurEffect(24f, 24f, android.graphics.Shader.TileMode.DECAL),
             )
         }
     }
-    DisposableEffect(Unit) {
+    DisposableEffect(activity) {
         onDispose {
             // 弹层关闭必须清除，否则主界面持续模糊
             activity?.window?.decorView?.setRenderEffect(null)
@@ -252,4 +256,11 @@ private fun ModelRowContent(
                 }
             }
         }
+}
+
+/** v1.7.1-6：沿 ContextWrapper 链向上找 Activity（Dialog 的 context 是 ContextThemeWrapper）。 */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

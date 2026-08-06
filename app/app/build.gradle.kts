@@ -61,7 +61,9 @@ android {
         //  新建会话按钮玻璃化 / 主模型行与视觉模型行等高 / 主页面返回两次确认退出
         // v1.7.1-5：侧栏模糊提升至整个背景层（含顶栏/输入栏）+ 半径渐强动画（0→18f 250ms）/
         //  模型弹层加 Activity decorView RenderEffect 兜底模糊（窗口 blur 部分 ROM 不生效）+ 关闭清理
-        versionCode = 20
+        // v1.7.1-6：修复弹层 decorView 模糊失效——dialog window context 是 ContextThemeWrapper，
+        //  as? Activity 必为 null → 改沿 ContextWrapper 链 findActivity
+        versionCode = 21
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
