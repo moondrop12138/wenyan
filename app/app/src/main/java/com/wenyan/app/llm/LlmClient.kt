@@ -201,12 +201,14 @@ class LlmClient(
         }
         return if (t is IOException) {
             val msg = t.message ?: ""
-            val code = if (msg.contains("timeout", ignoreCase = true)) {
-                LlmErrorCode.READ_TIMEOUT
-            } else {
-                LlmErrorCode.CONNECT_TIMEOUT
+            val code = when {
+                // 非 localhost 的明文地址被网络安全策略拦截（UnknownServiceException: CLEARTEXT...）
+                msg.contains("cleartext", ignoreCase = true) -> LlmErrorCode.UNSUPPORTED_URL
+                msg.contains("timeout", ignoreCase = true) -> LlmErrorCode.READ_TIMEOUT
+                else -> LlmErrorCode.CONNECT_TIMEOUT
             }
-            SingleResult.Retryable(code, msg)
+            if (code.retryable) SingleResult.Retryable(code, msg)
+            else SingleResult.Fatal(code, msg)
         } else {
             SingleResult.Fatal(LlmErrorCode.UNKNOWN, t?.message ?: "")
         }

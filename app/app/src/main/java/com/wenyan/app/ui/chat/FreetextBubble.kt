@@ -21,8 +21,8 @@ internal fun FreetextBubble(
     message: ChatMessageUi,
     split: FreetextSplit,
     onCopyReply: (String) -> Unit,
-    onLongClick: ((Offset) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onLongClick: ((Offset) -> Unit)? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),

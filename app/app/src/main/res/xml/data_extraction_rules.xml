@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  数据提取规则（v1.7.1 终检补全）：聊天记录是高度隐私数据。
+  allowBackup=false 在 Android 12+ 只禁云端备份，设备间迁移（换机直传）不受控，
+  这里显式排除全部数据的 cloud-backup 与 device-transfer。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

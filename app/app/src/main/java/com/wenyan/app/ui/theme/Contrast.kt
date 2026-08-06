@@ -48,6 +48,6 @@ object GtjContrast {
         )
     }
 
-    /** 格式化保留两位小数（测试断言输出友好）。 */
-    fun format(ratio: Double): String = String.format("%.2f", ratio)
+    /** 格式化保留两位小数（测试断言输出友好）；显式 Locale.US 避免数字格式随系统语言变化。 */
+    fun format(ratio: Double): String = String.format(java.util.Locale.US, "%.2f", ratio)
 }

@@ -23,7 +23,9 @@ fun <VM : ViewModel> rememberViewModel(
     }
     return remember(owner, key) {
         val store = owner.viewModelStore
-        @Suppress("UNCHECKED_CAST")
+        // get/put 标注了 RestrictedApi（仅限 lifecycle 库组内调用），此处是受控用法：
+        // 宿主 Activity 的 ViewModelStore + 自定义 key，行为与官方 viewModel(key) 一致
+        @Suppress("UNCHECKED_CAST", "RestrictedApi")
         store[key] as? VM ?: create().also { store.put(key, it) }
     }
 }

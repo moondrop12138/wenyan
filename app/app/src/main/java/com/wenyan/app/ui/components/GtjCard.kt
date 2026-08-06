@@ -63,8 +63,8 @@ enum class TagKind { ACCENT, NEUTRAL, WARM, DANGER }
 @Composable
 fun Tag(
     text: String,
-    kind: TagKind = TagKind.NEUTRAL,
     modifier: Modifier = Modifier,
+    kind: TagKind = TagKind.NEUTRAL,
     icon: ImageVector? = null,
 ) {
     val p = LocalGtjColors.current

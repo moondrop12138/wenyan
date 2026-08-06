@@ -50,17 +50,18 @@ class ErrorMapperFullTest {
         assertEquals("连接中断，可重试或停止", LlmErrorCode.READ_TIMEOUT.userMessage)
     }
 
-    // ---- 11 个错误码齐全 ----
+    // ---- 12 个错误码齐全 ----
 
     @Test
-    fun `all 11 error codes exist with non empty user message`() {
+    fun `all 12 error codes exist with non empty user message`() {
         val codes = LlmErrorCode.entries
-        assertEquals("应有 11 个错误码", 11, codes.size)
+        // v1.7.1 终检：新增 UNSUPPORTED_URL（公网明文地址被网络安全策略拦截，提示改 https/localhost）
+        assertEquals("应有 12 个错误码", 12, codes.size)
 
         val expected = setOf(
             "UNAUTHORIZED", "FORBIDDEN", "MODEL_NOT_FOUND", "RATE_LIMITED",
-            "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "STREAM_ERROR",
-            "EMPTY_CONTENT", "PARSE_ERROR", "UNKNOWN",
+            "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "UNSUPPORTED_URL",
+            "STREAM_ERROR", "EMPTY_CONTENT", "PARSE_ERROR", "UNKNOWN",
         )
         assertEquals(expected, codes.map { it.name }.toSet())
 

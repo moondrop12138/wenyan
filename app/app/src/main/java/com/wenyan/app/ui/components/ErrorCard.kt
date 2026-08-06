@@ -39,6 +39,8 @@ private fun errorUi(code: String, fallback: String): ErrorUi = when {
     code == "429" -> ErrorUi("请求过于频繁或额度已用尽", "稍后重试", showCancel = true)
     code.startsWith("5") -> ErrorUi("模型服务异常", "请稍后重试", showCancel = true)
     code == "timeout" || code == "disconnect" -> ErrorUi("连接中断", "可重试或停止", showCancel = true)
+    // v1.7.1 终检：非 localhost 明文地址被网络安全策略拦截（对应 LlmErrorCode.UNSUPPORTED_URL）
+    code == "UNSUPPORTED_URL" -> ErrorUi("地址不受支持", "仅支持 https:// 地址；本地模型服务请填 http://localhost", hasSettings = true, showRetry = false)
     else -> ErrorUi("模型返回错误", fallback, showCancel = true)
 }
 

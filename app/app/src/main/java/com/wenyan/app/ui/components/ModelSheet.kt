@@ -107,8 +107,11 @@ fun ModelSheet(
     }
     DisposableEffect(activity) {
         onDispose {
-            // 弹层销毁兜底清除，否则主界面持续模糊
-            activity?.window?.decorView?.setRenderEffect(null)
+            // 弹层销毁兜底清除，否则主界面持续模糊。
+            // 注意：setRenderEffect 是 API 31+，低版本必须守卫——否则关闭弹层直接 NoSuchMethodError 崩溃
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                activity?.window?.decorView?.setRenderEffect(null)
+            }
         }
     }
     ModalBottomSheet(
@@ -214,7 +217,7 @@ private fun ModelRowContent(
 ) {
     // v1.5：图标缩写（前两位字母，如 DS / GPT），40dp 陶土棕底 r12 容器（设计稿 WY-05）
     val abbrev = model.name.take(2).uppercase()
-        Row(
+    Row(
             verticalAlignment = Alignment.CenterVertically,
             // v1.7.1 二改：fillMaxSize 让 72dp 最小行高内内容垂直居中（此前内容贴顶）
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),

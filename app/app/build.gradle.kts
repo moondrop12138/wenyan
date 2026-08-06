@@ -69,7 +69,11 @@ android {
         //  空状态文案排版升级（箴言两行断句+字距、温柔引导语、锁图标隐私行）
         // v1.7.1-9：空状态去箴言去隐私说明，重排布局（日期→引导语→大留白→示例卡→引导卡，功能导向）
         // v1.7.1-10：弹层模糊改 targetValue 驱动——与弹层动画同步（跟手），消除迟滞感
-        versionCode = 25
+        // v1.7.1 终检修复（versionCode 26）：弹层 onDispose 去模糊补 API 31+ 守卫（低版本关弹层崩溃）/
+        //  网络安全配置 localhost 明文豁免（本地模型可连）+ dataExtractionRules 禁换机迁移备份 /
+        //  UNSUPPORTED_URL 错误码（公网明文地址明确提示）/
+        //  顺带修 ModelSheet 缩进 lint / ViewModelExt RestrictedApi suppress
+        versionCode = 26
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
