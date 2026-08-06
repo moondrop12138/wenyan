@@ -43,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -82,19 +83,28 @@ fun ProviderEditScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
+            // v1.7.1 二改续：顶栏悬浮胶囊（与聊天页/输入栏同款 strong 玻璃）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RectangleShape)
-                    .windowInsetsPadding(WindowInsets.statusBars),
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                        .clip(GtjShape.inputBar),
                 ) {
-                    GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
-                    Text(if (vm.isNew) "添加提供商" else "编辑提供商", style = GtjType.Title, color = p.fg)
-                }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                    ) {
+                        GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
+                        Text(if (vm.isNew) "添加提供商" else "编辑提供商", style = GtjType.Title, color = p.fg)
+                    }
+                } // 玻璃胶囊
             }
         },
     ) { padding ->

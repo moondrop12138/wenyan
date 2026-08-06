@@ -56,7 +56,8 @@ android {
         //  抽屉面板改回实底（半透明影响阅读）/ 玻璃厚度层（上微光+下微影）与高光加宽增强质感 /
         //  光斑调柔（浅色浓度下调 + 三段衰减）/ 气泡与卡片内容内边距加大（文字不再贴框边）
         // v1.7.1 二改：空状态示例卡/引导卡/模型行内容 fillMaxSize——固定高度玻璃容器内文字垂直居中（此前贴顶）
-        versionCode = 17
+        // v1.7.1 二改续：顶栏改悬浮胶囊（与输入栏同款 r28 strong 玻璃 + 软投影，聊天页/设置页/模型编辑页统一）
+        versionCode = 18
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

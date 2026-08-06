@@ -568,16 +568,24 @@ private fun ChatTopBar(
         DotState.Failure -> p.dotFailure
     }
 
-    // v1.7.0：顶栏 = 48dp 玻璃条（glassFill + 顶高光 + 描边 + 软影），edge-to-edge 状态栏内边距
+    // v1.7.1 二改续：顶栏改悬浮胶囊（与输入栏同款 r28 strong 玻璃 + 软投影），
+    // 外层留 12/8 悬浮留白保证投影可见；edge-to-edge 状态栏内边距保留
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(shape = RectangleShape)
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .liquidGlass(shape = GtjShape.inputBar, strong = true)
+                .clip(GtjShape.inputBar),
+        ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 4.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
         ) {
             GtjIconButton(
                 icon = Icons.Outlined.Menu,
@@ -628,5 +636,6 @@ private fun ChatTopBar(
             Spacer(Modifier.width(4.dp))
             GtjIconButton(icon = Icons.Outlined.Settings, contentDescription = "设置", onClick = onSettings, tint = p.fgSecondary)
         }
+        } // 玻璃胶囊
     }
 }
