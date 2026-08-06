@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-知识库路由表生成器 + 完整性校验（AC-17 构建门禁）
+知识库路由表生成器 + 完整性校验（构建门禁）
 
 职责：
 1. 校验 assets/knowledge 恰好 40 份 md（20 knowledge + 20 practical）
-2. 按 SKILL.md「按需加载」表 + 文档标题关键词生成 routes.json
-3. 校验 routes.json 覆盖 SKILL.md 全部主题；缺失/不匹配 → 非零退出（构建失败）
+2. 按下方 ROUTE_TABLE（文档标题关键词 → 文档路径）生成 routes.json
+3. 校验路由表覆盖与文档完整性；缺失/不匹配 → 非零退出（构建失败）
 
 用法：
-    python scripts/gen_routes.py
-运行目录：工程根（C:/Users/Khalil/WorkBuddy/apk2/app/）
+    python scripts/gen_routes.py   # 在仓库根的 app/ 目录下运行
 """
 from __future__ import annotations
 
@@ -24,18 +23,11 @@ ASSETS_KNOWLEDGE = os.path.join(ROOT, "app", "src", "main", "assets", "knowledge
 # 用独立文件名：部分环境对反复覆盖的已知文件有写锁（safe-delete 机制），新文件名可写
 OUT_ROUTES = os.path.join(ASSETS_KNOWLEDGE, "routes-v2.json")
 
-SKILL_MD = os.path.join(
-    ROOT,
-    "..", "..", "..", "..", "..", "..", "..",
-    "Users", "Khalil", ".workbuddy", "skills", "goutoujunshi", "SKILL.md",
-)
-# 实际技能仓库路径（若上述相对路径解析失败则尝试绝对路径）
-SKILL_ABS = r"C:/Users/Khalil/.workbuddy/skills/goutoujunshi/SKILL.md"
-
 EXPECTED_COUNTS = {"knowledge": 20, "practical": 20}
 EXPECTED_TOTAL = 40
 
-# SKILL.md「按需加载」表主题（锁定的路由入口，顺序即优先级）
+# 路由表（文档标题关键词 → 相对 assets/knowledge 的路径，顺序即优先级）
+# 主题对应原始开源项目 goutoujunshi（powerycy/goutoujunshi）的按需加载设计
 # (主题关键词列表, 文档相对 assets/knowledge 的路径)
 ROUTE_TABLE = [
     (["回复", "开场", "邀约", "演练", "怎么回", "话术"], "practical/实战话术编排器：从一句回复到后续分支.md"),
@@ -126,7 +118,7 @@ def extract_title(abs_path: str) -> str:
 
 
 def verify_routes_coverage(files: dict, routes: dict) -> None:
-    """校验 routes 覆盖 SKILL.md 全部主题（按需加载表 15 行全部有对应路由）"""
+    """校验路由表引用全部落在现有文档上，且无主题文档未被路由覆盖"""
     route_docs = set()
     for r in routes["routes"]:
         route_docs.update(r["docs"])

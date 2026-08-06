@@ -63,3 +63,15 @@ app/pch/
 app/gt*/
 app/gh*/
 app/gt/
+
+# ===== 开发过程产物（公开仓库不含，本地保留）=====
+# 设计过程稿（图标迭代/画布导出/原型）
+outputs/
+# 图标生成等一次性脚本（含本地密钥痕迹，勿公开）
+scripts/
+# 单屏设计说明（过程文档）
+overview.md
+# 发布归档（APK 备份与发布说明，本地保留）
+dist/
+# 本机专用构建封装（WorkBuddy safe-delete 规避，含 JDK 绝对路径）
+app/scripts/run_gradle.sh
