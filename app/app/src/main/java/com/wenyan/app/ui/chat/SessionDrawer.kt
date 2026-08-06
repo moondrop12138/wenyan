@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -62,7 +63,8 @@ fun SessionDrawerContent(
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(312.dp)
+            // v1.7.0：抽屉宽按原型收窄 312 → 300
+            .width(300.dp)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
         // v1.5 头部：产品名 + 副标题（设计稿 WY-04）
@@ -144,14 +146,35 @@ private fun SessionItem(
     onLongClick: () -> Unit,
 ) {
     val p = LocalGtjColors.current
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        shape = GtjShape.md,
-        color = if (isCurrent) p.accentSoft else p.surfaceElevated,
-        border = if (isCurrent) BorderStroke(1.dp, p.accent.copy(alpha = 0.35f)) else BorderStroke(1.dp, p.borderSoft),
-    ) {
+    // v1.7.0：会话行 = 玻璃（未选中）；当前会话保持 accentSoft + accent 边强调
+    if (isCurrent) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            shape = GtjShape.md,
+            color = p.accentSoft,
+            border = BorderStroke(1.dp, p.accent.copy(alpha = 0.35f)),
+        ) {
+            SessionItemContent(session, p)
+        }
+    } else {
+        GlassSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            shape = GtjShape.md,
+        ) {
+            SessionItemContent(session, p)
+        }
+    }
+}
+
+@Composable
+private fun SessionItemContent(
+    session: SessionSummaryUi,
+    p: com.wenyan.app.ui.theme.GtjPalette,
+) {
         // v1.5：标题 + 首条消息预览（设计稿 WY-04 会话项）
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -175,7 +198,6 @@ private fun SessionItem(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
 }
 
 private fun formatSessionTime(epochMs: Long): String {

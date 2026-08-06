@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,7 +56,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -65,9 +69,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.wenyan.app.ui.components.GtjIconButton
+import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.rememberSendGradient
+import com.wenyan.app.ui.theme.rememberSendIconColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -184,14 +191,14 @@ fun ChatInputBar(
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
-            Surface(
+            // v1.7.0：悬浮胶囊 = strong 玻璃（glassFillStrong + 顶高光 + 描边 + 软影），
+            // 删除旧 shadowElevation=8 避免双影；内凹输入框保持实心 surface 底
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(28.dp),
-                color = p.surfaceElevated,
-                border = BorderStroke(1.dp, p.borderSoft),
-                shadowElevation = 8.dp,
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .clip(GtjShape.inputBar)
+                    .liquidGlass(shape = GtjShape.inputBar, strong = true),
             ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -267,22 +274,29 @@ fun ChatInputBar(
                     }
                 }
             } else {
-                // v1.5：陶土棕圆形发送键 40dp（设计稿 WY-01/02 发送按钮）
-                Surface(
-                    onClick = onSend,
-                    enabled = canSend,
-                    modifier = Modifier.size(40.dp),
-                    shape = GtjShape.pill,
-                    color = if (canSend) p.accent else p.borderSoft,
+                // v1.7.0：发送键 40dp 渐变 #B5651F→#8A4A1B（浅）/ #E0A978→#B06A35（深），150°（原型 .inbar send）
+                val sendGradient = rememberSendGradient()
+                val sendIconColor = rememberSendIconColor()
+                val sendEnd = with(LocalDensity.current) { Offset(40.dp.toPx(), 40.dp.toPx()) }
+                val sendBrush = Brush.linearGradient(
+                    colorStops = sendGradient.map { it.first to it.second }.toTypedArray(),
+                    start = Offset.Zero,
+                    end = sendEnd,
+                )
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (canSend) sendBrush else SolidColor(p.borderSoft))
+                        .clickable(enabled = canSend, onClick = onSend),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.Send,
-                            contentDescription = "发送",
-                            modifier = Modifier.size(18.dp),
-                            tint = if (canSend) p.accentOn else p.meta,
-                        )
-                    }
+                    Icon(
+                        Icons.Outlined.Send,
+                        contentDescription = "发送",
+                        modifier = Modifier.size(18.dp),
+                        tint = if (canSend) sendIconColor else p.meta,
+                    )
                 }
             }
             }

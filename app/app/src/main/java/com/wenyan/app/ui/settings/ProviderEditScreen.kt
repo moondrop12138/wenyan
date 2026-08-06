@@ -1,11 +1,14 @@
 package com.wenyan.app.ui.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -39,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -47,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.components.SecondaryButton
+import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.navigation.rememberViewModel
@@ -69,23 +76,24 @@ fun ProviderEditScreen(
     }
     val p = LocalGtjColors.current
 
+    // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        GlowBackground()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         topBar = {
-            Surface(color = p.bg) {
-                // edge-to-edge：顶栏整体下移状态栏高度（insets 自适应）
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.statusBars),
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(shape = RectangleShape)
+                    .windowInsetsPadding(WindowInsets.statusBars),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
-                    ) {
-                        GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
-                        Text(if (vm.isNew) "添加提供商" else "编辑提供商", style = GtjType.Title, color = p.fg)
-                    }
+                    GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
+                    Text(if (vm.isNew) "添加提供商" else "编辑提供商", style = GtjType.Title, color = p.fg)
                 }
             }
         },
@@ -145,13 +153,21 @@ fun ProviderEditScreen(
             ) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("模型管理", style = GtjType.Label, color = p.muted)
+                    // v1.6.3 每个模型包一个独立卡片框（沙色底+细边框），模型之间靠框自然分隔
                     vm.models.forEach { model ->
-                        ModelManageRow(
-                            model = model,
-                            onSheetVisibleChange = { vm.toggleSheetVisible(model.id) },
-                            onVisionChange = { vm.setVision(model.id, it) },
-                            onDelete = { vm.deleteModel(model.id) },
-                        )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = GtjShape.md,
+                            color = p.surface,
+                            border = BorderStroke(1.dp, p.borderSoft),
+                        ) {
+                            ModelManageRow(
+                                model = model,
+                                onSheetVisibleChange = { vm.toggleSheetVisible(model.id) },
+                                onVisionChange = { vm.setVision(model.id, it) },
+                                onDelete = { vm.deleteModel(model.id) },
+                            )
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -186,6 +202,7 @@ fun ProviderEditScreen(
             Spacer(Modifier.height(16.dp))
         }
     }
+    } // Box（GlowBackground + Scaffold）
 
     if (vm.showDeleteDialog) {
         AlertDialog(
@@ -255,8 +272,11 @@ private fun ModelManageRow(
     onDelete: () -> Unit,
 ) {
     val p = LocalGtjColors.current
-    // v1.6.3 两行式排布：第一行模型名+删除；第二行缩进"主页/视觉"两个带标签开关（红绿灯移至设置页提供商列表）
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    // v1.6.3 两行式排布（外层为独立卡片框）：第一行模型名+删除；第二行缩进"主页/视觉"两个带标签开关
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(model.name, style = GtjType.Body, color = p.fg, modifier = Modifier.weight(1f))
             GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除模型", onClick = onDelete, tint = p.muted, iconSize = 20.dp)

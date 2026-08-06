@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.LruCache
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -14,12 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -49,18 +45,22 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.ChatRole
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.rememberUserBubbleBorder
+import com.wenyan.app.ui.theme.rememberUserBubbleTint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * 消息气泡（design-tokens component.bubbleUser/bubbleAi，design-pages 页面1）：
- * 用户右对齐 accent 底 + accentOn 字（右下小圆角，maxWidth 82%）；
- * AI 左对齐 surface 底 + fg 字（左下小圆角，maxWidth 92%，borderSoft 边）。
+ * v1.7.0 液态玻璃：用户 = 玻璃 + 深棕 tint 渐变 150° + 棕描边（右下尾圆角 6，行距 1.7，fg 字）；
+ * AI = 玻璃 + 白描边（左下尾圆角 6，fg 字）。文字统一 ink 色，合成对比度由 ContrastTest 断言。
  * 长按气泡触发操作菜单（复制/删除），由上层 ChatScreen 处理。
  * v1.2.1：onLongClick 上报触点窗口坐标（气泡窗口位置 + 局部偏移），菜单跟随点按处弹出。
  */
@@ -77,7 +77,7 @@ fun MessageBubble(
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
         var windowPos by remember { mutableStateOf(Offset.Zero) }
-        Surface(
+        Box(
             modifier = Modifier
                 .widthIn(max = if (isUser) 300.dp else 340.dp)
                 .onGloballyPositioned { windowPos = it.positionInWindow() }
@@ -95,18 +95,23 @@ fun MessageBubble(
                         onLongClick?.invoke(Offset.Zero)
                         true
                     }
-                },
-            shape = bubbleShape(isUser),
-            color = if (isUser) p.accent else p.surfaceElevated,
-            contentColor = if (isUser) p.accentOn else p.fg,
-            border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
+                }
+                // v1.7.0 玻璃气泡：clip 管内容，liquidGlass 管玻璃（用户侧叠 tint + 棕描边）
+                .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi)
+                .liquidGlass(
+                    shape = if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi,
+                    tint = if (isUser) rememberUserBubbleTint() else null,
+                    borderColor = if (isUser) rememberUserBubbleBorder() else null,
+                ),
         ) {
             Text(
                 text = message.content,
-                style = GtjType.Body,
+                // v1.7.0：用户气泡 14sp/行距 1.7（原型 13px/1.7），AI 保持正文 16/24
+                style = if (isUser) UserBubbleTextStyle else GtjType.Body,
+                color = p.fg,
                 // 无障碍：读屏按"角色+内容"播报——用户消息前置"你说"，AI 消息保持原文
                 modifier = Modifier
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics {
                         if (isUser) {
                             contentDescription = "你说：" + message.content
@@ -171,7 +176,8 @@ fun ImageMessageBubble(
                     modifier = Modifier
                         .widthIn(max = 240.dp)
                         .heightIn(max = 240.dp)
-                        .clip(bubbleShape(isUser)),
+                        // v1.7.0：图片裁剪沿用 20/20/6 气泡圆角
+                        .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
                 )
             } else {
                 Text(
@@ -179,8 +185,8 @@ fun ImageMessageBubble(
                     style = GtjType.Body,
                     color = p.muted,
                     modifier = Modifier
-                        .clip(bubbleShape(isUser))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                        .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 )
             }
         }
@@ -226,22 +232,25 @@ fun SelectableMessageContent(
             )
         }
         CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
-            Surface(
-                modifier = Modifier.widthIn(max = if (isUser) 300.dp else 340.dp),
-                shape = bubbleShape(isUser),
-                color = if (isUser) p.accent else p.surfaceElevated,
-                contentColor = if (isUser) p.accentOn else p.fg,
-                border = if (isUser) null else BorderStroke(1.dp, p.borderSoft),
+            Box(
+                modifier = Modifier
+                    .widthIn(max = if (isUser) 300.dp else 340.dp)
+                    .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi)
+                    .liquidGlass(
+                        shape = if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi,
+                        tint = if (isUser) rememberUserBubbleTint() else null,
+                        borderColor = if (isUser) rememberUserBubbleBorder() else null,
+                    ),
             ) {
                 BasicTextField(
                     value = tfv,
                     onValueChange = { tfv = it },
                     modifier = Modifier
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                         .focusRequester(focusRequester),
                     readOnly = true,
-                    // Surface contentColor 不自动作用于 BasicTextField，需显式上色
-                    textStyle = GtjType.Body.copy(color = if (isUser) p.accentOn else p.fg),
+                    // Surface contentColor 不自动作用于 BasicTextField，需显式上色（v1.7.0 统一 ink 色）
+                    textStyle = (if (isUser) UserBubbleTextStyle else GtjType.Body).copy(color = p.fg),
                     cursorBrush = SolidColor(Color.Transparent),
                 )
             }
@@ -249,7 +258,7 @@ fun SelectableMessageContent(
     }
 }
 
-/** 流式中的 AI 气泡（打字机增量文本，design-pages 页面1） */
+/** 流式中的 AI 气泡（打字机增量文本，design-pages 页面1；v1.7.0 玻璃 + AI 圆角） */
 @Composable
 fun StreamingBubble(
     text: String,
@@ -257,22 +266,17 @@ fun StreamingBubble(
 ) {
     val p = LocalGtjColors.current
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Surface(
-            modifier = Modifier.widthIn(max = 340.dp),
-            shape = RoundedCornerShape(
-                topStart = CornerSize(GtjShape.lgRadius),
-                topEnd = CornerSize(GtjShape.lgRadius),
-                bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
-                bottomEnd = CornerSize(GtjShape.lgRadius),
-            ),
-            color = p.surfaceElevated,
-            contentColor = p.fg,
-            border = BorderStroke(1.dp, p.borderSoft),
+        Box(
+            modifier = Modifier
+                .widthIn(max = 340.dp)
+                .clip(GtjShape.bubbleAi)
+                .liquidGlass(shape = GtjShape.bubbleAi),
         ) {
             Text(
                 text = text,
                 style = GtjType.Body,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                color = p.fg,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
     }
@@ -288,43 +292,25 @@ fun StreamingPlaceholderBubble(
 ) {
     val p = LocalGtjColors.current
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Surface(
-            modifier = Modifier.widthIn(max = 340.dp),
-            shape = RoundedCornerShape(
-                topStart = CornerSize(GtjShape.lgRadius),
-                topEnd = CornerSize(GtjShape.lgRadius),
-                bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
-                bottomEnd = CornerSize(GtjShape.lgRadius),
-            ),
-            color = p.surfaceElevated,
-            contentColor = p.muted,
-            border = BorderStroke(1.dp, p.borderSoft),
+        Box(
+            modifier = Modifier
+                .widthIn(max = 340.dp)
+                .clip(GtjShape.bubbleAi)
+                .liquidGlass(shape = GtjShape.bubbleAi),
         ) {
             Text(
                 text = "正在组织语言…",
                 style = GtjType.Body,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                color = p.muted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
     }
 }
 
-private fun bubbleShape(isUser: Boolean): RoundedCornerShape =
-    if (isUser) {
-        RoundedCornerShape(
-            topStart = CornerSize(GtjShape.xlRadius),
-            topEnd = CornerSize(GtjShape.xlRadius),
-            bottomStart = CornerSize(GtjShape.xlRadius),
-            bottomEnd = CornerSize(GtjShape.bubbleTailSmRadius),
-        )
-    } else {
-        RoundedCornerShape(
-            topStart = CornerSize(GtjShape.xlRadius),
-            topEnd = CornerSize(GtjShape.xlRadius),
-            bottomStart = CornerSize(GtjShape.bubbleTailSmRadius),
-            bottomEnd = CornerSize(GtjShape.xlRadius),
-        )
-    }
+/** v1.7.0 用户气泡正文：14sp / 行距 1.7（原型 buser 13px/1.7，略放大保可读性） */
+internal val UserBubbleTextStyle: androidx.compose.ui.text.TextStyle =
+    GtjType.Body.copy(fontSize = 14.sp, lineHeight = 24.sp)
 
 /** data URL 解码缓存（按 byteCount 计量，32MB 上限），避免 LazyColumn 滚动重组时重复解码 */
 private object DataUrlBitmapCache {

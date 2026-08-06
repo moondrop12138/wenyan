@@ -1,6 +1,5 @@
 package com.wenyan.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -47,7 +47,8 @@ fun CrisisCard(
 ) {
     val p = LocalGtjColors.current
     var windowPos by remember { mutableStateOf(Offset.Zero) }
-    Surface(
+    // v1.7.0：危机卡 = 玻璃材质（克制冷静，无闪烁样式）
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .onGloballyPositioned { windowPos = it.positionInWindow() }
@@ -64,8 +65,6 @@ fun CrisisCard(
                 }
             ),
         shape = GtjShape.md,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.border),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

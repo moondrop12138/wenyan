@@ -31,7 +31,25 @@
       "warm": "#C0743F",
       "warmSoft": "#F7EADC",
       "warmOn": "#8F4F24",
-      "scrim": "rgba(43,33,24,0.45)"
+      "scrim": "rgba(43,33,24,0.45)",
+      "glass": {
+        "fill": "rgba(253,249,242,0.55)",
+        "fillStrong": "rgba(253,248,240,0.82)",
+        "border": "rgba(255,255,255,0.75)",
+        "edgeHighlight": "rgba(255,255,255,0.95)",
+        "shadow": "rgba(110,70,30,0.18)"
+      },
+      "glow": {
+        "a": "rgba(242,203,169,0.50)",
+        "b": "rgba(223,166,120,0.42)",
+        "c": "rgba(192,116,63,0.30)"
+      },
+      "statusDot": {
+        "connected": "#7FA65A",
+        "connecting": "#DFA678",
+        "thinking": "#C0743F",
+        "failure": "#9A8F85"
+      }
     },
     "dark": {
       "bg": "#17120E",
@@ -55,7 +73,25 @@
       "warm": "#DFA678",
       "warmSoft": "#3A2A1C",
       "warmOn": "#F2CBA9",
-      "scrim": "rgba(0,0,0,0.60)"
+      "scrim": "rgba(0,0,0,0.60)",
+      "glass": {
+        "fill": "rgba(46,36,28,0.45)",
+        "fillStrong": "rgba(34,26,20,0.82)",
+        "border": "rgba(255,255,255,0.12)",
+        "edgeHighlight": "rgba(255,255,255,0.35)",
+        "shadow": "rgba(0,0,0,0.50)"
+      },
+      "glow": {
+        "a": "rgba(206,138,86,0.45)",
+        "b": "rgba(223,166,120,0.30)",
+        "c": "rgba(58,42,28,0.75)"
+      },
+      "statusDot": {
+        "connected": "#7FA65A",
+        "connecting": "#DFA678",
+        "thinking": "#C0743F",
+        "failure": "#9A8F85"
+      }
     }
   },
 
@@ -96,6 +132,7 @@
 
   "radius": {
     "sm": 8, "md": 12, "lg": 16, "xl": 18, "pill": 9999,
+    "bubble": 20, "bubbleTail": 4, "sheetTop": 28,
     "unit": "dp"
   },
 

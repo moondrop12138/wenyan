@@ -1,6 +1,8 @@
 package com.wenyan.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -41,11 +44,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.CoachCard
 import com.wenyan.app.ui.contract.ScriptStyle
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.rememberCoachInnerCard
 
 /**
  * v1.6 四段结构回答卡（参考旧版"狗头军师"回答结构，配色走温言陶土棕×暖米白，与启动图标对齐）：
@@ -67,7 +72,8 @@ fun CoachCard(
 ) {
     val p = LocalGtjColors.current
     var windowPos by remember { mutableStateOf(Offset.Zero) }
-    Surface(
+    // v1.7.0：卡体 = 玻璃（glassFill + 顶高光 + 描边 + 软影替代 shadowElevation=2）
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .onGloballyPositioned { windowPos = it.positionInWindow() }
@@ -84,11 +90,8 @@ fun CoachCard(
                 }
             ),
         shape = GtjShape.xl,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.borderSoft),
-        shadowElevation = 2.dp,
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(18.dp)) {
             // 卡头：温言标记（22dp 陶土棕圆 + 白"温"）+ 标题 + 时间戳（设计稿 WY-02/03 头部）
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = CircleShape, color = p.accent, modifier = Modifier.size(22.dp)) {
@@ -128,7 +131,19 @@ fun CoachCard(
                 Spacer(Modifier.height(14.dp))
                 SectionDivider()
                 Spacer(Modifier.height(14.dp))
-                AdviceBlock(card, messageId, onCopy)
+                // v1.7.0 军师建议内卡：暖米半透明 + 淡棕描边（浅）/ 白 10% + 杏棕描边（深）
+                val (innerFill, innerBorder) = rememberCoachInnerCard()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(GtjShape.lg)
+                        .background(innerFill)
+                        .border(1.dp, innerBorder, GtjShape.lg),
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        AdviceBlock(card, messageId, onCopy)
+                    }
+                }
             }
 
             if (card.actions.isNotEmpty()) {

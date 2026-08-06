@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -39,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,9 +51,13 @@ import com.wenyan.app.ui.components.ModelSheet
 import com.wenyan.app.ui.components.Tag
 import com.wenyan.app.ui.components.TagKind
 import com.wenyan.app.ui.components.ThickDivider
+import com.wenyan.app.ui.components.glass.GlassSurface
+import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.navigation.rememberViewModel
+import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 
@@ -78,23 +85,25 @@ fun SettingsScreen(
     val p = LocalGtjColors.current
     var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
 
+    // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        GlowBackground()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         topBar = {
-            Surface(color = p.bg) {
-                // edge-to-edge：顶栏整体下移状态栏高度（insets 自适应）
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.statusBars),
+            // v1.7.0：顶栏 = 玻璃条（与聊天页顶栏同材质）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(shape = RectangleShape)
+                    .windowInsetsPadding(WindowInsets.statusBars),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
-                    ) {
-                        GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
-                        Text("设置", style = GtjType.Title, color = p.fg)
-                    }
+                    GtjIconButton(icon = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", onClick = onBack)
+                    Text("设置", style = GtjType.Title, color = p.fg)
                 }
             }
         },
@@ -178,6 +187,7 @@ fun SettingsScreen(
             }
         }
     }
+    } // Box（GlowBackground + Scaffold）
 
     pickerTarget?.let { target ->
         val list = if (target == PickerTarget.VISION) models.filter { it.supportsVision } else models
@@ -221,11 +231,12 @@ private fun SettingsRow(
     onClick: (() -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
-    Surface(
+    // v1.7.0：设置行 = 玻璃材质
+    GlassSurface(
         onClick = onClick ?: {},
         enabled = onClick != null,
         modifier = Modifier.fillMaxWidth(),
-        color = p.surface,
+        shape = RectangleShape,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -267,12 +278,11 @@ private fun ProviderRow(
     onClick: () -> Unit,
 ) {
     val p = LocalGtjColors.current
-    Surface(
+    // v1.7.0：提供商行 = 玻璃卡片
+    GlassSurface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = com.wenyan.app.ui.theme.GtjShape.md,
-        color = p.surfaceElevated,
-        border = BorderStroke(1.dp, p.border),
+        shape = GtjShape.md,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

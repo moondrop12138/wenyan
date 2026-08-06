@@ -50,8 +50,13 @@ android {
         //  模型回复（分析卡）也可部分选择（四段拼接文本，含默认风格话术）/ 菜单项去图标并改名"部分选择"
         // v1.6.3 沉浸式手势小白条：enableEdgeToEdge 双 scrim 全透明（去导航栏白条）/ 系统栏外观跟随 App 主题三态 /
         //  themes.xml 导航栏透明 + values-night 镜像防冷启动白闪 / API 26-28 navBar 用背景色顶替
-        versionCode = 14
-        versionName = "1.6.3"
+        // v1.7.0 液态玻璃 UI 全量玻璃化：Glass.kt tokens + LiquidGlass 自包含玻璃绘制 + GlowBackground 光斑层 +
+        //  全组件改造（顶栏/输入胶囊/气泡/CoachCard/抽屉/弹层/设置/模型管理/引导页）+ 玻璃对比度断言
+        // v1.7.1 迭代打磨：根 Box 加主题背景（防浅色模式透出系统深色 windowBackground 变暗底）/
+        //  抽屉面板改回实底（半透明影响阅读）/ 玻璃厚度层（上微光+下微影）与高光加宽增强质感 /
+        //  光斑调柔（浅色浓度下调 + 三段衰减）/ 气泡与卡片内容内边距加大（文字不再贴框边）
+        versionCode = 16
+        versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

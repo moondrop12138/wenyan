@@ -2,6 +2,7 @@ package com.wenyan.app.ui.onboarding
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,10 +26,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.components.GhostButton
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.PrimaryButton
+import com.wenyan.app.ui.components.glass.GlowBackground
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -59,7 +62,10 @@ fun OnboardingScreen(
         label = "progress",
     )
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+    // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        GlowBackground()
+    Scaffold(containerColor = Color.Transparent) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -117,6 +123,7 @@ fun OnboardingScreen(
             }
         }
     }
+    } // Box（GlowBackground + Scaffold）
 
     if (vm.showSkipDialog) {
         SkipDialog(

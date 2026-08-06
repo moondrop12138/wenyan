@@ -6,7 +6,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,9 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -59,16 +60,15 @@ fun ThinkingPanel(
     var expanded by rememberSaveable(streaming) { mutableStateOf(streaming) }
     val arrowRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "thinkingArrow")
 
-    Surface(
+    // v1.7.0：思考便签 = 玻璃材质（便签感由半透明玻璃 + 描边承担）
+    GlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = GtjShape.md,
-        color = p.surface,
-        border = BorderStroke(1.dp, p.borderSoft),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             Surface(
                 onClick = { expanded = !expanded },
-                color = p.surface,
+                color = Color.Transparent,
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics {

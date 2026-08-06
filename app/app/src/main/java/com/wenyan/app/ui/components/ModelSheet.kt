@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -65,8 +66,9 @@ fun ModelSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = GtjShape.xlRadius, topEnd = GtjShape.xlRadius),
-        containerColor = p.surfaceElevated,
+        // v1.7.0：顶圆角 28 + 半透明玻璃容器（glassFillStrong 透出背后光斑）
+        shape = GtjShape.sheetTop,
+        containerColor = p.glassFillStrong,
         dragHandle = { Surface(color = p.borderSoft, modifier = Modifier.size(width = 36.dp, height = 4.dp), shape = GtjShape.pill) {} },
     ) {
         Column(Modifier.padding(horizontal = 16.dp)) {
@@ -122,21 +124,48 @@ private fun ModelRow(
     onClick: () -> Unit,
 ) {
     val p = LocalGtjColors.current
+    // v1.7.0：模型行 = 玻璃（未选中）；选中态保持 accentSoft 强调
+    if (selected) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .semantics {
+                    role = Role.RadioButton
+                    this.selected = selected
+                },
+            shape = GtjShape.lg,
+            color = p.accentSoft,
+            border = BorderStroke(1.5.dp, p.accent),
+        ) {
+            ModelRowContent(model, selected, p)
+        }
+    } else {
+        GlassSurface(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .semantics {
+                    role = Role.RadioButton
+                    this.selected = selected
+                },
+            shape = GtjShape.lg,
+        ) {
+            ModelRowContent(model, selected, p)
+        }
+    }
+}
+
+@Composable
+private fun ModelRowContent(
+    model: ModelInfo,
+    selected: Boolean,
+    p: com.wenyan.app.ui.theme.GtjPalette,
+) {
     // v1.5：图标缩写（前两位字母，如 DS / GPT），40dp 陶土棕底 r12 容器（设计稿 WY-05）
     val abbrev = model.name.take(2).uppercase()
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 72.dp)
-            .semantics {
-                role = Role.RadioButton
-                this.selected = selected
-            },
-        shape = GtjShape.lg,
-        color = if (selected) p.accentSoft else p.surface,
-        border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) p.accent else p.borderSoft),
-    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -188,5 +217,4 @@ private fun ModelRow(
                 }
             }
         }
-    }
 }

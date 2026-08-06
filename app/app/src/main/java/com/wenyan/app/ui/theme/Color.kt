@@ -34,6 +34,19 @@ data class GtjPalette(
     val warmSoft: Color,
     val warmOn: Color,
     val scrim: Color,
+    // ── v1.7.0 液态玻璃（唯一来源 docs/design-tokens.json color.light/dark.glass.*，参数固化自 outputs/liquid-glass-prototype.html）──
+    val glassFill: Color,          // 玻璃主填充
+    val glassFillStrong: Color,    // 强玻璃（输入胶囊/高密度容器）
+    val glassBorder: Color,        // 玻璃描边 1dp
+    val glassEdgeHighlight: Color, // 顶部高光线（1.5dp 渐隐）
+    val glassShadow: Color,        // 柔和外投影
+    val glowA: Color,              // 光斑 A（径向渐变中心色）
+    val glowB: Color,              // 光斑 B
+    val glowC: Color,              // 光斑 C
+    val dotConnected: Color,       // 状态点·已连接（橄榄绿）
+    val dotConnecting: Color,      // 状态点·连接中（杏棕呼吸）
+    val dotThinking: Color,        // 状态点·思考中（赭石呼吸）
+    val dotFailure: Color,         // 状态点·失败（灰）
 )
 
 /** 浅色 Token（design-tokens.json color.light，v1.6.1 陶土棕×暖米白，与启动图标配色对齐） */
@@ -62,6 +75,22 @@ val LightPalette = GtjPalette(
     warmSoft = Color(0xFFF7EADC),
     warmOn = Color(0xFF8F4F24),
     scrim = Color(0x732B2118),
+    // 玻璃（原型浅色值）：fill rgba(253,249,242,.55) / strong rgba(253,248,240,.82) /
+    // border rgba(255,255,255,.75) / edge rgba(255,255,255,.95) / shadow rgba(110,70,30,.18)
+    glassFill = Color(0x8CFDF9F2),
+    glassFillStrong = Color(0xD1FDF8F0),
+    glassBorder = Color(0xBFFFFFFF),
+    glassEdgeHighlight = Color(0xF2FFFFFF),
+    glassShadow = Color(0x2E6E461E),
+    // 光斑（v1.7.1 调柔：浅色浓度下调，避免径向渐变边缘生硬成色块；原型值 .85/.75/.55）
+    glowA = Color(0x80F2CBA9), // rgba(242,203,169,.50)
+    glowB = Color(0x6BDFA678), // rgba(223,166,120,.42)
+    glowC = Color(0x4DC0743F), // rgba(192,116,63,.30)
+    // 状态点四态（跨主题恒定，原型 sdot）
+    dotConnected = Color(0xFF7FA65A),
+    dotConnecting = Color(0xFFDFA678),
+    dotThinking = Color(0xFFC0743F),
+    dotFailure = Color(0xFF9A8F85),
 )
 
 /** 深色 Token（design-tokens.json color.dark，v1.6.1 暖黑×杏棕，与启动图标配色对齐） */
@@ -90,6 +119,22 @@ val DarkPalette = GtjPalette(
     warmSoft = Color(0xFF3A2A1C),
     warmOn = Color(0xFFF2CBA9),
     scrim = Color(0x99000000),
+    // 玻璃（原型深色值）：fill rgba(46,36,28,.45) / strong rgba(34,26,20,.82) /
+    // border rgba(255,255,255,.12) / edge rgba(255,255,255,.35) / shadow rgba(0,0,0,.5)
+    glassFill = Color(0x732E241C),
+    glassFillStrong = Color(0xD1221A14),
+    glassBorder = Color(0x1FFFFFFF),
+    glassEdgeHighlight = Color(0x59FFFFFF),
+    glassShadow = Color(0x80000000),
+    // 光斑（v1.7.1 微调：深色稍提亮保持暖氛围）
+    glowA = Color(0x73CE8A56), // rgba(206,138,86,.45)
+    glowB = Color(0x4DDFA678), // rgba(223,166,120,.30)
+    glowC = Color(0xBF3A2A1C), // rgba(58,42,28,.75)
+    // 状态点四态（跨主题恒定）
+    dotConnected = Color(0xFF7FA65A),
+    dotConnecting = Color(0xFFDFA678),
+    dotThinking = Color(0xFFC0743F),
+    dotFailure = Color(0xFF9A8F85),
 )
 
 /** 供组件读取扩展色（warm/warn/dangerSoft/meta/accentSoft 等非 M3 槽位） */

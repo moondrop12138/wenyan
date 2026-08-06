@@ -1,6 +1,5 @@
 package com.wenyan.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,13 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 
 /**
  * 卡片体系（design-tokens.json component.card / divider / tag）。
- * 卡片：surfaceElevated 底 + border 边 + radius-md，无默认阴影（深色用亮度递进代替）。
+ * v1.7.0：卡片 = 玻璃材质（glassFill + 顶高光 + 描边 + 软影），圆角 md。
  */
 @Composable
 fun GtjCard(
@@ -30,14 +30,12 @@ fun GtjCard(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val p = LocalGtjColors.current
-    val shape = GtjShape.md
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier, shape = shape, color = p.surfaceElevated, border = BorderStroke(1.dp, p.border)) {
+        GlassSurface(onClick = onClick, modifier = modifier, shape = GtjShape.md) {
             Box(Modifier.padding(16.dp)) { content() }
         }
     } else {
-        Surface(modifier = modifier, shape = shape, color = p.surfaceElevated, border = BorderStroke(1.dp, p.border)) {
+        GlassSurface(modifier = modifier, shape = GtjShape.md) {
             Box(Modifier.padding(16.dp)) { content() }
         }
     }

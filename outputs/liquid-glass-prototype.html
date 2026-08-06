@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>温言 · 液态玻璃 UI 原型 v1.7.0</title>
+<style>
+:root{--bg-page:#1C1510;--fg:#EDE4D8;--fg-mut:#9B8A7A;--line:rgba(237,228,216,.14)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg-page);color:var(--fg);font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;min-height:100vh;padding:18px 14px 48px}
+.bar{max-width:760px;margin:0 auto 16px}
+.bar .ttl{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.bar h1{font-size:17px;font-weight:500}
+.bar .ver{font-size:12px;color:var(--fg-mut)}
+.tabs{display:flex;gap:6px;margin-top:12px;overflow-x:auto;padding-bottom:4px}
+.tab{flex-shrink:0;font-size:12px;padding:6px 13px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--fg-mut);cursor:pointer;font-family:inherit;transition:all .18s}
+.tab:hover{color:var(--fg);border-color:rgba(237,228,216,.35)}
+.tab.on{background:#CE8A56;border-color:#CE8A56;color:#1C1510;font-weight:500}
+.themes{display:flex;gap:6px;margin-top:12px}
+.themes button{font-size:12px;padding:6px 16px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--fg-mut);cursor:pointer;font-family:inherit;transition:all .18s}
+.themes button.on{background:#EDE4D8;color:#1C1510;border-color:#EDE4D8;font-weight:500}
+.hint{font-size:12px;color:var(--fg-mut);margin-top:10px;line-height:1.7}
+
+.phone{--bg:#F6F0E6;--accent:#A4551C;--accent-d:#8F4F24;--ink:#38291D;--muted:#8A7665;--glass:rgba(253,249,242,.55);--glass-border:rgba(255,255,255,.75);--edge:rgba(255,255,255,.95);--shadow:0 14px 40px rgba(110,70,30,.18),0 2px 6px rgba(110,70,30,.1);--chip:rgba(164,85,28,.12);--inset:rgba(120,80,40,.09);--l2:rgba(247,234,220,.72);--l2b:rgba(164,85,28,.22);--utint:linear-gradient(150deg,rgba(164,85,28,.48),rgba(164,85,28,.26) 50%,rgba(164,85,28,.4));--uborder:rgba(164,85,28,.5);--gs:rgba(253,248,240,.82);--inp:rgba(255,255,255,.55);--send1:#B5651F;--send2:#8A4A1B;--sendic:#fff;--scrimc:rgba(30,18,8,.35);width:min(392px,94vw);aspect-ratio:390/844;border-radius:46px;border:6px solid #0E0A07;position:relative;overflow:hidden;background:var(--bg);box-shadow:0 34px 90px rgba(0,0,0,.6);margin:0 auto;font-family:inherit}
+.phone[data-theme=dark]{--bg:#17120E;--accent:#CE8A56;--accent-d:#DFA678;--ink:#F2E9DC;--muted:#A9968A;--glass:rgba(46,36,28,.45);--glass-border:rgba(255,255,255,.12);--edge:rgba(255,255,255,.35);--shadow:0 14px 40px rgba(0,0,0,.5);--chip:rgba(206,138,86,.18);--inset:rgba(0,0,0,.32);--l2:rgba(255,255,255,.1);--l2b:rgba(206,138,86,.2);--utint:linear-gradient(150deg,rgba(206,138,86,.5),rgba(206,138,86,.28) 50%,rgba(206,138,86,.42));--uborder:rgba(206,138,86,.5);--gs:rgba(34,26,20,.82);--inp:rgba(255,255,255,.07);--send1:#E0A978;--send2:#B06A35;--sendic:#17120E;--scrimc:rgba(0,0,0,.5)}
+.glow{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
+.g1{width:340px;height:340px;left:-90px;top:110px;background:radial-gradient(circle,rgba(242,203,169,.85),transparent 65%);animation:drift 22s ease-in-out infinite alternate}
+.g2{width:300px;height:300px;right:-100px;top:430px;background:radial-gradient(circle,rgba(223,166,120,.75),transparent 65%);animation:drift 26s ease-in-out infinite alternate-reverse}
+.g3{width:260px;height:260px;left:30px;bottom:-90px;background:radial-gradient(circle,rgba(192,116,63,.55),transparent 65%);animation:drift 30s ease-in-out infinite alternate}
+.phone[data-theme=dark] .g1{background:radial-gradient(circle,rgba(206,138,86,.4),transparent 65%)}
+.phone[data-theme=dark] .g2{background:radial-gradient(circle,rgba(223,166,120,.22),transparent 65%)}
+.phone[data-theme=dark] .g3{background:radial-gradient(circle,rgba(58,42,28,.9),transparent 65%)}
+@keyframes drift{0%{transform:translate(0,0)}50%{transform:translate(24px,-16px)}100%{transform:translate(-14px,12px)}}
+@keyframes breathe{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+@keyframes caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+.glass{background:var(--glass);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid var(--glass-border);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.45)}
+.edge{position:relative;overflow:hidden}
+.edge::before{content:"";position:absolute;top:0;left:10%;right:10%;height:1.5px;border-radius:99px;background:linear-gradient(90deg,transparent,var(--edge),transparent)}
+.stbar{height:30px;display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:11px;padding:0 6px;position:relative;z-index:2}
+.stbar .sig{display:flex;align-items:flex-end;gap:1.5px;height:9px}
+.stbar .sig i{width:2px;background:var(--muted);border-radius:1px;display:block}
+.tbar{position:relative;z-index:2;height:48px;margin:4px 0 0;border-radius:20px;display:flex;align-items:center;padding:0 14px;gap:8px;transition:opacity .35s,transform .35s}
+.tbar.hide{opacity:0;pointer-events:none}
+.tbar .t{font-size:15px;font-weight:500;color:var(--ink)}
+.tbar .sp{width:6px;height:6px;border-radius:50%;background:#7FA65A;flex-shrink:0}
+.tbar .mbtn{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;flex-shrink:0;transition:background .15s}
+.tbar .mbtn:hover{background:var(--chip);color:var(--accent)}
+.pill{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:99px;font-size:11px;font-weight:500;color:var(--accent);cursor:pointer;transition:transform .12s;white-space:nowrap;max-width:158px;overflow:hidden;text-overflow:ellipsis;background:var(--glass);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid var(--glass-border);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.45)}
+.pill:active{transform:scale(.94)}
+.sdot{width:11px;height:11px;border-radius:50%;background:var(--glass);border:1px solid var(--glass-border);box-shadow:inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.sdot::after{content:"";width:5px;height:5px;border-radius:50%;background:#7FA65A;transition:background .25s}
+.sdot.t::after{background:#C0743F;animation:breathe 1.2s ease-in-out infinite}
+.sdot.c::after{background:#DFA678;animation:breathe .8s ease-in-out infinite}
+.sdot.f::after{background:#9A8F85}
+.gear{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;transition:all .15s;flex-shrink:0}
+.gear:hover{background:var(--chip);color:var(--accent)}
+.gear:active{transform:scale(.9)}
+
+.scr{position:absolute;left:0;right:0;top:84px;bottom:0;display:none;flex-direction:column;padding:10px 14px 14px;z-index:1}
+.scr.on{display:flex}
+.msgs{flex:1;display:flex;flex-direction:column;gap:10px;overflow:hidden;min-height:0}
+.buser{position:relative;align-self:flex-end;max-width:82%;font-size:13px;line-height:1.7;padding:12px 14px;border-radius:20px 20px 6px 20px;overflow:hidden;background:var(--utint),var(--glass);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid var(--uborder);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.45)}
+.buser::before{content:"";position:absolute;top:1px;left:8px;width:52%;height:12px;border-radius:99px;background:radial-gradient(ellipse at 30% 0%,rgba(255,255,255,.6),rgba(255,255,255,0) 70%)}
+.buser>span{position:relative;color:var(--ink);display:block}
+.phone[data-theme=dark] .buser{box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.2)}
+.phone[data-theme=dark] .buser::before{background:radial-gradient(ellipse at 30% 0%,rgba(255,255,255,.28),rgba(255,255,255,0) 70%)}
+.aib{position:relative;align-self:flex-start;max-width:88%;border-radius:20px 20px 20px 6px;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.day{position:relative;align-self:center;border-radius:99px;padding:4px 12px;font-size:11px;color:var(--muted)}
+.think{position:relative;align-self:flex-start;border-radius:16px;padding:8px 12px;font-size:11px;color:var(--muted);display:flex;align-items:center}
+.dots{display:inline-flex;gap:3px;margin-left:6px}
+.dots i{width:3px;height:3px;border-radius:50%;background:var(--muted);display:block;animation:breathe 1.2s ease-in-out infinite}
+.dots i:nth-child(2){animation-delay:.2s}
+.dots i:nth-child(3){animation-delay:.4s}
+.sec{font-size:11px;color:var(--accent);font-weight:500}
+.fchip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--chip);color:var(--accent)}
+.l2{position:relative;border-radius:14px;background:var(--l2);border:1px solid var(--l2b);box-shadow:inset 0 1px 0 rgba(255,255,255,.6);padding:10px 11px;display:flex;flex-direction:column;gap:7px}
+.sty{font-size:11px;padding:3px 12px;border-radius:99px;color:var(--muted);border:1px solid var(--glass-border);cursor:pointer;transition:all .15s;background:transparent;font-family:inherit}
+.sty.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.phone[data-theme=dark] .sty.on{color:#17120E}
+.inbar{position:relative;border-radius:28px;padding:8px;margin-top:10px;display:flex;gap:8px;align-items:center;flex-shrink:0}
+.inbox{flex:1;background:var(--inp);box-shadow:inset 0 2px 8px var(--inset),inset 0 -1px 0 rgba(255,255,255,.5);border-radius:22px;padding:10px 14px;font-size:12px;color:var(--muted);border:none;outline:none;font-family:inherit}
+.phone[data-theme=dark] .inbox{box-shadow:inset 0 2px 8px var(--inset),inset 0 -1px 0 rgba(255,255,255,.08)}
+.send{width:38px;height:38px;border-radius:50%;background:linear-gradient(150deg,var(--send1),var(--send2));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 14px rgba(164,85,28,.35);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;border:none;padding:0;transition:transform .12s}
+.send:active{transform:scale(.92)}
+.caret{display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:caret 1s step-end infinite;border-radius:1px}
+
+.scrim{position:absolute;inset:0;z-index:19;background:var(--scrimc);opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.open{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;border-radius:28px 28px 0 0;background:var(--glass);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid var(--glass-border);border-bottom:none;box-shadow:var(--shadow),0 -20px 60px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.5);transform:translateY(110%);transition:transform .35s cubic-bezier(.32,.72,0,1);padding:14px 16px 28px}
+.sheet.open{transform:translateY(0)}
+.sheet::before{content:"";position:absolute;top:0;left:35%;right:35%;height:4px;border-radius:99px;background:var(--muted);opacity:.35}
+.sheet::after{content:"";position:absolute;top:0;left:12%;right:12%;height:1.5px;border-radius:99px;background:linear-gradient(90deg,transparent,var(--edge),transparent)}
+.srow{display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:16px;cursor:pointer}
+.srow:hover{background:rgba(164,85,28,.08)}
+.phone[data-theme=dark] .srow:hover{background:rgba(206,138,86,.1)}
+.sic{width:40px;height:40px;border-radius:12px;background:var(--chip);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--muted);flex-shrink:0;transition:all .2s}
+.srow.on .check{background:var(--accent);border-color:var(--accent)}
+.check::after{content:"";display:block;width:8px;height:5px;margin:4px auto;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) scale(0);transition:transform .15s}
+.srow.on .check::after{transform:rotate(-45deg) scale(1)}
+.phone[data-theme=dark] .check::after{border-color:#17120E}
+.toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(8px);background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--glass-border);border-radius:99px;padding:7px 14px;font-size:11px;color:var(--ink);opacity:0;pointer-events:none;transition:all .25s;z-index:18;white-space:nowrap;box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.empty{flex:1;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0}
+.epic{position:relative;flex:none;height:188px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px}
+.ecard{position:relative;border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:transform .12s}
+.ecard:active{transform:scale(.97)}
+.ecard .q{font-size:12.5px;color:var(--ink);line-height:1.55}
+.ecard .tag{font-size:10.5px;color:var(--muted)}
+.eguide{display:flex;gap:10px;flex-shrink:0}
+.gcard{position:relative;flex:1;border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;cursor:pointer}
+.gcard .gt{font-size:12.5px;color:var(--ink);font-weight:500}
+.gcard .gd{font-size:10.5px;color:var(--muted);line-height:1.5}
+.motto{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.motto .d{font-size:11px;color:var(--muted)}
+.motto .m{font-size:14px;color:var(--ink);font-weight:500}
+
+.drawer{position:absolute;inset:0;z-index:30;transform:translateX(-105%);transition:transform .35s cubic-bezier(.32,.72,0,1)}
+.drawer.open{transform:translateX(0)}
+.dpanel{position:absolute;left:0;top:0;bottom:0;width:300px;background:var(--glass);backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);border-right:1px solid var(--glass-border);box-shadow:var(--shadow),20px 0 60px rgba(0,0,0,.22);display:flex;flex-direction:column;padding:16px 12px 20px}
+.dhead{display:flex;align-items:center;gap:8px;padding:6px 8px 12px}
+.dhead .logo{width:30px;height:30px;border-radius:10px;background:linear-gradient(150deg,var(--send1),var(--send2));display:flex;align-items:center;justify-content:center;color:var(--sendic);font-size:12px;font-weight:500;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+.dhead .nm{font-size:14px;font-weight:500;color:var(--ink)}
+.dnew{position:relative;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:14px;cursor:pointer;font-size:12.5px;color:var(--accent);font-weight:500}
+.dlist{flex:1;display:flex;flex-direction:column;gap:4px;overflow:hidden;margin-top:6px}
+.drow{position:relative;display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:14px;cursor:pointer}
+.drow.on{background:var(--chip)}
+.drow .t{font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drow .s{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dfoot{position:relative;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:14px;cursor:pointer;font-size:12.5px;color:var(--ink)}
+.dscrim{position:absolute;inset:0;background:var(--scrimc);z-index:29;opacity:0;pointer-events:none;transition:opacity .3s}
+.dscrim.open{opacity:1;pointer-events:auto}
+
+.setlist{flex:1;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0}
+.setgrp{display:flex;flex-direction:column;gap:2px}
+.setgrp .gl{font-size:11px;color:var(--muted);padding:0 8px 6px}
+.setrow{position:relative;display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:16px;cursor:pointer}
+.setrow+.setrow{margin-top:2px}
+.setrow .ic{width:34px;height:34px;border-radius:11px;background:var(--chip);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.setrow .tx{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.setrow .tx .t{font-size:12.5px;color:var(--ink)}
+.setrow .tx .d{font-size:10.5px;color:var(--muted)}
+.setrow .ch{font-size:11px;color:var(--muted);flex-shrink:0}
+.sw{width:36px;height:21px;border-radius:99px;background:var(--chip);border:1px solid var(--glass-border);position:relative;cursor:pointer;transition:all .2s;flex-shrink:0}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--muted);transition:all .2s}
+.sw.on{background:var(--accent);border-color:var(--accent)}
+.sw.on::after{left:17px;background:#fff}
+.phone[data-theme=dark] .sw.on::after{background:#17120E}
+
+.pledit{flex:1;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0}
+.prow{position:relative;display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:16px;cursor:pointer}
+.prow+.prow{margin-top:2px}
+.prow .sic{width:40px;height:40px;border-radius:12px;background:var(--chip);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.prow .tx{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.prow .tx .t{font-size:12.5px;color:var(--ink)}
+.prow .tx .d{font-size:10.5px;color:var(--muted)}
+.prow.on{background:var(--chip);border:1px solid var(--l2b)}
+.pform{position:relative;border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pform label{font-size:11px;color:var(--muted)}
+.pform .inbox{flex:none;width:100%}
+.pbtn{width:100%;border:none;border-radius:16px;padding:11px;background:linear-gradient(150deg,var(--send1),var(--send2));color:var(--sendic);font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 14px rgba(164,85,28,.3);transition:transform .12s}
+.pbtn:active{transform:scale(.98)}
+.pnote{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.6}
+
+.ob{flex:1;display:flex;flex-direction:column;gap:14px;overflow:hidden;min-height:0;align-items:center;justify-content:center;padding-bottom:8px}
+.oblogo{width:76px;height:76px;border-radius:26px;background:linear-gradient(150deg,var(--send1),var(--send2));display:flex;align-items:center;justify-content:center;color:var(--sendic);position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -12px 22px rgba(74,36,12,.25),0 16px 38px rgba(164,85,28,.42);overflow:hidden}
+.oblogo::before{content:"";position:absolute;top:5px;left:12px;right:12px;height:22px;border-radius:99px;background:radial-gradient(ellipse at 30% 0%,rgba(255,255,255,.55),rgba(255,255,255,0) 70%)}
+.oblogo svg{position:relative;z-index:1}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.dot.g{background:#7FA65A}
+.dot.r{background:#C94F3D}
+.mrow{position:relative;display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:16px;cursor:pointer;background:var(--glass);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);border:1px solid var(--glass-border);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.45)}
+.mrow+.mrow{margin-top:2px}
+.mrow.on{border-color:var(--l2b)}
+.mrow.on .check{background:var(--accent);border-color:var(--accent)}
+.mrow.on .check::after{transform:rotate(-45deg) scale(1)}
+.pback{position:relative;display:flex;align-items:center;gap:8px;padding:10px 6px;border-radius:14px;cursor:pointer;font-size:13px;color:var(--ink);font-weight:500}
+.pback svg{color:var(--accent)}
+.pback:hover{background:var(--chip)}
+.ob h2{font-size:19px;font-weight:500;color:var(--ink)}
+.ob .sub{font-size:12.5px;color:var(--muted);line-height:1.7;text-align:center}
+.obf{display:flex;flex-direction:column;gap:8px;width:100%}
+.obfcard{position:relative;display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:16px}
+.obfcard .ic{width:32px;height:32px;border-radius:10px;background:var(--chip);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.obfcard .t{font-size:12px;color:var(--ink);line-height:1.5}
+.obdots{display:flex;gap:6px}
+.obdots i{width:6px;height:6px;border-radius:50%;background:var(--muted);opacity:.4;display:block}
+.obdots i.on{background:var(--accent);opacity:1}
+.obbtn{width:100%;border:none;border-radius:99px;padding:13px;background:linear-gradient(150deg,var(--send1),var(--send2));color:var(--sendic);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 20px rgba(164,85,28,.35);transition:transform .12s}
+.obbtn:active{transform:scale(.98)}
+.obskip{font-size:11px;color:var(--muted);cursor:pointer;text-align:center}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="ttl"><h1>温言 · 液态玻璃 UI 原型</h1><span class="ver">v1.7.0 设计稿 · 8 屏 · 浅深双主题</span></div>
+  <nav class="tabs" id="tabs">
+    <button class="tab on" data-s="s1">对话</button>
+    <button class="tab" data-s="s2">思考/流式</button>
+    <button class="tab" data-s="s3">空状态</button>
+    <button class="tab" data-s="s4">抽屉</button>
+    <button class="tab" data-s="s5">模型弹层</button>
+    <button class="tab" data-s="s6">设置</button>
+    <button class="tab" data-s="s7">模型管理</button>
+    <button class="tab" data-s="s9">厂商详情</button>
+    <button class="tab" data-s="s8">引导页</button>
+  </nav>
+  <div class="themes">
+    <button id="thLight" class="on">浅色</button>
+    <button id="thDark">深色</button>
+  </div>
+  <p class="hint">交互提示：顶栏模型 pill 可点击（弹层联动状态点）· 状态点可点击演示三态 · 军师建议三风格可切换 · 空状态示例卡可点击填入输入栏 · 抽屉可展开收起 · 模型管理行可选中编辑</p>
+</header>
+
+<div class="phone" id="phone" data-theme="light">
+  <div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div>
+  <div class="toast" id="toast">完整原型中展示</div>
+
+  <div class="stbar">
+    <span style="font-weight:500">9:41</span>
+    <span style="display:flex;align-items:center;gap:5px">
+      <span class="sig"><i style="height:3px"></i><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span>
+      <span style="width:13px;height:6px;border:1px solid var(--muted);border-radius:2px;position:relative"><i style="position:absolute;left:1px;top:1px;bottom:1px;width:8px;background:var(--muted);border-radius:1px;display:block"></i></span>
+    </span>
+  </div>
+
+  <div class="tbar glass edge" id="tbar">
+    <span class="mbtn" id="menuBtn" style="display:none">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </span>
+    <span class="t" id="tbarTitle">温言</span>
+    <span class="sp" id="tbarDot" style="display:none"></span>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+      <span class="pill" id="modelPill">
+        <span class="sdot" id="sdot"></span>
+        <span id="curM" style="color:var(--accent)">DeepSeek-V3</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </span>
+      <span class="gear" id="gearBtn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      </span>
+    </span>
+  </div>
+
+  <!-- S1 对话态 -->
+  <section class="scr on" id="s1">
+    <div class="msgs">
+      <div class="day glass edge">今天 · 8月5日</div>
+      <div class="buser"><span>他三天没回我消息了，我该主动问一句吗？</span></div>
+      <div class="aib glass edge">
+        <div style="font-size:13px;color:var(--ink);line-height:1.6">先别急着脑补剧情——三天没回，也可能只是他这周忙到起飞。</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span class="sec">先分清事实</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span class="fchip">已知 · 周一约了周五见面</span>
+            <span class="fchip">推测 · 可能只是忙，未必冷淡</span>
+            <span class="fchip">未知 · 他最近的真实状态</span>
+          </div>
+        </div>
+        <div class="l2">
+          <span class="sec">军师建议</span>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5">不追问给双方留空间，小事分享最无压力</div>
+          <div style="display:flex;gap:6px">
+            <button class="sty on" onclick="setStyle(0)">稳健</button>
+            <button class="sty" onclick="setStyle(1)">会撩</button>
+            <button class="sty" onclick="setStyle(2)">强势</button>
+          </div>
+          <div style="font-size:12px;color:var(--ink);line-height:1.55" id="coreTxt">发一条无压力的消息，分享一件小事，别问「为什么不回」。</div>
+        </div>
+        <div style="font-size:12px;color:var(--ink);line-height:1.6"><span class="sec">现在可以做什么</span>：下午顺手发一张晚霞，附一句「今天的天空很温柔」。</div>
+      </div>
+    </div>
+    <div class="inbar glass edge">
+      <input class="inbox" placeholder="说说你的处境…">
+      <button class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sendic)"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
+    </div>
+  </section>
+
+  <!-- S2 思考/流式态 -->
+  <section class="scr" id="s2">
+    <div class="msgs">
+      <div class="day glass edge">今天 · 8月5日</div>
+      <div class="buser"><span>他三天没回我消息了，我该主动问一句吗？</span></div>
+      <div class="think glass edge">正在翻知识库，梳理你的处境…<span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="aib glass edge">
+        <div style="font-size:13px;color:var(--ink);line-height:1.6">先别急着脑补剧情——三天没回，也可能只是他这周忙到起飞<span class="caret"></span></div>
+      </div>
+    </div>
+    <div class="inbar glass edge" style="opacity:.55">
+      <input class="inbox" placeholder="说说你的处境…" disabled>
+      <button class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sendic)"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
+    </div>
+  </section>
+
+  <!-- S3 空状态 -->
+  <section class="scr" id="s3">
+    <div class="empty">
+      <div class="motto">
+        <span class="d">8月5日 · 周三</span>
+        <span class="m">有些答案，晚一点更清楚。</span>
+      </div>
+      <div class="epic">
+        <div class="ecard glass edge" onclick="fillExample(0)">
+          <span class="tag">关系升温</span>
+          <span class="q">他为什么突然冷淡了？</span>
+        </div>
+        <div class="ecard glass edge" onclick="fillExample(1)">
+          <span class="tag">表白时机</span>
+          <span class="q">要不要主动表白？</span>
+        </div>
+        <div class="ecard glass edge" onclick="fillExample(2)">
+          <span class="tag">关系判断</span>
+          <span class="q">他是不是在养鱼？</span>
+        </div>
+        <div class="ecard glass edge" onclick="fillExample(3)">
+          <span class="tag">自然推进</span>
+          <span class="q">怎么自然地推进关系？</span>
+        </div>
+      </div>
+      <div class="eguide">
+        <div class="gcard glass edge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <span class="gt">从一次聊天开始</span>
+          <span class="gd">把你的处境说给军师听</span>
+        </div>
+        <div class="gcard glass edge" onclick="showToast('知识库 · 40 份恋爱方法论已打包')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>
+          <span class="gt">看看知识库</span>
+          <span class="gd">冷读、自然流、推进策略</span>
+        </div>
+      </div>
+    </div>
+    <div class="inbar glass edge">
+      <input class="inbox" id="exInput" placeholder="说说你的处境…">
+      <button class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sendic)"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
+    </div>
+  </section>
+
+  <!-- S4 抽屉 -->
+  <section class="scr" id="s4">
+    <div class="msgs" style="opacity:.35;filter:saturate(.6)">
+      <div class="day glass edge">今天 · 8月5日</div>
+      <div class="buser"><span>他三天没回我消息了，我该主动问一句吗？</span></div>
+      <div class="aib glass edge">
+        <div style="font-size:13px;color:var(--ink);line-height:1.6">先别急着脑补剧情——三天没回，也可能只是他这周忙到起飞。</div>
+      </div>
+    </div>
+    <div class="dscrim open" id="dscrim" onclick="closeDrawer()"></div>
+    <div class="drawer open" id="drawer">
+      <div class="dpanel">
+        <div class="dhead"><span class="nm" style="font-size:15px">历史对话</span></div>
+        <div class="dnew glass edge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          新建会话
+        </div>
+        <div class="dlist">
+          <div class="drow on glass edge">
+            <span class="t">他三天没回消息</span>
+            <span class="s">今天 20:31 · 已回复</span>
+          </div>
+          <div class="drow glass edge">
+            <span class="t">要不要主动表白</span>
+            <span class="s">昨天 · 已回复</span>
+          </div>
+          <div class="drow glass edge">
+            <span class="t">和男朋友吵架了</span>
+            <span class="s">8月3日 · 已回复</span>
+          </div>
+          <div class="drow glass edge">
+            <span class="t">他是不是在养鱼</span>
+            <span class="s">8月1日 · 已回复</span>
+          </div>
+        </div>
+        <div class="dfoot glass edge" onclick="showToast('设置 · 完整原型中展示')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="color:var(--muted)"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          设置
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S5 模型弹层 -->
+  <section class="scr" id="s5">
+    <div class="msgs" style="opacity:.4">
+      <div class="day glass edge">今天 · 8月5日</div>
+      <div class="buser"><span>他三天没回我消息了，我该主动问一句吗？</span></div>
+    </div>
+    <div class="scrim open" id="s5scrim" onclick="closeSheetStatic()"></div>
+    <div class="sheet open" id="s5sheet">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 4px 8px">
+        <span style="font-size:14px;font-weight:500;color:var(--ink)">选择模型</span>
+        <span style="font-size:11px;color:var(--muted)">点按切换，实时生效</span>
+      </div>
+      <div class="srow on" data-m="DeepSeek-V3" onclick="pickStatic('DeepSeek-V3',this)">
+        <span class="sic">DS</span>
+        <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:13px;color:var(--ink)">DeepSeek-V3</span>
+          <span style="font-size:11px;color:var(--muted)">深度思考 · 推荐</span>
+        </span>
+        <span class="check"></span>
+      </div>
+      <div class="srow" data-m="GLM-4.6" onclick="pickStatic('GLM-4.6',this)">
+        <span class="sic">GLM</span>
+        <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:13px;color:var(--ink)">GLM-4.6</span>
+          <span style="font-size:11px;color:var(--muted)">快速响应</span>
+        </span>
+        <span class="check"></span>
+      </div>
+      <div class="srow" data-m="Qwen3" onclick="pickStatic('Qwen3',this)">
+        <span class="sic">QW</span>
+        <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:13px;color:var(--ink)">Qwen3</span>
+          <span style="font-size:11px;color:var(--muted)">轻量省电</span>
+        </span>
+        <span class="check"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- S6 设置页 -->
+  <section class="scr" id="s6">
+    <div class="setlist">
+      <div class="setgrp">
+        <span class="gl">外观</span>
+        <div class="setrow glass edge" onclick="showToast('跟随系统 · 浅色/深色')">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
+          <span class="tx"><span class="t">主题</span><span class="d">跟随系统</span></span>
+          <span class="ch">浅色/深色</span>
+        </div>
+      </div>
+      <div class="setgrp">
+        <span class="gl">模型</span>
+        <div class="setrow glass edge" onclick="showToast('当前模型 · DeepSeek-V3')">
+          <span class="ic"><span style="font-size:11px;font-weight:500">DS</span></span>
+          <span class="tx"><span class="t">当前模型</span><span class="d">DeepSeek-V3 · 深度思考</span></span>
+          <span class="ch">切换</span>
+        </div>
+        <div class="setrow glass edge" onclick="showToast('模型管理 · 见下一屏')">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>
+          <span class="tx"><span class="t">模型管理</span><span class="d">Base URL 与 API Key</span></span>
+          <span class="ch">管理</span>
+        </div>
+      </div>
+      <div class="setgrp">
+        <span class="gl">数据与隐私</span>
+        <div class="setrow glass edge" onclick="showToast('会话记录 · 已加密存储')">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></span>
+          <span class="tx"><span class="t">清除会话记录</span><span class="d">本地数据，删除后不可恢复</span></span>
+          <span class="ch">清除</span>
+        </div>
+        <div class="setrow glass edge" onclick="showToast('导出 · 完整原型中展示')">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg></span>
+          <span class="tx"><span class="t">导出聊天记录</span><span class="d">导出为文本</span></span>
+          <span class="ch">导出</span>
+        </div>
+      </div>
+      <div class="setgrp">
+        <span class="gl">关于</span>
+        <div class="setrow glass edge">
+          <span class="ic"><span style="font-size:11px;font-weight:500">温</span></span>
+          <span class="tx"><span class="t">版本</span><span class="d">温言 1.7.0 · 液态玻璃</span></span>
+          <span class="ch">v1.7.0</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S7 模型管理：厂商列表（红绿灯）→ 厂商详情（模型选择） -->
+  <section class="scr" id="s7">
+    <div class="pledit">
+      <div style="font-size:11px;color:var(--muted);line-height:1.7;padding:0 4px">选择模型服务商。绿灯=已配置可用，红灯=未配置。点按厂商行进入其模型配置；顶部「厂商详情」页可直接预览 DeepSeek 配置界面。</div>
+      <div id="provList" style="display:flex;flex-direction:column;gap:2px">
+        <div class="prow on" data-p="0" onclick="pickProv(0)">
+          <span class="dot g"></span>
+          <span class="sic">DS</span>
+          <span class="tx"><span class="t">DeepSeek</span><span class="d">api.deepseek.com · 已配置</span></span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="prow" data-p="1" onclick="pickProv(1)">
+          <span class="dot r"></span>
+          <span class="sic">GLM</span>
+          <span class="tx"><span class="t">智谱 GLM</span><span class="d">open.bigmodel.cn · 未配置</span></span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="prow" data-p="2" onclick="pickProv(2)">
+          <span class="dot r"></span>
+          <span class="sic">QW</span>
+          <span class="tx"><span class="t">通义千问</span><span class="d">dashscope.aliyuncs.com · 未配置</span></span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+      <div id="provDetail" style="display:none;flex-direction:column;gap:12px">
+        <div class="pback" onclick="backProv()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          <span id="pName">DeepSeek</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);padding:0 4px">选择该厂商要使用的模型，并填入连接信息</div>
+        <div id="modelList" style="display:flex;flex-direction:column;gap:2px"></div>
+        <div class="pform glass edge">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <label>Base URL</label>
+            <input class="inbox" id="pfUrl" value="">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <label>API Key</label>
+            <input class="inbox" id="pfKey" type="password" value="">
+          </div>
+          <button class="pbtn" onclick="showToast('已保存 · Key 加密存储于本地')">保存配置</button>
+          <span class="pnote">Key 仅保存在本机加密存储中，不会上传服务器</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S9 厂商详情：点击模型管理中的厂商后进入的界面 -->
+  <section class="scr" id="s9">
+    <div class="pledit">
+      <div class="pback" onclick="setScreen('s7')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <span>模型管理</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7;padding:0 4px">选择 DeepSeek 要使用的模型，并填入连接信息。Key 仅存本地、加密存储。</div>
+      <div style="font-size:11px;color:var(--accent);font-weight:500;padding:2px 6px 0">选择模型</div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div class="mrow on">
+          <span class="sic">V3</span>
+          <span style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;color:var(--ink)">DeepSeek-V3</span><span style="font-size:10.5px;color:var(--muted)">深度思考 · 推荐</span></span>
+          <span class="check"></span>
+        </div>
+        <div class="mrow">
+          <span class="sic">R1</span>
+          <span style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;color:var(--ink)">DeepSeek-R1</span><span style="font-size:10.5px;color:var(--muted)">推理加强</span></span>
+          <span class="check"></span>
+        </div>
+      </div>
+      <div class="pform glass edge">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label>Base URL</label>
+          <input class="inbox" value="https://api.deepseek.com/v1">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label>API Key</label>
+          <input class="inbox" type="password" value="sk-••••••••••••••••">
+        </div>
+        <button class="pbtn" onclick="showToast('已保存 · Key 加密存储于本地')">保存配置</button>
+        <span class="pnote">Key 仅保存在本机加密存储中，不会上传服务器</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- S8 引导页 -->
+  <section class="scr" id="s8">
+    <div class="ob">
+      <div class="oblogo">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 1 1 16.1-3.8Z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"/></svg>
+      </div>
+      <h2>温言</h2>
+      <p class="sub">恋爱里的每个问号<br>都有军师陪你想清楚</p>
+      <div class="obf">
+        <div class="obfcard glass edge">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 1 1 16.1-3.8Z"/></svg></span>
+          <span class="t">四段式回答：先接住你，再分清事实、给建议、定行动</span>
+        </div>
+        <div class="obfcard glass edge">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+          <span class="t">稳健 / 会撩 / 强势，三套话术随时切换</span>
+        </div>
+        <div class="obfcard glass edge">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <span class="t">Key 本地加密存储，你的心事只属于你</span>
+        </div>
+      </div>
+      <div class="obdots"><i class="on"></i><i></i><i></i></div>
+      <button class="obbtn" onclick="showToast('开始使用 · 进入聊天页')">开始使用</button>
+      <span class="obskip" onclick="showToast('跳过 · 随时可在设置中重新引导')">跳过引导</span>
+    </div>
+  </section>
+
+  <div class="scrim" id="scrim" onclick="closeSheet()"></div>
+  <div class="sheet" id="sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 4px 8px">
+      <span style="font-size:14px;font-weight:500;color:var(--ink)">选择模型</span>
+      <span style="font-size:11px;color:var(--muted)">点按切换，实时生效</span>
+    </div>
+    <div class="srow on" data-m="DeepSeek-V3" onclick="pick('DeepSeek-V3',this)">
+      <span class="sic">DS</span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:13px;color:var(--ink)">DeepSeek-V3</span>
+        <span style="font-size:11px;color:var(--muted)">深度思考 · 推荐</span>
+      </span>
+      <span class="check"></span>
+    </div>
+    <div class="srow" data-m="GLM-4.6" onclick="pick('GLM-4.6',this)">
+      <span class="sic">GLM</span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:13px;color:var(--ink)">GLM-4.6</span>
+        <span style="font-size:11px;color:var(--muted)">快速响应</span>
+      </span>
+      <span class="check"></span>
+    </div>
+    <div class="srow" data-m="Qwen3" onclick="pick('Qwen3',this)">
+      <span class="sic">QW</span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:13px;color:var(--ink)">Qwen3</span>
+        <span style="font-size:11px;color:var(--muted)">轻量省电</span>
+      </span>
+      <span class="check"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+function $(id){return document.getElementById(id)}
+function setTheme(t){
+  var p=$('phone');p.dataset.theme=t;
+  $('thLight').classList.toggle('on',t==='light');
+  $('thDark').classList.toggle('on',t==='dark');
+}
+$('thLight').onclick=function(){setTheme('light')};
+$('thDark').onclick=function(){setTheme('dark')};
+
+function setScreen(s){
+  document.querySelectorAll('.scr').forEach(function(x){x.classList.toggle('on',x.id===s)});
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
+  var menu=$('menuBtn'),title=$('tbarTitle');
+  menu.style.display = (s==='s4') ? 'flex' : 'none';
+  title.textContent = s==='s6' ? '设置' : (s==='s7' ? '模型管理' : (s==='s9' ? 'DeepSeek' : '温言'));
+  $('tbar').classList.toggle('hide', s==='s4');
+  if(s==='s4'){openDrawer()}else{closeDrawer()}
+  if(s==='s5'){setState('t')}else{setState('i')}
+}
+document.querySelectorAll('.tab').forEach(function(b){
+  b.onclick=function(){setScreen(b.dataset.s)}
+});
+
+var stateOrder=['i','t','f'];
+function cycleState(){
+  var d=$('sdot');
+  var n=stateOrder.indexOf(d.className.replace('sdot ','').trim()||'i');
+  setState(stateOrder[(n+1)%3]);
+}
+$('sdot').onclick=function(e){e.stopPropagation();cycleState()};
+function setState(s){
+  var d=$('sdot');d.className='sdot';
+  if(s==='t'){d.classList.add('t')}else if(s==='f'){d.classList.add('f')}else if(s==='c'){d.classList.add('c')}
+}
+
+function openSheet(){$('scrim').classList.add('open');$('sheet').classList.add('open')}
+function closeSheet(){$('scrim').classList.remove('open');$('sheet').classList.remove('open')}
+$('modelPill').onclick=function(){openSheet()};
+function pick(m,el){
+  $('curM').textContent=m;
+  document.querySelectorAll('#sheet .srow').forEach(function(r){r.classList.toggle('on',r===el)});
+  closeSheet();setState('c');setTimeout(function(){setState('i')},900);
+  document.querySelectorAll('#s5sheet .srow').forEach(function(r){r.classList.toggle('on',r.getAttribute('data-m')===m)});
+}
+function pickStatic(m,el){
+  $('curM').textContent=m;
+  document.querySelectorAll('#s5sheet .srow').forEach(function(r){r.classList.toggle('on',r===el)});
+  setState('c');setTimeout(function(){setState('i')},900);
+  document.querySelectorAll('#sheet .srow').forEach(function(r){r.classList.toggle('on',r.getAttribute('data-m')===m)});
+}
+function closeSheetStatic(){setScreen('s1')}
+
+var cores=[
+ '发一条无压力的消息，分享一件小事，别问「为什么不回」。',
+ '拍张晚霞发过去，附一句「今天的天空很温柔，想拍给你看」——留个台阶，也留个钩子。',
+ '直接问他：「这周五的见面还算数吗？」把球踢回去，别替他找借口。'
+];
+function setStyle(n){
+  document.querySelectorAll('#s1 .sty').forEach(function(p,i){p.classList.toggle('on',i===n)});
+  $('coreTxt').textContent=cores[n];
+}
+
+var exs=['他为什么突然冷淡了？','要不要主动表白？','他是不是在养鱼？','怎么自然地推进关系？'];
+function fillExample(i){$('exInput').value=exs[i];$('exInput').focus()}
+
+function openDrawer(){$('drawer').classList.add('open');$('dscrim').classList.add('open')}
+function closeDrawer(){$('drawer').classList.remove('open');$('dscrim').classList.remove('open')}
+$('menuBtn').onclick=function(){closeDrawer();setScreen('s1')};
+
+var provs=[
+ {name:'DeepSeek',url:'https://api.deepseek.com/v1',key:'sk-••••••••••••••••',models:[['DeepSeek-V3','深度思考 · 推荐'],['DeepSeek-R1','推理加强']]},
+ {name:'智谱 GLM',url:'https://open.bigmodel.cn/api/paas/v4',key:'',models:[['GLM-4.6','快速响应'],['GLM-4.5','均衡稳定']]},
+ {name:'通义千问',url:'https://dashscope.aliyuncs.com/compatible-mode/v1',key:'',models:[['Qwen3','轻量省电'],['Qwen2.5','通用']]}
+];
+function pickProv(i){
+  document.querySelectorAll('#s7 .prow').forEach(function(r,idx){r.classList.toggle('on',idx===i)});
+  $('provList').style.display='none';
+  var d=$('provDetail');d.style.display='flex';
+  $('pName').textContent=provs[i].name;
+  var ml=$('modelList');ml.innerHTML='';
+  provs[i].models.forEach(function(m,mi){
+    var row=document.createElement('div');
+    row.className='mrow'+(mi===0?' on':'');
+    row.innerHTML='<span style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;color:var(--ink)">'+m[0]+'</span><span style="font-size:10.5px;color:var(--muted)">'+m[1]+'</span></span><span class="check"></span>';
+    row.onclick=function(){ml.querySelectorAll('.mrow').forEach(function(x){x.classList.toggle('on',x===row)})};
+    ml.appendChild(row);
+  });
+  $('pfUrl').value=provs[i].url;
+  $('pfKey').value=provs[i].key||'';
+}
+function backProv(){$('provDetail').style.display='none';$('provList').style.display='flex'}
+
+var toastTimer;
+function showToast(msg){
+  var t=$('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show')},1800);
+}
+$('gearBtn').onclick=function(){showToast('设置 · 见「设置」屏')};
+</script>
+</body>
+</html>
