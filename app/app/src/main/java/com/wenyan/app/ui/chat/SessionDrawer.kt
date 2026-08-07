@@ -2,6 +2,7 @@ package com.wenyan.app.ui.chat
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -126,18 +127,51 @@ fun SessionDrawerContent(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(sessions, key = { it.id }) { session ->
-                    SessionItem(
-                        session = session,
-                        isCurrent = session.id == currentSessionId,
-                        onClick = { onSelectSession(session.id) },
-                        onLongClick = { onLongPressSession(session) },
-                    )
+                // v1.7.3 F4 会话按记忆档案分组（v1.7.3-fix：分组键改 targetId，同名档案不再合并）；
+                // 组内保持列表顺序（id DESC = 时间倒序）；每组前加档案名组头（取组内第一条的 targetName）；
+                // 未关联（targetId=null）归最后
+                val grouped = sessions.groupBy { it.targetId }
+                val orderedGroups = grouped.filterKeys { it != null } +
+                    (grouped[null]?.let { mapOf<Long?, List<SessionSummaryUi>>(null to it) } ?: emptyMap())
+                orderedGroups.forEach { (_, groupSessions) ->
+                    // 组头文字：组内第一条的 targetName（空/档案已删 → 回退未关联占位）
+                    val groupName = groupSessions.firstOrNull()
+                        ?.targetName?.trim()?.takeIf(String::isNotEmpty) ?: UNLINKED_GROUP
+                    item(key = "group_${groupSessions.firstOrNull()?.targetId ?: UNLINKED_GROUP}") {
+                        GroupHeader(groupName)
+                    }
+                    items(groupSessions, key = { "session_${it.id}" }) { session ->
+                        SessionItem(
+                            session = session,
+                            isCurrent = session.id == currentSessionId,
+                            onClick = { onSelectSession(session.id) },
+                            onLongClick = { onLongPressSession(session) },
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+/** v1.7.3 会话分组组头（accentSoft 小字，风格对齐「最近会话」标题）；未关联组显示占位 */
+@Composable
+private fun GroupHeader(name: String) {
+    val p = LocalGtjColors.current
+    val label = if (name == UNLINKED_GROUP) "未关联" else name
+    Text(
+        text = label,
+        style = GtjType.Caption,
+        color = p.accent,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(p.accentSoft, GtjShape.sm)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+/** 未关联会话组名（targetName=null，放最后） */
+private const val UNLINKED_GROUP = "__unlinked__"
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -218,5 +252,28 @@ private fun formatSessionTime(epochMs: Long): String {
         diff < oneDay -> "${diff / 3_600_000} 小时前"
         diff < 7 * oneDay -> "${diff / oneDay} 天前"
         else -> SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(epochMs))
+    }
+}
+
+/** v1.7.3 T2 @Preview：会话条目（含档案 Tag） */
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)
+@Composable
+private fun SessionItemPreview() {
+    com.wenyan.app.ui.theme.GtjTheme {
+        SessionItem(
+            session = SessionSummaryUi(id = 1L, title = "我们聊聊最近的状态", createdAt = System.currentTimeMillis() - 3600_000, targetName = "小A"),
+            isCurrent = false,
+            onClick = {},
+            onLongClick = {},
+        )
+    }
+}
+
+/** v1.7.3 T2 @Preview：分组组头 */
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)
+@Composable
+private fun GroupHeaderPreview() {
+    com.wenyan.app.ui.theme.GtjTheme {
+        GroupHeader("小A")
     }
 }

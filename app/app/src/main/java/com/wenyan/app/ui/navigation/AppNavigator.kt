@@ -13,6 +13,8 @@ sealed interface Route {
     data object Chat : Route
     data object Settings : Route
     data class ProviderEdit(val providerId: Long) : Route
+    /** v1.7.3 档案详情页（F1+F2 合并：结构化字段 + 事实单条管理） */
+    data class MemoryEdit(val targetId: Long) : Route
 }
 
 class AppNavigator(initial: Route) {

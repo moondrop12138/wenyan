@@ -122,6 +122,7 @@ class RealChatRepository(
                     title = title,
                     createdAt = s.createdAt,
                     targetName = s.targetId?.let { targetNameById[it] },
+                    targetId = s.targetId,
                 )
             }
         }
@@ -169,7 +170,9 @@ class RealChatRepository(
         val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
         val profile = profileRepository.getProfile()
         // v1.7.2 会话归属档案优先（老会话 targetId=null → 空档案 = 现状行为）
-        val target = resolveTarget(sid)
+        // v1.7.3 注入链路改读事实表：resolveTargetWithMemory 内部惰性搬移 note→facts 后
+        //   target.copy(note = facts.joinToString("；").take(2000))，PromptBuilder 零改动。
+        val target = resolveTargetWithMemory(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val history = buildHistory(sid, text)
         val user = when (mode) {
@@ -325,8 +328,8 @@ class RealChatRepository(
 
         val (knowledge, _) = knowledgeEngine.buildInjection(transcription)
         val profile = profileRepository.getProfile()
-        // v1.7.2 会话归属档案优先
-        val target = resolveTarget(sid)
+        // v1.7.2 会话归属档案优先；v1.7.3 注入改读事实表
+        val target = resolveTargetWithMemory(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val user = promptBuilder.buildUserTranscription(transcription)
         val history = buildHistory(sid, transcription)
@@ -509,6 +512,18 @@ class RealChatRepository(
     private suspend fun resolveTarget(sid: Long): TargetEntity? =
         conversationRepository.getSession(sid)?.targetId?.let { profileRepository.getTarget(it) }
 
+    /**
+     * v1.7.3 注入用档案解析：在 resolveTarget 基础上把记忆注入文本换成事实表内容。
+     * memoryText 内部惰性搬移（note→facts，幂等）后 facts.joinToString("；").take(2000)；
+     * 以 target.copy(note = memoryText) 传给 PromptBuilder（PromptBuilder 零改动）。
+     * 失败静默回退原档案（note 可能为空 = 现状行为）。
+     */
+    private suspend fun resolveTargetWithMemory(sid: Long): TargetEntity? {
+        val target = resolveTarget(sid) ?: return null
+        val memory = runCatching { profileRepository.memoryText(target.id) }.getOrDefault(target.note)
+        return if (memory == target.note) target else target.copy(note = memory)
+    }
+
     private suspend fun resolveClient(): ResolvedClient? {
         val model = resolveModel() ?: return null
         val provider = providerRepository.getProvider(model.providerId) ?: return null
@@ -540,8 +555,8 @@ class RealChatRepository(
         mode: AnalysisMode,
     ): Flow<StreamEvent> = flow {
         val profile = profileRepository.getProfile()
-        // v1.7.2 会话归属档案优先
-        val target = resolveTarget(sid)
+        // v1.7.2 会话归属档案优先；v1.7.3 注入改读事实表
+        val target = resolveTargetWithMemory(sid)
         val system = promptBuilder.buildSystem(profile, target, "")
         val client = resolveClient() ?: run {
             emit(StreamEvent.Error(noConfigError()))
@@ -685,25 +700,34 @@ class RealChatRepository(
 
     /**
      * 执行一次记忆提炼（独立 scope + 幂等 + 失败静默 + 20s 超时，仿 generateTitleOnce）：
-     * 调主模型（temperature=0.3）→ parseFacts 防御解析 → mergeNote 去重追加（≤2000 字）→ updateTarget。
-     * 失败静默 Log.w；重复触发因 mergeNote 去重不会重复追加。
+     * 调主模型（temperature=0.3）→ parseFacts 防御解析 → mergeFacts 去重（≤50 条）→ 仅新增逐条 INSERT。
+     * 失败静默 Log.w；重复触发因 mergeFacts 去重不会重复插入。
      */
     private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String) {
         runCatching {
             withTimeout(MEMORY_TIMEOUT_MS) {
                 val targetId = conversationRepository.getSession(sid)?.targetId ?: return@withTimeout
                 val target = profileRepository.getTarget(targetId) ?: return@withTimeout
+                // v1.7.3 提炼前确保惰性搬移完成（老 note 进事实表），existing 从事实表读取
+                profileRepository.migrateNoteToFactsOnce(targetId)
+                val existing = profileRepository.getFacts(targetId).map { it.text }
                 val reply = runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault(replyFullText)
-                val prompt = MemoryExtractor.buildPrompt(userInput, reply, target.note)
+                val prompt = MemoryExtractor.buildPrompt(userInput, reply, existing.joinToString("；"))
                 val client = resolveClient() ?: return@withTimeout
                 val json = client.client.stream(
                     ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
                 ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
                 val facts = MemoryExtractor.parseFacts(json ?: "")
-                val merged = MemoryExtractor.mergeNote(target.note, facts)
-                if (merged != target.note) {
-                    profileRepository.updateTarget(target.copy(note = merged))
-                    Log.i("RealChatRepository", "memory extracted: +${facts.size} facts for target $targetId")
+                val merged = MemoryExtractor.mergeFacts(existing, facts)
+                val toAdd = merged.drop(existing.size)
+                if (toAdd.isNotEmpty()) {
+                    if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
+                        Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
+                    } else {
+                        toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
+                            .forEach { profileRepository.addFact(targetId, it) }
+                        Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
+                    }
                 }
             }
         }.onFailure { Log.w("RealChatRepository", "memory extraction failed", it) }

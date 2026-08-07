@@ -191,4 +191,120 @@ class MemoryExtractorTest {
         assertTrue(prompt.contains("facts"))
         assertTrue(prompt.contains("没有已记住的内容"))
     }
+
+    // ===== v1.7.3 mergeFacts / splitNoteToFacts =====
+
+    @Test
+    fun `mergeFacts appends new facts preserving order`() {
+        val merged = MemoryExtractor.mergeFacts(listOf("她喜欢猫"), listOf("她怕黑", "她是夜猫子"))
+        assertEquals(listOf("她喜欢猫", "她怕黑", "她是夜猫子"), merged)
+    }
+
+    @Test
+    fun `mergeFacts from empty existing`() {
+        assertEquals(listOf("她喜欢猫"), MemoryExtractor.mergeFacts(emptyList(), listOf("她喜欢猫")))
+        assertEquals(emptyList<String>(), MemoryExtractor.mergeFacts(emptyList(), emptyList()))
+    }
+
+    @Test
+    fun `mergeFacts skips exact duplicate and overlap`() {
+        val existing = listOf("她喜欢猫", "她怕黑")
+        assertEquals(existing, MemoryExtractor.mergeFacts(existing, listOf("她喜欢猫", "她怕黑")))
+        // 6 字前缀重叠也跳过
+        assertEquals(existing, MemoryExtractor.mergeFacts(existing, listOf("她喜欢猫讨厌吃鱼")))
+    }
+
+    @Test
+    fun `mergeFacts idempotent on repeat trigger`() {
+        val existing = listOf("她喜欢猫")
+        val once = MemoryExtractor.mergeFacts(existing, listOf("她怕黑"))
+        val twice = MemoryExtractor.mergeFacts(once, listOf("她怕黑"))
+        assertEquals(once, twice)
+    }
+
+    @Test
+    fun `mergeFacts trims and drops blanks`() {
+        val merged = MemoryExtractor.mergeFacts(listOf("她喜欢猫"), listOf("  她怕黑  ", "", "  "))
+        assertEquals(listOf("她喜欢猫", "她怕黑"), merged)
+    }
+
+    @Test
+    fun `mergeFacts caps total at limit`() {
+        val existing = (1..50).map { "事实$it" }
+        val merged = MemoryExtractor.mergeFacts(existing, listOf("新事实A", "新事实B"))
+        assertEquals(50, merged.size)
+        assertFalse(merged.contains("新事实A"))
+    }
+
+    @Test
+    fun `splitNoteToFacts splits and truncates each to 40 chars`() {
+        val note = "她喜欢猫。她怕黑；她是个夜猫子\n她喜欢读书"
+        val facts = MemoryExtractor.splitNoteToFacts(note)
+        assertEquals(listOf("她喜欢猫", "她怕黑", "她是个夜猫子", "她喜欢读书"), facts)
+        val longFact = MemoryExtractor.splitNoteToFacts("字".repeat(60))
+        assertTrue(longFact.single().length <= 40)
+    }
+
+    @Test
+    fun `splitNoteToFacts trims and drops empties`() {
+        val facts = MemoryExtractor.splitNoteToFacts("  她喜欢猫  。。；；\n  ")
+        assertEquals(listOf("她喜欢猫"), facts)
+    }
+
+    // ===== QA 独立补充：mergeFacts / splitNoteToFacts 边界（2026-08-07） =====
+
+    @Test
+    fun `mergeFacts limit zero returns empty`() {
+        val merged = MemoryExtractor.mergeFacts(listOf("她喜欢猫"), listOf("她怕黑"), limit = 0)
+        assertEquals(emptyList<String>(), merged)
+    }
+
+    @Test
+    fun `mergeFacts limit smaller than existing truncates`() {
+        val existing = listOf("一", "二", "三", "四")
+        val merged = MemoryExtractor.mergeFacts(existing, listOf("五"), limit = 3)
+        assertEquals(3, merged.size)
+        assertEquals(listOf("一", "二", "三"), merged)
+    }
+
+    @Test
+    fun `mergeFacts whitespace-only existing entries dropped`() {
+        val merged = MemoryExtractor.mergeFacts(listOf("", "  ", "她喜欢猫"), listOf("她怕黑"))
+        assertEquals(listOf("她喜欢猫", "她怕黑"), merged)
+    }
+
+    @Test
+    fun `mergeFacts dedupes against multi-segment existing fact`() {
+        // existing 单条含多个分句 → 拆段后逐段 overlaps 判定，新事实命中任意段即跳过
+        val existing = listOf("她喜欢猫，讨厌香菜")
+        assertEquals(existing, MemoryExtractor.mergeFacts(existing, listOf("她喜欢猫")))
+        assertEquals(existing, MemoryExtractor.mergeFacts(existing, listOf("讨厌香菜")))
+    }
+
+    @Test
+    fun `mergeFacts empty facts returns existing capped at limit`() {
+        val existing = (1..60).map { "事实$it" }
+        val merged = MemoryExtractor.mergeFacts(existing, emptyList())
+        assertEquals(50, merged.size)
+    }
+
+    @Test
+    fun `mergeFacts all-duplicates returns existing unchanged`() {
+        val existing = listOf("她喜欢猫", "她怕黑")
+        assertEquals(existing, MemoryExtractor.mergeFacts(existing, listOf("她喜欢猫", "她怕黑", "她喜欢猫讨厌吃鱼")))
+    }
+
+    @Test
+    fun `splitNoteToFacts blank or separator-only note yields empty`() {
+        assertEquals(emptyList<String>(), MemoryExtractor.splitNoteToFacts(""))
+        assertEquals(emptyList<String>(), MemoryExtractor.splitNoteToFacts("   "))
+        assertEquals(emptyList<String>(), MemoryExtractor.splitNoteToFacts("。；\n"))
+    }
+
+    @Test
+    fun `mergeFacts preserves existing order when appending`() {
+        val existing = listOf("最早事实", "中间事实")
+        val merged = MemoryExtractor.mergeFacts(existing, listOf("新事实"))
+        assertEquals(listOf("最早事实", "中间事实", "新事实"), merged)
+    }
 }

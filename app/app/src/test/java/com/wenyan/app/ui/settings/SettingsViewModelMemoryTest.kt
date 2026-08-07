@@ -44,13 +44,15 @@ class SettingsViewModelMemoryTest {
         val repo = FakeSettingsRepository().apply {
             targetsFlow.value = listOf(
                 TargetUi(1, "小A", "", 0, isActive = false),
-                TargetUi(2, "小B", "", 0, isActive = true),
+                TargetUi(2, "小B", "", 0, isActive = true, factCount = 3),
             )
         }
         val vm = SettingsViewModel(repo)
         advanceUntilIdle()
         assertEquals(2, vm.targets.value.size)
         assertEquals(true, vm.targets.value[1].isActive)
+        // v1.7.3-fix：事实数字段透传到 VM（设置页 caption 展示「已记住 3 条」）
+        assertEquals(3, vm.targets.value[1].factCount)
     }
 
     @Test
@@ -209,6 +211,20 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) {
         memoryAutoFlow.value = enabled
     }
+
+    override fun observeFacts(targetId: Long): Flow<List<com.wenyan.app.ui.contract.MemoryFactUi>> =
+        MutableStateFlow(emptyList())
+    override suspend fun addFact(targetId: Long, text: String) = Unit
+    override suspend fun updateFact(factId: Long, text: String) = Unit
+    override suspend fun deleteFact(factId: Long) = Unit
+    override suspend fun updateTargetDetails(
+        id: Long, name: String, mbti: String?, score: Int?, relationStatus: String?, timelineJson: String,
+    ) = Unit
+    override suspend fun exportCrashLog(): android.net.Uri? = null
+    override suspend fun checkUpdate(): com.wenyan.app.data.update.UpdateCheckResult =
+        com.wenyan.app.data.update.UpdateCheckResult.UpToDate
+    override suspend fun downloadUpdateApk(info: com.wenyan.app.data.update.UpdateInfo): java.io.File? = null
+    override suspend fun installApk(file: java.io.File): Boolean = false
 
     override suspend fun setCurrentModel(id: Long) = Unit
     override suspend fun setVisionModel(id: Long) = Unit

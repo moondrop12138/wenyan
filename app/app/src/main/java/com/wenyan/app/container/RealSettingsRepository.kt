@@ -1,16 +1,22 @@
 package com.wenyan.app.container
 
+import android.content.Context
+import android.net.Uri
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
+import com.wenyan.app.data.update.UpdateCheckResult
+import com.wenyan.app.data.update.UpdateChecker
 import com.wenyan.app.llm.ChatRequest
 import com.wenyan.app.llm.LlmClient
 import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.llm.LlmEvent
 import com.wenyan.app.log.AppLogger
+import com.wenyan.app.log.CrashLogStore
 import com.wenyan.app.ui.contract.LlmError
+import com.wenyan.app.ui.contract.MemoryFactUi
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
@@ -24,12 +30,16 @@ import kotlinx.coroutines.flow.toList
 /**
  * 设置项/提供商/模型 Repository 真实实现（AC-09/10/11/12/18）
  * 装配：Room provider/model + DataStore 设置 + Keystore 加密 + LLM 测试连接。
+ * v1.7.3：事实单条管理 + 档案详情全字段编辑 + 崩溃日志导出 + 更新检查。
  */
 class RealSettingsRepository(
+    private val context: Context,
     private val dataStore: DataStoreSettings,
     private val providerRepository: ProviderRepository,
     private val profileRepository: ProfileRepository,
     private val conversationRepository: ConversationRepository,
+    private val crashLogStore: CrashLogStore,
+    private val updateChecker: UpdateChecker,
 ) : SettingsRepository {
 
     override val providers: Flow<List<ProviderInfo>> =
@@ -51,9 +61,14 @@ class RealSettingsRepository(
 
     // ===== v1.7.2 记忆档案 =====
 
+    /** v1.7.3-fix：第三路全档案事实计数 → 档案行 caption 展示「已记住 N 条」 */
     override val targets: Flow<List<TargetUi>> =
-        combine(profileRepository.observeTargets(), dataStore.activeTargetId) { list, activeId ->
-            list.map { UiMappers.toTargetUi(it, isActive = it.id == activeId) }
+        combine(
+            profileRepository.observeTargets(),
+            dataStore.activeTargetId,
+            profileRepository.observeFactCounts(),
+        ) { list, activeId, factCounts ->
+            list.map { UiMappers.toTargetUi(it, isActive = it.id == activeId, factCount = factCounts[it.id] ?: 0) }
         }
 
     override val activeTargetId: Flow<Long?> = dataStore.activeTargetId
@@ -69,10 +84,13 @@ class RealSettingsRepository(
         return id
     }
 
-    /** v1.7.2 改名 + 编辑记忆正文（名称/正文 trim；档案不存在静默跳过） */
+    /**
+     * v1.7.2 改名兼容入口（v1.7.3 起 note 代码层废弃：只改名称，不再写入 note——防旧数据污染）；
+     * 档案详情页编辑走 updateTargetDetails（全字段）。
+     */
     override suspend fun updateTarget(id: Long, name: String, note: String) {
         val e = profileRepository.getTarget(id) ?: return
-        profileRepository.updateTarget(e.copy(codeName = name.trim(), note = note.trim()))
+        profileRepository.updateTarget(e.copy(codeName = name.trim()))
     }
 
     /** v1.7.2 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条，id DESC=最新）；无剩余 → null */
@@ -86,6 +104,85 @@ class RealSettingsRepository(
     override suspend fun setActiveTarget(id: Long) = dataStore.setActiveTargetId(id)
 
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) = dataStore.setMemoryAutoEnabled(enabled)
+
+    // ===== v1.7.3 事实单条管理 + 档案详情编辑 =====
+
+    override fun observeFacts(targetId: Long): Flow<List<MemoryFactUi>> =
+        profileRepository.observeFacts(targetId).map { list -> list.map { UiMappers.toMemoryFactUi(it) } }
+
+    override suspend fun addFact(targetId: Long, text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        // 条数上限 50：超出静默丢弃（与提炼链路一致）
+        if (profileRepository.countFacts(targetId) >= 50) return
+        profileRepository.addFact(targetId, trimmed)
+    }
+
+    override suspend fun updateFact(factId: Long, text: String) {
+        profileRepository.updateFact(factId, text)
+    }
+
+    override suspend fun deleteFact(factId: Long) {
+        profileRepository.deleteFact(factId)
+    }
+
+    /** 全字段保存（名称/MBTI/吸引力分/关系状态/关键事件 timeline JSON 数组；note 代码层废弃不写） */
+    override suspend fun updateTargetDetails(
+        id: Long,
+        name: String,
+        mbti: String?,
+        score: Int?,
+        relationStatus: String?,
+        timelineJson: String,
+    ) {
+        val e = profileRepository.getTarget(id) ?: return
+        profileRepository.updateTarget(
+            e.copy(
+                codeName = name.trim().ifBlank { e.codeName },
+                mbti = mbti,
+                score = score,
+                relationStatus = relationStatus,
+                timeline = timelineJson,
+            )
+        )
+    }
+
+    // ===== v1.7.3 T3 崩溃日志导出 =====
+
+    /** 返回可分享的 crash 文件 Uri（无则 null）；文件不存在/授权异常 → null 静默 */
+    override suspend fun exportCrashLog(): Uri? {
+        val file = crashLogStore.crashFile() ?: return null
+        if (!file.exists()) return null
+        return runCatching {
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            )
+        }.getOrNull()
+    }
+
+    // ===== v1.7.3 T4 更新检查 =====
+
+    override suspend fun checkUpdate(): UpdateCheckResult = updateChecker.check()
+
+    override suspend fun downloadUpdateApk(info: com.wenyan.app.data.update.UpdateInfo): java.io.File? =
+        updateChecker.download(info, context.cacheDir)
+
+    /** 下载完成后唤起系统安装器（FileProvider + ACTION_VIEW + FLAG_GRANT_READ_URI_PERMISSION） */
+    override suspend fun installApk(file: java.io.File): Boolean = runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
+        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }.isSuccess
 
     override suspend fun setCurrentModel(id: Long) {
         dataStore.setCurrentModelId(id)
@@ -181,6 +278,8 @@ class RealSettingsRepository(
         conversationRepository.clearAll()
         providerRepository.clearAll()
         dataStore.clearAll()
+        // v1.7.3 隐私联动：删除崩溃日志目录与下载缓存（含事实表，随 profileRepository.clearAll 的 memoryFactDao.clear）
+        crashLogStore.clear()
         AppLogger.i("privacy_wipe_all")
     }
 }

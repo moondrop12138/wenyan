@@ -17,6 +17,7 @@ import com.wenyan.app.AppViewModel
 import com.wenyan.app.ui.chat.ChatScreen
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.onboarding.OnboardingScreen
+import com.wenyan.app.ui.settings.MemoryEditScreen
 import com.wenyan.app.ui.settings.ProviderEditScreen
 import com.wenyan.app.ui.settings.SettingsScreen
 
@@ -69,10 +70,18 @@ fun AppRoot(
                 container = container,
                 onBack = { navigator.pop() },
                 onEditProvider = { id -> navigator.push(Route.ProviderEdit(id)) },
+                // v1.7.3 档案行「编辑」图标 → 跳档案详情页（替代 v1.7.2 改名弹窗）
+                onEditTarget = { id -> navigator.push(Route.MemoryEdit(id)) },
             )
             is Route.ProviderEdit -> ProviderEditScreen(
                 container = container,
                 providerId = route.providerId,
+                onBack = { navigator.pop() },
+            )
+            // v1.7.3 档案详情页（结构化字段 + 事实单条管理）
+            is Route.MemoryEdit -> MemoryEditScreen(
+                container = container,
+                targetId = route.targetId,
                 onBack = { navigator.pop() },
             )
         }

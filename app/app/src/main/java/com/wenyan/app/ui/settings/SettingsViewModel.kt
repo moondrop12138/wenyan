@@ -1,7 +1,13 @@
 package com.wenyan.app.ui.settings
 
+import android.net.Uri
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.wenyan.app.data.update.UpdateCheckResult
+import com.wenyan.app.data.update.UpdateInfo
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
@@ -14,6 +20,7 @@ import kotlinx.coroutines.launch
 /**
  * 设置页状态（AC-09/11/12/18）：提供商列表、主/视觉模型、主题、隐私清除。
  * v1.7.2 新增「记忆」分组：记忆档案列表 / 激活档案 / 自动记忆开关 / Toast / 三个弹窗状态。
+ * v1.7.3 新增：导出诊断日志、更新检查/下载状态（T3/T4）。
  * 纯状态装配；读写全部经 SettingsRepository（后端实现）。
  */
 class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
@@ -65,6 +72,20 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     private val _deleteTarget = MutableStateFlow<TargetUi?>(null)
     val deleteTarget: StateFlow<TargetUi?> = _deleteTarget.asStateFlow()
+
+    // ===== v1.7.3 T3 导出诊断日志 / T4 更新检查 =====
+
+    /** v1.7.3 T4 更新检查中 */
+    var checkingUpdate by mutableStateOf(false)
+        private set
+
+    /** v1.7.3 T4 有新版待确认（AlertDialog 数据源；null = 无弹窗） */
+    var updateAvailable by mutableStateOf<UpdateInfo?>(null)
+        private set
+
+    /** v1.7.3 T4 正在下载 APK */
+    var downloading by mutableStateOf(false)
+        private set
 
     init {
         viewModelScope.launch { repo.providers.collect { _providers.value = it } }
@@ -179,5 +200,47 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     fun consumeToast() {
         _toastMessage.value = null
+    }
+
+    // ===== v1.7.3 T3 导出诊断日志 =====
+
+    /** 导出崩溃日志：成功返回可分享 Uri，无则 null（UI 决定是否提示） */
+    fun exportCrashLog(onResult: (Uri?) -> Unit) {
+        viewModelScope.launch { onResult(repo.exportCrashLog()) }
+    }
+
+    // ===== v1.7.3 T4 更新检查 / 下载安装 =====
+
+    /** 手动检查更新：NewVersion → 弹确认弹窗；UpToDate/Failed → Toast（静默不阻塞主流程） */
+    fun checkUpdate() {
+        if (checkingUpdate) return
+        checkingUpdate = true
+        viewModelScope.launch {
+            when (val result = repo.checkUpdate()) {
+                is UpdateCheckResult.NewVersion -> updateAvailable = result.info
+                is UpdateCheckResult.UpToDate -> _toastMessage.value = "当前已是最新版本"
+                is UpdateCheckResult.Failed -> _toastMessage.value = "检查更新失败，请稍后重试"
+            }
+            checkingUpdate = false
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        updateAvailable = null
+    }
+
+    /** 下载新版 APK → 唤起系统安装器；失败 Toast（不阻塞） */
+    fun downloadAndInstall(info: UpdateInfo) {
+        if (downloading) return
+        downloading = true
+        updateAvailable = null
+        viewModelScope.launch {
+            val file = repo.downloadUpdateApk(info)
+            val installed = file != null && repo.installApk(file)
+            downloading = false
+            if (!installed) {
+                _toastMessage.value = "下载失败，请稍后重试"
+            }
+        }
     }
 }

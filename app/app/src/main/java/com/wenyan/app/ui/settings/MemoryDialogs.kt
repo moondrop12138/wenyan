@@ -21,8 +21,9 @@ import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 
 /**
- * v1.7.2 记忆档案弹窗三件套（风格对齐 PrivacyDialogs.kt：AlertDialog + GtjShape.lg + surfaceElevated 容器）：
- * MemoryNameDialog（新建，空白不允许）/ MemoryEditDialog（改名 + 正文多行 2-4 行）/ MemoryDeleteDialog（二次确认 danger）。
+ * v1.7.2/1.7.3 记忆档案弹窗（风格对齐 PrivacyDialogs.kt：AlertDialog + GtjShape.lg + surfaceElevated 容器）：
+ * MemoryNameDialog（新建，空白不允许）/ MemoryDeleteDialog（二次确认 danger）。
+ * v1.7.3 编辑弹窗已移除：档案行「编辑」→ 跳 MemoryEdit 页（MemoryEditDialog 废弃）。
  */
 
 /** 新建记忆档案：名称 TextField，确认钮 accent，空白输入禁用确认 */
@@ -56,64 +57,6 @@ fun MemoryNameDialog(
         confirmButton = {
             TextButton(onClick = { onConfirm(name) }, enabled = name.trim().isNotEmpty()) {
                 Text("创建", style = GtjType.Label, color = p.accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消", style = GtjType.Label, color = p.muted)
-            }
-        },
-    )
-}
-
-/** 编辑记忆档案：名称 TextField + 记忆正文多行 TextField（2-4 行），保存钮 → updateTarget(id, name, note) */
-@Composable
-fun MemoryEditDialog(
-    initialName: String,
-    initialNote: String,
-    onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit,
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var note by remember { mutableStateOf(initialNote) }
-    val p = LocalGtjColors.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = GtjShape.lg,
-        containerColor = p.surfaceElevated,
-        titleContentColor = p.fg,
-        textContentColor = p.fgSecondary,
-        title = { Text("编辑记忆", style = GtjType.Title) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("档案名称", style = GtjType.Label) },
-                    textStyle = GtjType.Body,
-                    singleLine = true,
-                    shape = GtjShape.md,
-                    colors = memoryFieldColors(),
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("记忆正文", style = GtjType.Label) },
-                    placeholder = { Text("已记住的关于咨询对象的信息", style = GtjType.BodySm, color = p.meta) },
-                    textStyle = GtjType.BodySm,
-                    minLines = 2,
-                    maxLines = 4,
-                    shape = GtjShape.md,
-                    colors = memoryFieldColors(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(name, note) }, enabled = name.trim().isNotEmpty()) {
-                Text("保存", style = GtjType.Label, color = p.accent)
             }
         },
         dismissButton = {
@@ -162,3 +105,21 @@ private fun memoryFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedContainerColor = LocalGtjColors.current.surface,
     cursorColor = LocalGtjColors.current.accent,
 )
+
+/** v1.7.3 T2 @Preview：新建记忆弹窗 */
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)
+@Composable
+private fun MemoryNameDialogPreview() {
+    com.wenyan.app.ui.theme.GtjTheme {
+        MemoryNameDialog(onDismiss = {}, onConfirm = {})
+    }
+}
+
+/** v1.7.3 T2 @Preview：删除记忆确认弹窗 */
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)
+@Composable
+private fun MemoryDeleteDialogPreview() {
+    com.wenyan.app.ui.theme.GtjTheme {
+        MemoryDeleteDialog(targetName = "小A", onDismiss = {}, onConfirm = {})
+    }
+}

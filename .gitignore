@@ -75,3 +75,8 @@ overview.md
 dist/
 # 本机专用构建封装（WorkBuddy safe-delete 规避，含 JDK 绝对路径）
 app/scripts/run_gradle.sh
+
+# 排障产物（勿入库）
+app/tools/
+app/gdh-fresh/
+app/*.txt

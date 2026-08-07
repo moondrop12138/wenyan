@@ -1,6 +1,7 @@
 package com.wenyan.app.ui.settings
 
 import com.wenyan.app.BuildConfig
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,6 +58,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.data.update.UpdateInfo
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.ModelSheet
 import com.wenyan.app.ui.components.Tag
@@ -74,13 +78,15 @@ import com.wenyan.app.ui.theme.LocalGtjColors
 private enum class PickerTarget { MAIN, VISION }
 
 /**
- * 设置页（/settings，SPEC §7 页面3）：模型服务 / 外观 / 隐私与安全 三分组。
+ * 设置页（/settings，SPEC §7 页面3）：模型服务 / 记忆 / 外观 / 隐私与安全 分组。
+ * v1.7.3：档案行编辑 → 跳 MemoryEdit 页；新增「导出诊断日志」「检查更新」行。
  */
 @Composable
 fun SettingsScreen(
     container: AppContainer,
     onBack: () -> Unit,
     onEditProvider: (Long) -> Unit,
+    onEditTarget: (Long) -> Unit,
 ) {
     val vm: SettingsViewModel = rememberViewModel("SettingsViewModel") {
         SettingsViewModel(container.settingsRepository)
@@ -181,7 +187,11 @@ fun SettingsScreen(
                     }
                 }
             } else {
-                items(providers, key = { it.id }) { provider ->
+                // key 加 "provider_" 前缀：与下方「记忆」分组 items 的 key 空间隔离。
+                // provider/target 是两张独立自增表，id 均从 1 开始——同一 LazyColumn 内若都用裸 id 作 key，
+                // provider id=1 与 target id=1 会撞 key，滚动到记忆分组时 Compose 抛
+                // "Key was already used"（LayoutNodeSubcompositionsState）→ 100% 闪退。
+                items(providers, key = { "provider_${it.id}" }) { provider ->
                     ProviderRow(provider = provider, onClick = { onEditProvider(provider.id) })
                 }
             }
@@ -195,11 +205,13 @@ fun SettingsScreen(
                     }
                 }
             } else {
-                items(targets, key = { it.id }) { target ->
+                // key 加 "target_" 前缀：与「模型服务」分组 providers items 的 key 空间隔离（防撞 key 闪退，见上）
+                items(targets, key = { "target_${it.id}" }) { target ->
                     MemoryTargetRow(
                         target = target,
                         onClick = { vm.setActiveTarget(target) },
-                        onEdit = { vm.requestEditTarget(target) },
+                        // v1.7.3 编辑图标 → 跳档案详情页（替代改名弹窗）
+                        onEdit = { onEditTarget(target.id) },
                         onDelete = { vm.requestDeleteTarget(target) },
                     )
                 }
@@ -266,6 +278,28 @@ fun SettingsScreen(
                 )
             }
             item {
+                // v1.7.3 T3 导出诊断日志（ShareIntent + FileProvider 发送 last_crash.txt，无用户内容）
+                SettingsRow(
+                    label = "导出诊断日志",
+                    value = "崩溃日志本地文件",
+                    icon = null,
+                    onClick = {
+                        vm.exportCrashLog { uri ->
+                            if (uri == null) {
+                                Toast.makeText(context, "暂无崩溃日志可导出", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                runCatching { context.startActivity(Intent.createChooser(intent, "导出诊断日志")) }
+                            }
+                        }
+                    },
+                )
+            }
+            item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -284,6 +318,15 @@ fun SettingsScreen(
                     // 对比度：版本号升到 muted 4.8:1
                     color = p.muted,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
+            item {
+                // v1.7.3 T4 手动检查更新（GitHub Releases 直连；失败静默/Toast 由 VM 处理）
+                SettingsRow(
+                    label = "检查更新",
+                    value = if (vm.checkingUpdate) "检查中…" else "v${BuildConfig.VERSION_NAME}",
+                    icon = null,
+                    onClick = vm::checkUpdate,
                 )
             }
         }
@@ -314,19 +357,21 @@ fun SettingsScreen(
     if (showNameDialog) {
         MemoryNameDialog(onDismiss = vm::dismissCreateTarget, onConfirm = vm::createTarget)
     }
-    editTarget?.let { t ->
-        MemoryEditDialog(
-            initialName = t.name,
-            initialNote = t.note,
-            onDismiss = vm::dismissEditTarget,
-            onSave = { name, note -> vm.updateTarget(t.id, name, note) },
-        )
-    }
+    // v1.7.3 编辑弹窗已移除：档案行「编辑」→ 跳 MemoryEdit 页（MemoryEditDialog 废弃）
     deleteTarget?.let { t ->
         MemoryDeleteDialog(
             targetName = t.name,
             onDismiss = vm::dismissDeleteTarget,
             onConfirm = { vm.deleteTarget(t.id) },
+        )
+    }
+    // v1.7.3 T4 更新确认弹窗
+    vm.updateAvailable?.let { info ->
+        UpdateDialog(
+            info = info,
+            downloading = vm.downloading,
+            onDownload = { vm.downloadAndInstall(info) },
+            onDismiss = vm::dismissUpdateDialog,
         )
     }
 }
@@ -473,9 +518,9 @@ private fun MemoryTargetRow(
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(target.name, style = GtjType.Body, color = p.fg)
-                // caption：激活 =「使用中」/「使用中 · 已记住 N 字」；未激活 =「未使用」
+                // caption（v1.7.3-fix）：激活 =「使用中」/「使用中 · 已记住 N 条」（N=事实条数，替代已废弃的 note.length）；未激活 =「未使用」
                 val caption = when {
-                    target.isActive && target.note.isNotEmpty() -> "使用中 · 已记住 ${target.note.length} 字"
+                    target.isActive && target.factCount > 0 -> "使用中 · 已记住 ${target.factCount} 条"
                     target.isActive -> "使用中"
                     else -> "未使用"
                 }
@@ -485,4 +530,59 @@ private fun MemoryTargetRow(
             GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除记忆", onClick = onDelete, tint = p.danger, iconSize = 20.dp)
         }
     }
+}
+
+/** v1.7.3 T2 @Preview：档案行（激活态，含事实数 caption） */
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)
+@Composable
+private fun MemoryTargetRowPreview() {
+    com.wenyan.app.ui.theme.GtjTheme {
+        MemoryTargetRow(
+            target = TargetUi(id = 1L, name = "小A", note = "", createdAt = 0L, isActive = true, factCount = 3),
+            onClick = {},
+            onEdit = {},
+            onDelete = {},
+        )
+    }
+}
+
+/**
+ * v1.7.3 T4 更新确认弹窗：版本说明 + 「去下载」；下载中禁用按钮。
+ * 失败静默/Toast 由 VM 处理（不阻塞主流程）。
+ */
+@Composable
+private fun UpdateDialog(
+    info: UpdateInfo,
+    downloading: Boolean,
+    onDownload: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = com.wenyan.app.ui.theme.GtjShape.lg,
+        containerColor = p.surfaceElevated,
+        titleContentColor = p.fg,
+        textContentColor = p.fgSecondary,
+        title = { Text("发现新版本 v${info.versionName}", style = GtjType.Title) },
+        text = {
+            Text(
+                info.notes.ifBlank { "修复与体验优化，建议升级。" },
+                style = GtjType.BodySm,
+                color = p.fgSecondary,
+                maxLines = 8,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDownload, enabled = !downloading) {
+                Text(if (downloading) "下载中…" else "去下载", style = GtjType.Label, color = p.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !downloading) {
+                Text("取消", style = GtjType.Label, color = p.muted)
+            }
+        },
+    )
 }

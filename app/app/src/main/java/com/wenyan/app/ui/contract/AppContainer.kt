@@ -1,5 +1,7 @@
 package com.wenyan.app.ui.contract
 
+import com.wenyan.app.data.update.UpdateCheckResult
+import com.wenyan.app.data.update.UpdateInfo
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -64,6 +66,40 @@ interface SettingsRepository {
 
     /** 自动记忆开关 */
     suspend fun setMemoryAutoEnabled(enabled: Boolean)
+
+    // ===== v1.7.3 事实单条管理 + 档案详情编辑 =====
+
+    /** 档案全部事实（时间倒序） */
+    fun observeFacts(targetId: Long): Flow<List<MemoryFactUi>>
+
+    suspend fun addFact(targetId: Long, text: String)
+    suspend fun updateFact(factId: Long, text: String)
+    suspend fun deleteFact(factId: Long)
+
+    /**
+     * 全字段保存（名称/MBTI/吸引力分/关系状态/关键事件 timeline JSON 数组）。
+     * 注意：v1.7.3 起 note 代码层废弃，本方法不写 note（保留旧数据）。
+     */
+    suspend fun updateTargetDetails(
+        id: Long,
+        name: String,
+        mbti: String?,
+        score: Int?,
+        relationStatus: String?,
+        timelineJson: String,
+    )
+
+    /** v1.7.3 T3 导出诊断日志：返回可分享的 crash 文件 Uri（无则 null） */
+    suspend fun exportCrashLog(): android.net.Uri?
+
+    /** v1.7.3 T4 检查更新：NewVersion / UpToDate / Failed */
+    suspend fun checkUpdate(): UpdateCheckResult
+
+    /** v1.7.3 T4 下载新版 APK 到 cacheDir（返回文件/null，失败静默） */
+    suspend fun downloadUpdateApk(info: UpdateInfo): java.io.File?
+
+    /** v1.7.3 T4 唤起系统安装器（FileProvider + ACTION_VIEW）；返回是否成功发起 */
+    suspend fun installApk(file: java.io.File): Boolean
 }
 
 /**

@@ -18,6 +18,8 @@ data class CoachAnalysis(
     val advice: Advice = Advice(),
     val actions: List<ActionItem> = emptyList(),
     val citations: List<String> = emptyList(),
+    /** v1.7.3 记忆引用溯源：实际依据的已记住事实原文（≤3 条，未使用空数组） */
+    val memoryCitations: List<String> = emptyList(),
     val safetyOverride: Boolean = false,
     val safetyMessage: String = "",
     val tokenEstimate: Int? = null,
@@ -83,6 +85,8 @@ fun FiveStepAnalysis.toCoachAnalysis(): CoachAnalysis {
         ),
         actions = byKey["action"]?.items.orEmpty().map { CoachAnalysis.ActionItem(label = "小动作", text = it) },
         citations = citations,
+        // v1.7.3 老五步法无记忆引用字段 → 空数组（兼容）
+        memoryCitations = emptyList(),
         safetyOverride = safetyOverride,
         safetyMessage = safetyMessage,
         tokenEstimate = tokenEstimate,

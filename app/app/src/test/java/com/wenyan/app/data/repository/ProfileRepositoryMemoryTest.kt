@@ -1,5 +1,7 @@
 package com.wenyan.app.data.repository
 
+import com.wenyan.app.data.db.MemoryFactDao
+import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.ProfileDao
 import com.wenyan.app.data.db.ProfileEntity
 import com.wenyan.app.data.db.TargetDao
@@ -10,15 +12,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * v1.7.2 ProfileRepository 多档案 CRUD 测试（fake DAO：内存实现 TargetDao/ProfileDao 接口）
+ * v1.7.3 增加：事实表 CRUD + note→facts 惰性搬移幂等测试（fake MemoryFactDao）。
  * 覆盖：save/get by id / observeAll（id DESC）/ update（改名+正文）/ delete / clearAll。
  */
 class ProfileRepositoryMemoryTest {
 
-    private fun newRepo() = ProfileRepository(FakeProfileDao(), FakeTargetDao())
+    private fun newRepo() = ProfileRepository(FakeProfileDao(), FakeTargetDao(), FakeMemoryFactDao())
 
     @Test
     fun `save and get target by id`() = runTest {
@@ -100,6 +104,167 @@ class ProfileRepositoryMemoryTest {
         assertNull(repo.observeTargets().first().firstOrNull())
         assertEquals(0, repo.observeTargets().first().size)
     }
+
+    // ===== v1.7.3 事实表 CRUD + note→facts 惰性搬移 =====
+
+    @Test
+    fun `add fact and observe by target`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val factId = repo.addFact(id, "她喜欢猫")
+        repo.addFact(id, "她怕黑")
+        assertEquals(2, repo.getFacts(id).size)
+        assertEquals("她喜欢猫", repo.getFacts(id).single { it.id == factId }.text)
+    }
+
+    @Test
+    fun `update and delete fact`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val factId = repo.addFact(id, "旧事实")
+        repo.updateFact(factId, "新事实")
+        assertEquals("新事实", repo.getFacts(id).single().text)
+        repo.deleteFact(factId)
+        assertEquals(0, repo.getFacts(id).size)
+    }
+
+    @Test
+    fun `migrateNoteToFactsOnce splits note and clears it`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = "她喜欢猫。她怕黑；她喜欢读书"))
+        repo.migrateNoteToFactsOnce(id)
+        assertEquals(3, repo.countFacts(id))
+        assertEquals("", repo.getTarget(id)?.note)
+        // memoryText 按 DAO 规范顺序（createdAt DESC, id DESC = 最新在前）
+        assertEquals("她喜欢读书；她怕黑；她喜欢猫", repo.memoryText(id))
+    }
+
+    @Test
+    fun `migrateNoteToFactsOnce idempotent`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = "她喜欢猫。她怕黑"))
+        repo.migrateNoteToFactsOnce(id)
+        repo.migrateNoteToFactsOnce(id)
+        assertEquals(2, repo.countFacts(id))
+        assertEquals("她怕黑；她喜欢猫", repo.memoryText(id))
+    }
+
+    @Test
+    fun `migrateNoteToFactsOnce skips blank note and skips when facts exist`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = ""))
+        repo.migrateNoteToFactsOnce(id)
+        assertEquals(0, repo.countFacts(id))
+        // 已有事实时不再搬移（防覆盖）
+        val id2 = repo.saveTarget(TargetEntity(codeName = "小B", note = "旧 note 内容"))
+        repo.addFact(id2, "已提炼事实")
+        repo.migrateNoteToFactsOnce(id2)
+        assertEquals(listOf("已提炼事实"), repo.getFacts(id2).map { it.text })
+    }
+
+    @Test
+    fun `migrateNoteToFactsOnce caps at 50 and truncates each to 40 chars`() = runTest {
+        val repo = newRepo()
+        val longSegment = "字".repeat(60)
+        val note = (1..60).joinToString("。") { "事实$it" } + "。" + longSegment
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = note))
+        repo.migrateNoteToFactsOnce(id)
+        assertEquals(50, repo.countFacts(id))
+        assertTrue(repo.getFacts(id).all { it.text.length <= 40 })
+    }
+
+    @Test
+    fun `clearAll clears facts too`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        repo.addFact(id, "她喜欢猫")
+        repo.clearAll()
+        assertEquals(0, repo.countFacts(id))
+    }
+
+    // ===== v1.7.3-fix：全档案事实计数（设置页档案行 caption） =====
+
+    @Test
+    fun `observeFactCounts groups facts by target`() = runTest {
+        val repo = newRepo()
+        val idA = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val idB = repo.saveTarget(TargetEntity(codeName = "小B"))
+        repo.addFact(idA, "她喜欢猫")
+        repo.addFact(idA, "她怕黑")
+        repo.addFact(idB, "她爱运动")
+        val counts = repo.observeFactCounts().first()
+        assertEquals(2, counts[idA])
+        assertEquals(1, counts[idB])
+        assertEquals(0, counts[999L] ?: 0)
+    }
+
+    @Test
+    fun `observeFactCounts empty when no facts`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        repo.saveTarget(TargetEntity(codeName = "小B"))
+        val counts = repo.observeFactCounts().first()
+        assertEquals(0, counts[id] ?: 0)
+        assertTrue(counts.isEmpty())
+    }
+
+    // ===== QA 独立补充：惰性搬移边界（2026-08-07） =====
+
+    @Test
+    fun `memoryText triggers lazy migration implicitly`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = "她喜欢猫。她怕黑"))
+        // 注入读 memoryText 前自动搬移：facts 落地 + note 清空
+        val text = repo.memoryText(id)
+        assertEquals(2, repo.countFacts(id))
+        assertEquals("", repo.getTarget(id)?.note)
+        assertEquals("她怕黑；她喜欢猫", text)
+    }
+
+    @Test
+    fun `memoryText on blank note returns empty without migration`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = ""))
+        assertEquals("", repo.memoryText(id))
+        assertEquals(0, repo.countFacts(id))
+    }
+
+    @Test
+    fun `memoryText caps joined facts at 2000 chars`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        repeat(50) { repo.addFact(id, "字".repeat(40)) }
+        val text = repo.memoryText(id)
+        assertTrue(text.length <= 2000)
+    }
+
+    @Test
+    fun `migrateNoteToFactsOnce unknown target is no-op`() = runTest {
+        val repo = newRepo()
+        repo.migrateNoteToFactsOnce(999L)
+        // 不抛异常，无副作用
+        assertEquals(0, repo.countFacts(999L))
+    }
+
+    @Test
+    fun `migrateNoteToFactsOnce note already blank stays idempotent`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = ""))
+        repo.migrateNoteToFactsOnce(id)
+        repo.migrateNoteToFactsOnce(id)
+        assertEquals(0, repo.countFacts(id))
+        assertEquals("", repo.getTarget(id)?.note)
+    }
+
+    @Test
+    fun `addFact and updateFact trim text`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val factId = repo.addFact(id, "  她喜欢猫  ")
+        assertEquals("她喜欢猫", repo.getFacts(id).single().text)
+        repo.updateFact(factId, "  她怕黑  ")
+        assertEquals("她怕黑", repo.getFacts(id).single().text)
+    }
 }
 
 /** 内存 TargetDao（observeAll 用 MutableStateFlow 模拟 Room Flow 响应式刷新） */
@@ -156,5 +321,54 @@ private class FakeProfileDao : ProfileDao {
     override suspend fun clear() {
         store.clear()
         _flow.value = null
+    }
+}
+
+/** v1.7.3 内存 MemoryFactDao（observeByTarget 用 MutableStateFlow 模拟 Room Flow 响应式刷新） */
+private class FakeMemoryFactDao : MemoryFactDao {
+    private val store = mutableListOf<MemoryFactEntity>()
+    private var nextId = 1L
+    private val _flow = MutableStateFlow<List<MemoryFactEntity>>(emptyList())
+
+    private fun refresh() {
+        _flow.value = store.sortedWith(compareByDescending<MemoryFactEntity> { it.createdAt }.thenByDescending { it.id }).toList()
+    }
+
+    override fun observeByTarget(targetId: Long): Flow<List<MemoryFactEntity>> =
+        MutableStateFlow(store.filter { it.targetId == targetId }.sortedByDescending { it.id })
+
+    override fun observeAll(): Flow<List<MemoryFactEntity>> = _flow
+
+    override suspend fun listByTarget(targetId: Long): List<MemoryFactEntity> =
+        store.filter { it.targetId == targetId }.sortedByDescending { it.id }
+
+    override suspend fun getById(id: Long): MemoryFactEntity? = store.firstOrNull { it.id == id }
+
+    override suspend fun insert(entity: MemoryFactEntity): Long {
+        val e = entity.copy(id = nextId++)
+        store.add(e)
+        refresh()
+        return e.id
+    }
+
+    override suspend fun update(entity: MemoryFactEntity) {
+        val idx = store.indexOfFirst { it.id == entity.id }
+        if (idx >= 0) store[idx] = entity
+        refresh()
+    }
+
+    override suspend fun deleteById(id: Long) {
+        store.removeAll { it.id == id }
+        refresh()
+    }
+
+    override suspend fun deleteByTarget(targetId: Long) {
+        store.removeAll { it.targetId == targetId }
+        refresh()
+    }
+
+    override suspend fun clear() {
+        store.clear()
+        refresh()
     }
 }

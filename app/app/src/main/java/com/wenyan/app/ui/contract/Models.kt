@@ -39,15 +39,31 @@ data class SessionSummaryUi(
     val createdAt: Long,
     /** v1.7.2 会话归属记忆档案名；老会话（targetId=null）为 null，抽屉不显示 Tag */
     val targetName: String? = null,
+    /** v1.7.3-fix 会话归属档案 id（分组键）；老会话为 null（归「未关联」组） */
+    val targetId: Long? = null,
 )
 
-/** v1.7.2 记忆档案（设置页「记忆」分组） */
+/** v1.7.2 记忆档案（设置页「记忆」分组）；v1.7.3 扩展结构化字段（详情页可编辑） */
 data class TargetUi(
     val id: Long,
     val name: String,          // = codeName（档案名称，用户可编辑）
-    val note: String,          // 记忆正文（跨会话记忆内容）
+    val note: String,          // 记忆正文（跨会话记忆内容；v1.7.3 起代码层废弃，列保留）
     val createdAt: Long,
     val isActive: Boolean,     // id == 激活档案
+    // v1.7.3 结构化字段（详情页编辑）
+    val mbti: String? = null,
+    val score: Int? = null,
+    val relationStatus: String? = null,
+    val timeline: String = "[]",   // 关键事件 JSON 数组字符串
+    /** v1.7.3-fix 该档案已记住事实条数（设置页 caption 展示，替代已废弃的 note.length） */
+    val factCount: Int = 0,
+)
+
+/** v1.7.3 单条已记住事实（MemoryEditScreen 列表管理） */
+data class MemoryFactUi(
+    val id: Long,
+    val text: String,
+    val createdAt: Long,
 )
 
 data class ChatMessageUi(
@@ -92,6 +108,8 @@ data class CoachCard(
     val reply: String = "",
     val replyTiming: String = "",
     val citations: List<String> = emptyList(),
+    /** v1.7.3 记忆引用溯源：实际依据的已记住事实原文（≤3 条，未使用空数组） */
+    val memoryCitations: List<String> = emptyList(),
     val safetyOverride: Boolean = false,
     val safetyMessage: String = "",
     val tokenEstimate: Int = 0,

@@ -59,7 +59,8 @@ object CorePrompt {
 记忆使用规则（target.memory 为已记住的关于咨询对象的信息）：
 - 基于其中已记住的信息与用户保持前后一致，回答不得与已记住信息矛盾；
 - 用户本轮未提到、且记忆中也没有的信息，不得编造成记忆内容或当作事实输出；
-- 记忆与用户新提供信息冲突时，以新信息为准并温和指出差异。
+- 记忆与用户新提供信息冲突时，以新信息为准并温和指出差异；
+- 引用记忆时，将其原文逐字列入 memory_citations（≤3 条）；未引用则留空数组。
     """.trimIndent()
 
     /**
@@ -94,6 +95,7 @@ object CorePrompt {
   },
   "actions": [{"label": "小动作 | 观察窗口 | 停止条件", "text": "≤30 字"}],
   "citations": ["实际使用的知识文档文件名"],
+  "memory_citations": ["实际依据的已记住事实原文，≤3 条；未使用留空数组"],
   "safety_override": false,
   "safety_message": "",
   "token_estimate": 0
@@ -102,5 +104,6 @@ object CorePrompt {
 - 三档风格沿用知识文档《00-导读与使用分级》的稳健/会撩/强势惯例；强势是边界和快速筛选，不是羞辱、威胁或控制。
 - input_kind 必填，uncertain 仅用于方向性事实歧义（分不清对象是谁/这句话谁说），不得因代词、性别、称呼等表面措辞触发，其反问句同样不得针对这类表面细节；uncertain 时 reply 写反问句、empathy 写拿不准的原因、facts/advice.styles/actions 留空数组。
 - 若参考了知识文档，citations 必须列出实际使用的文件名；未实际使用不得列入。
+- 若回答依据了 target.memory 中的已记住事实，memory_citations 必须逐字列出其原文（≤3 条）；未引用则留空数组。
     """.trimIndent()
 }

@@ -6,6 +6,7 @@ import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -188,5 +189,19 @@ class ProviderEditViewModelTest {
         override suspend fun deleteTarget(id: Long) = Unit
         override suspend fun setActiveTarget(id: Long) = Unit
         override suspend fun setMemoryAutoEnabled(enabled: Boolean) = Unit
+        // v1.7.3 事实/详情/导出/更新（本测试不使用，空实现）
+        override fun observeFacts(targetId: Long): Flow<List<com.wenyan.app.ui.contract.MemoryFactUi>> =
+            MutableStateFlow(emptyList())
+        override suspend fun addFact(targetId: Long, text: String) = Unit
+        override suspend fun updateFact(factId: Long, text: String) = Unit
+        override suspend fun deleteFact(factId: Long) = Unit
+        override suspend fun updateTargetDetails(
+            id: Long, name: String, mbti: String?, score: Int?, relationStatus: String?, timelineJson: String,
+        ) = Unit
+        override suspend fun exportCrashLog(): android.net.Uri? = null
+        override suspend fun checkUpdate(): com.wenyan.app.data.update.UpdateCheckResult =
+            com.wenyan.app.data.update.UpdateCheckResult.UpToDate
+        override suspend fun downloadUpdateApk(info: com.wenyan.app.data.update.UpdateInfo): java.io.File? = null
+        override suspend fun installApk(file: java.io.File): Boolean = false
     }
 }

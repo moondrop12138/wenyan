@@ -76,8 +76,12 @@ android {
         // v1.7.2 跨会话记忆：target 表多行化（note 记忆正文）+ session.targetId 档案归属（DB v5）/
         //  设置页「记忆」分组 CRUD + 激活切换 Toast + 自动记忆开关 /
         //  会话归属档案优先注入 + 新话题自动提炼（MemoryExtractor，20s 超时静默）/ 抽屉会话档案 Tag
-        versionCode = 27
-        versionName = "1.7.2"
+        // v1.7.3 记忆治理×稳定性：memory_fact 事实表（DB v6，单条管理+惰性搬移 note→facts）/
+        //  档案结构化字段编辑页 MemoryEdit + 记忆引用溯源 memory_citations + 会话按档案分组 /
+        //  Room 迁移自动化测试 + UI 测试/@Preview + 崩溃日志本地兜底（导出诊断）/
+        //  应用内更新检查（GitHub Releases 直连 + 下载安装）+ LazyColumn key 冲突 P0 修复
+        versionCode = 28
+        versionName = "1.7.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -107,6 +111,11 @@ android {
                 keyPassword = keystoreProps.getProperty("keyPassword")
             }
         }
+    }
+
+    // androidTest assets 指向 Room schema 导出目录（MigrationTestHelper 读取 1.json~6.json）
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     buildTypes {
@@ -195,6 +204,8 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // v1.7.3 T1：Room 迁移自动化测试（MigrationTestHelper，与 room 主版本 2.6.1 一致）
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
 }
 
 // 知识库完整性校验 + 路由表生成（AC-17 构建门禁）

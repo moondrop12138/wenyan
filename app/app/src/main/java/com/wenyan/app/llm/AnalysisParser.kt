@@ -131,6 +131,8 @@ object AnalysisParser {
             ),
             actions = parseActions(json.optJSONArray("actions")),
             citations = parseStringArray(json.optJSONArray("citations")),
+            // v1.7.3 记忆引用溯源（防御默认空，≤3 条）
+            memoryCitations = parseStringArray(json.optJSONArray("memory_citations")).take(3),
             safetyOverride = json.optBoolean("safety_override", false),
             safetyMessage = json.optString("safety_message", ""),
             tokenEstimate = if (json.has("token_estimate")) json.optInt("token_estimate") else null,

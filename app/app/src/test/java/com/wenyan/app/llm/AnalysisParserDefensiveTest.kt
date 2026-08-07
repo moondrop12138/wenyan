@@ -194,4 +194,59 @@ class AnalysisParserDefensiveTest {
         assertTrue(c.citations.isEmpty())
         assertEquals(0, c.tokenEstimate)
     }
+
+    // ===== v1.7.3 memory_citations 溯源字段防御（QA 独立补充 2026-08-07） =====
+
+    @Test
+    fun `v2 memoryCitations missing yields empty`() {
+        val c = AnalysisParser.parseV2("""{"empathy":"e","reply":"r"}""")
+        assertTrue(c.memoryCitations.isEmpty())
+    }
+
+    @Test
+    fun `v2 memoryCitations non-array yields empty`() {
+        val c = AnalysisParser.parseV2("""{"memory_citations":"not-an-array"}""")
+        assertTrue(c.memoryCitations.isEmpty())
+    }
+
+    @Test
+    fun `v2 memoryCitations empty array yields empty`() {
+        val c = AnalysisParser.parseV2("""{"memory_citations":[]}""")
+        assertTrue(c.memoryCitations.isEmpty())
+    }
+
+    @Test
+    fun `v2 memoryCitations caps at 3 preserving order`() {
+        val c = AnalysisParser.parseV2(
+            """{"memory_citations":["事实一","事实二","事实三","事实四"]}"""
+        )
+        assertEquals(3, c.memoryCitations.size)
+        assertEquals("事实一", c.memoryCitations[0])
+        assertEquals("事实三", c.memoryCitations[2])
+    }
+
+    @Test
+    fun `v2 memoryCitations drops empty strings keeps whitespace per shared helper contract`() {
+        // 共享 parseStringArray 契约：isNotEmpty 过滤（"" 丢弃；"  " 纯空白保留，与 citations/facts 一致）
+        val c = AnalysisParser.parseV2(
+            """{"memory_citations":["", "  ", "她喜欢猫"]}"""
+        )
+        assertEquals(listOf("  ", "她喜欢猫"), c.memoryCitations)
+    }
+
+    @Test
+    fun `legacy five-step via parseAny maps memoryCitations to empty`() {
+        // 老五步法输出无 memory_citations 字段 → 兼容映射为空（五步法兼容）
+        val json = """{"steps":[${stepJson("emotion")},${stepJson("facts")},${stepJson("interests")},${stepJson("advice")},${stepJson("action")}]}"""
+        val c = AnalysisParser.parseAny(json)
+        assertTrue(c.memoryCitations.isEmpty())
+    }
+
+    @Test
+    fun `parseAny v2 with memoryCitations caps at 3`() {
+        val c = AnalysisParser.parseAny(
+            """{"memory_citations":["a","b","c","d"],"empathy":"e"}"""
+        )
+        assertEquals(3, c.memoryCitations.size)
+    }
 }

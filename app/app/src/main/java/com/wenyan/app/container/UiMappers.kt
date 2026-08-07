@@ -14,6 +14,7 @@ import com.wenyan.app.ui.contract.ChatRole
 import com.wenyan.app.ui.contract.CoachCard
 import com.wenyan.app.ui.contract.InputKindUi
 import com.wenyan.app.ui.contract.LlmError
+import com.wenyan.app.ui.contract.MemoryFactUi
 import com.wenyan.app.ui.contract.MessageType
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
@@ -46,13 +47,25 @@ object UiMappers {
         showInSheet = m.showInSheet,
     )
 
-    /** v1.7.2 TargetEntity → TargetUi（isActive 由调用方比对激活档案 id 注入） */
-    fun toTargetUi(e: TargetEntity, isActive: Boolean): TargetUi = TargetUi(
+    /** v1.7.2 TargetEntity → TargetUi（isActive 由调用方比对激活档案 id 注入）；v1.7.3 映射结构化字段；v1.7.3-fix 映射事实数 */
+    fun toTargetUi(e: TargetEntity, isActive: Boolean, factCount: Int = 0): TargetUi = TargetUi(
         id = e.id,
         name = e.codeName,
         note = e.note,
         createdAt = e.createdAt,
         isActive = isActive,
+        mbti = e.mbti,
+        score = e.score,
+        relationStatus = e.relationStatus,
+        timeline = e.timeline,
+        factCount = factCount,
+    )
+
+    /** v1.7.3 MemoryFactEntity → MemoryFactUi */
+    fun toMemoryFactUi(e: com.wenyan.app.data.db.MemoryFactEntity): MemoryFactUi = MemoryFactUi(
+        id = e.id,
+        text = e.text,
+        createdAt = e.createdAt,
     )
 
     fun toChatMessage(e: MessageEntity): ChatMessageUi = ChatMessageUi(
@@ -83,6 +96,7 @@ object UiMappers {
         reply = a.reply,
         replyTiming = a.replyTiming,
         citations = a.citations,
+        memoryCitations = a.memoryCitations,
         safetyOverride = a.safetyOverride,
         safetyMessage = a.safetyMessage,
         tokenEstimate = a.tokenEstimate ?: 0,

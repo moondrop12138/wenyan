@@ -224,4 +224,69 @@ class UiMappersTest {
         val card = UiMappers.parseCoachCard(v2Json)!!.copy(safetyOverride = true, safetyMessage = "")
         assertEquals("先处理安全，再处理关系", UiMappers.coachCardToSelectableText(card))
     }
+
+    // ===== v1.7.3 memory_citations 映射 + 全字段 TargetUi / MemoryFactUi =====
+
+    @Test
+    fun `v2 json maps memory citations through coach card`() {
+        val json = """{
+          "input_kind": "pasted_chat",
+          "empathy": "e",
+          "reply": "r",
+          "facts": {"known": [], "assumed": [], "unknown": []},
+          "advice": {"core": "c", "styles": []},
+          "actions": [],
+          "citations": [],
+          "memory_citations": ["她喜欢猫", "她怕黑"],
+          "safety_override": false,
+          "safety_message": ""
+        }"""
+        val card = UiMappers.parseCoachCard(json)!!
+        assertEquals(listOf("她喜欢猫", "她怕黑"), card.memoryCitations)
+    }
+
+    @Test
+    fun `legacy json maps memory citations empty`() {
+        val card = UiMappers.parseCoachCard(legacyJson)!!
+        assertTrue(card.memoryCitations.isEmpty())
+    }
+
+    @Test
+    fun `toTargetUi maps structured fields`() {
+        val entity = com.wenyan.app.data.db.TargetEntity(
+            id = 7L,
+            codeName = "小A",
+            mbti = "INFJ",
+            score = 80,
+            relationStatus = "暧昧中",
+            timeline = """[{"time":"认识","event":"朋友介绍"}]""",
+            note = "旧记忆",
+            createdAt = 123L,
+        )
+        val ui = UiMappers.toTargetUi(entity, isActive = true, factCount = 5)
+        assertEquals(7L, ui.id)
+        assertEquals("小A", ui.name)
+        assertEquals("INFJ", ui.mbti)
+        assertEquals(80, ui.score)
+        assertEquals("暧昧中", ui.relationStatus)
+        assertTrue(ui.timeline.contains("朋友介绍"))
+        assertTrue(ui.isActive)
+        // v1.7.3-fix：事实数映射透传（默认 0）
+        assertEquals(5, ui.factCount)
+        assertEquals(0, UiMappers.toTargetUi(entity, isActive = false).factCount)
+    }
+
+    @Test
+    fun `toMemoryFactUi maps entity`() {
+        val entity = com.wenyan.app.data.db.MemoryFactEntity(
+            id = 3L,
+            targetId = 7L,
+            text = "她喜欢猫",
+            createdAt = 456L,
+        )
+        val ui = UiMappers.toMemoryFactUi(entity)
+        assertEquals(3L, ui.id)
+        assertEquals("她喜欢猫", ui.text)
+        assertEquals(456L, ui.createdAt)
+    }
 }

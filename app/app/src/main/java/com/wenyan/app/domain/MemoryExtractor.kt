@@ -11,6 +11,8 @@ import org.json.JSONObject
 object MemoryExtractor {
 
     const val DEFAULT_NOTE_LIMIT = 2000
+    /** v1.7.3 每档案事实条数上限（超出静默丢弃新事实） */
+    const val DEFAULT_FACT_LIMIT = 50
 
     /**
      * 提炼 prompt：从本轮（用户输入 + 军师回复）提炼「关于咨询对象的新事实」。
@@ -77,6 +79,32 @@ object MemoryExtractor {
         note.split(Regex("[\\n。；]"))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
+
+    /**
+     * v1.7.3 事实列表合并（替代 mergeNote 的新链路）：
+     * trim+去空；facts 逐条与 existing 全部片段做 overlaps 判定去重（保序追加）；
+     * 总条数 take(limit)（默认 50）。幂等兜底：重复触发不会重复追加。
+     * 纯函数，JVM 可测。
+     */
+    fun mergeFacts(
+        existing: List<String>,
+        facts: List<String>,
+        limit: Int = DEFAULT_FACT_LIMIT,
+    ): List<String> {
+        val cleanExisting = existing.map { it.trim() }.filter { it.isNotEmpty() }
+        val cleanFacts = facts.map { it.trim() }.filter { it.isNotEmpty() }
+        if (cleanFacts.isEmpty()) return cleanExisting.take(limit)
+        val segments = cleanExisting.flatMap { splitSegments(it) }.ifEmpty { cleanExisting }
+        val toAppend = cleanFacts.filter { fact -> segments.none { seg -> overlaps(seg, fact) } }
+        return (cleanExisting + toAppend).take(limit)
+    }
+
+    /**
+     * v1.7.3 note → 事实列表拆分（老数据惰性搬移用）：
+     * 按 \n。；切分 + trim + 去空 + 单条 ≤40 字。原 splitSegments 提为 public 工具。
+     */
+    fun splitNoteToFacts(note: String): List<String> =
+        splitSegments(note).map { it.take(40) }
 
     /** 重叠判定：整句互含 或 长度 ≥6 字片段包含（幂等兜底，确定性可测） */
     private fun overlaps(a: String, b: String): Boolean {

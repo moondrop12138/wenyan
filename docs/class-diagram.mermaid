@@ -8,7 +8,14 @@ classDiagram
         +Int? score
         +String? relationStatus
         +String timeline
-        +String note  "v1.7.2 新增：记忆正文，默认空串"
+        +String note  "v1.7.2 新增：记忆正文；v1.7.3 起代码层不再写入（保留防旧数据）"
+        +Long createdAt
+    }
+
+    class MemoryFactEntity {
+        +Long id
+        +Long targetId  "v1.7.3 新增：FK → target.id ON DELETE CASCADE"
+        +String text
         +Long createdAt
     }
 
@@ -27,8 +34,20 @@ classDiagram
         +observeAll() Flow~List~TargetEntity~~
         +getById(id) TargetEntity?
         +insert(entity) Long
+        +update(entity)  "v1.7.3 确认 @Update 全字段（结构化编辑无需改 DAO）"
+        +deleteById(id)
+        +clear()
+    }
+
+    class MemoryFactDao {
+        <<interface>>
+        +observeByTarget(targetId) Flow~List~MemoryFactEntity~~
+        +listByTarget(targetId) List~MemoryFactEntity~
+        +getById(id) MemoryFactEntity?
+        +insert(entity) Long
         +update(entity)
         +deleteById(id)
+        +deleteByTarget(targetId)
         +clear()
     }
 
@@ -44,6 +63,19 @@ classDiagram
         +updateTitle(id, title)
     }
 
+    class AppDatabase {
+        <<abstract>>
+        +version  "v1.7.3: 5 → 6"
+        +profileDao() ProfileDao
+        +targetDao() TargetDao
+        +memoryFactDao() MemoryFactDao  "v1.7.3 新增"
+        +sessionDao() SessionDao
+        +messageDao() MessageDao
+        +providerDao() ProviderDao
+        +modelDao() ModelDao
+        +MIGRATION_5_6  "建 memory_fact 表 + 索引，数据搬移在业务层"
+    }
+
     class ProfileRepository {
         +observeProfile() Flow~ProfileEntity?~
         +getProfile() ProfileEntity?
@@ -53,6 +85,14 @@ classDiagram
         +saveTarget(entity) Long
         +updateTarget(entity)
         +deleteTarget(id)
+        +observeFacts(targetId) Flow~List~MemoryFactEntity~~  "v1.7.3 新增"
+        +getFacts(targetId) List~MemoryFactEntity~  "v1.7.3 新增"
+        +addFact(targetId, text) Long  "v1.7.3 新增"
+        +updateFact(factId, text)  "v1.7.3 新增"
+        +deleteFact(factId)  "v1.7.3 新增"
+        +countFacts(targetId) Int  "v1.7.3 新增"
+        +migrateNoteToFactsOnce(targetId)  "v1.7.3 惰性搬移：note→facts，幂等"
+        +memoryText(targetId) String  "v1.7.3 facts joinToString 截断 2000"
         +clearAll()
     }
 
@@ -86,6 +126,13 @@ classDiagram
         +deleteTarget(id)
         +setActiveTarget(id)
         +setMemoryAutoEnabled(enabled)
+        +observeFacts(targetId) Flow~List~MemoryFactUi~~  "v1.7.3 新增"
+        +addFact(targetId, text)  "v1.7.3 新增"
+        +updateFact(factId, text)  "v1.7.3 新增"
+        +deleteFact(factId)  "v1.7.3 新增"
+        +updateTargetDetails(id, name, mbti, score, relationStatus, timelineJson)  "v1.7.3 新增"
+        +exportCrashLog() Uri?  "v1.7.3 新增"
+        +checkUpdate() UpdateCheckResult  "v1.7.3 新增"
         +wipeAll()
     }
 
@@ -96,15 +143,32 @@ classDiagram
         +deleteTarget(id)
         +setActiveTarget(id)
         +setMemoryAutoEnabled(enabled)
-        +wipeAll()
+        +observeFacts(targetId) Flow~List~MemoryFactUi~~  "v1.7.3"
+        +addFact(targetId, text)  "v1.7.3"
+        +updateFact(factId, text)  "v1.7.3"
+        +deleteFact(factId)  "v1.7.3"
+        +updateTargetDetails(...)  "v1.7.3"
+        +exportCrashLog() Uri?  "v1.7.3 → CrashLogStore"
+        +checkUpdate() UpdateCheckResult  "v1.7.3 → UpdateChecker"
+        +wipeAll()  "v1.7.3 增删 crash 目录与下载缓存"
     }
 
     class TargetUi {
         +Long id
         +String name
         +String note
+        +String? mbti  "v1.7.3 新增"
+        +Int? score  "v1.7.3 新增"
+        +String? relationStatus  "v1.7.3 新增"
+        +String timeline  "v1.7.3 新增"
         +Long createdAt
         +Boolean isActive
+    }
+
+    class MemoryFactUi {
+        +Long id
+        +String text
+        +Long createdAt
     }
 
     class SessionSummaryUi {
@@ -116,15 +180,20 @@ classDiagram
 
     class UiMappers {
         <<object>>
-        +toTargetUi(e, isActive) TargetUi
+        +toTargetUi(e, isActive) TargetUi  "v1.7.3 映射全字段"
+        +toMemoryFactUi(e) MemoryFactUi  "v1.7.3 新增"
+        +toCoachCard(a) CoachCard  "v1.7.3 加 memoryCitations"
     }
 
     class MemoryExtractor {
         <<object>>
         +DEFAULT_NOTE_LIMIT Int = 2000
+        +MAX_FACTS Int = 50  "v1.7.3 新增"
         +buildPrompt(userInput, replyText, existingNote) String
         +parseFacts(json) List~String~
-        +mergeNote(existingNote, facts, limit) String
+        +mergeNote(existingNote, facts, limit) String  "v1.7.2 兼容保留"
+        +mergeFacts(existing, facts, limit) List~String~  "v1.7.3 新增：逐条去重+上限"
+        +splitNoteToFacts(note) List~String~  "v1.7.3 新增：拆分散列（搬移用）"
     }
 
     class RealChatRepository {
@@ -133,7 +202,7 @@ classDiagram
         -ensureSession() Long
         -resolveTarget(sid) TargetEntity?
         -shouldExtractMemory(sid, state, userInput) Boolean
-        -extractMemoryOnce(sid, userInput, replyFullText)
+        -extractMemoryOnce(sid, userInput, replyFullText)  "v1.7.3 改写：mergeFacts → 逐条 insert"
     }
 
     class RealOnboardingRepository {
@@ -142,47 +211,87 @@ classDiagram
     }
 
     class PromptBuilder {
-        +buildSystem(profile, target, knowledge) String
+        +buildSystem(profile, target, knowledge) String  "v1.7.3 零改动：memory 仍读 target.note"
         +buildProfileJson(profile, target) String
     }
 
     class CorePrompt {
         <<object>>
         +text String
-        +structuredOutput String
-        +memoryRule String  "v1.7.2 新增：记忆使用规则"
+        +structuredOutput String  "v1.7.3 schema v2 加 memory_citations"
+        +memoryRule String  "v1.7.3 补引用说明"
     }
 
-    class ConversationState {
-        +topicSummary String
-        +conclusionGiven String
-        +lastReplyText String
-        +replyAlreadyGiven Boolean
-        +turnCount Int
-        +hasActiveTopic Boolean
-        +fromJson(raw) ConversationState
+    class CoachAnalysis {
+        +memoryCitations List~String~  "v1.7.3 新增"
     }
 
-    class ConversationStateTracker {
-        +isSameTopic(state, userInput) Boolean
-        +onUserInput(state, userInput) ConversationState
-        +onModelReply(state, topicSummary, conclusion, reply) ConversationState
+    class CoachCard {
+        +memoryCitations List~String~  "v1.7.3 新增"
+    }
+
+    class AnalysisParser {
+        <<object>>
+        +parseAny(raw) CoachAnalysis
+        +parseV2Json(json) CoachAnalysis  "v1.7.3 加 memory_citations 防御解析"
+    }
+
+    class UpdateClient {
+        +fetchLatest() UpdateInfo?  "v1.7.3 GitHub Releases API"
+    }
+
+    class UpdateChecker {
+        +check() UpdateCheckResult  "v1.7.3 版本比较"
+        +download(info, cacheDir) File?  "v1.7.3 下载 APK"
+    }
+
+    class CrashLogStore {
+        +append(line)  "v1.7.3 环形缓冲 100 条"
+        +snapshot() String
+        +writeCrash(thread, throwable) File?
+        +crashFile() File?
+        +clear()
+    }
+
+    class AppLogger {
+        <<object>>
+        +d/i/w/e(event, kv)
+        +e(event, throwable, kv)
+        +sink  "v1.7.3 崩溃缓冲钩子"
+    }
+
+    class MemoryEditViewModel {
+        +targetId Long
+        +target TargetUi?
+        +facts Flow~List~MemoryFactUi~~
+        +saveDetails(name, mbti, score, relationStatus, timelineJson)
+        +addFact(text)
+        +updateFact(factId, text)
+        +deleteFact(factId)
     }
 
     TargetDao --> TargetEntity : CRUD
-    SessionDao --> SessionEntity : CRUD
+    MemoryFactDao --> MemoryFactEntity : CRUD
+    AppDatabase --> TargetEntity
+    AppDatabase --> MemoryFactEntity
+    AppDatabase --> MemoryFactDao
     ProfileRepository --> TargetDao
+    ProfileRepository --> MemoryFactDao
     ProfileRepository --> ProfileDao
     ConversationRepository --> SessionDao
     RealSettingsRepository ..|> SettingsRepositoryContract : implements
     RealSettingsRepository --> SettingsRepository : dataStore
     RealSettingsRepository --> ProfileRepository
-    RealSettingsRepository --> UiMappers : toTargetUi
+    RealSettingsRepository --> UiMappers : toTargetUi / toMemoryFactUi
+    RealSettingsRepository --> CrashLogStore : exportCrashLog / wipeAll
+    RealSettingsRepository --> UpdateChecker : checkUpdate
+    UpdateChecker --> UpdateClient
     SettingsRepositoryContract --> TargetUi
+    SettingsRepositoryContract --> MemoryFactUi
     RealChatRepository --> ConversationRepository
-    RealChatRepository --> ProfileRepository : resolveTarget / updateTarget
+    RealChatRepository --> ProfileRepository : resolveTarget / memoryText / extractMemoryOnce
     RealChatRepository --> SettingsRepository : activeTargetId / memoryAutoEnabled
-    RealChatRepository --> MemoryExtractor : 提炼
+    RealChatRepository --> MemoryExtractor : mergeFacts / splitNoteToFacts
     RealChatRepository --> ConversationStateTracker : isSameTopic
     RealChatRepository --> PromptBuilder : buildSystem
     RealChatRepository --> SessionSummaryUi : sessions
@@ -190,3 +299,7 @@ classDiagram
     RealOnboardingRepository --> SettingsRepository : 自动激活
     PromptBuilder --> CorePrompt : text / memoryRule
     ConversationState --> ConversationStateTracker : 输入快照
+    AnalysisParser --> CoachAnalysis : parseV2Json
+    UiMappers --> CoachCard : toCoachCard
+    MemoryEditViewModel --> SettingsRepositoryContract : facts CRUD / updateTargetDetails
+    AppLogger --> CrashLogStore : sink 缓冲

@@ -167,6 +167,23 @@ fun CoachCard(
                     )
                 }
             }
+            // v1.7.3 记忆依据：实际使用的已记住事实原文（≤3 条），非空才显示；隐私=用户自己档案内容，仅本地展示
+            if (card.memoryCitations.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Column {
+                    Text("记忆依据", style = GtjType.Caption, color = p.muted)
+                    card.memoryCitations.take(3).forEach { citation ->
+                        Text(
+                            text = "「$citation」",
+                            style = GtjType.Caption,
+                            color = p.muted,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                        )
+                    }
+                }
+            }
             if (card.tokenEstimate > 0) {
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -382,3 +399,20 @@ private fun ActionsBlock(actions: List<com.wenyan.app.ui.contract.ActionItemUi>)
 /** 卡片时间戳（设计稿 WY-02：HH:mm） */
 private fun formatNowTime(): String =
     java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
+/** v1.7.3 T2 @Preview：回答卡（含记忆依据小节） */
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)
+@Composable
+private fun CoachCardPreview() {
+    com.wenyan.app.ui.theme.GtjTheme {
+        CoachCard(
+            card = com.wenyan.app.ui.contract.CoachCard(
+                empathy = "这件事确实让人心里发堵。",
+                adviceCore = "保持低强度主动，观察反馈。",
+                memoryCitations = listOf("她连续三天主动找话题", "她说过周末想去美术馆"),
+            ),
+            messageId = 1L,
+            onCopy = {},
+        )
+    }
+}

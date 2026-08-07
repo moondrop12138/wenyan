@@ -60,6 +60,38 @@ class AnalysisParserTest {
         }
     }
 
+    // ===== v1.7.3 memory_citations =====
+
+    @Test
+    fun `parseV2 reads memory citations capped at 3`() {
+        val json = """{
+          "input_kind": "user_question",
+          "empathy": "x",
+          "reply": "y",
+          "facts": {"known": [], "assumed": [], "unknown": []},
+          "advice": {"core": "z", "styles": []},
+          "actions": [],
+          "citations": [],
+          "memory_citations": ["她喜欢猫", "她怕黑", "她是夜猫子", "第四条"],
+          "safety_override": false,
+          "safety_message": ""
+        }"""
+        val analysis = AnalysisParser.parseAny(json)
+        assertEquals(listOf("她喜欢猫", "她怕黑", "她是夜猫子"), analysis.memoryCitations)
+    }
+
+    @Test
+    fun `parseV2 missing memory citations defaults empty`() {
+        val analysis = AnalysisParser.parseAny("""{"input_kind":"greeting","empathy":"","reply":"","facts":{},"advice":{},"actions":[],"citations":[]}""")
+        assertTrue(analysis.memoryCitations.isEmpty())
+    }
+
+    @Test
+    fun `legacy five step maps memory citations empty`() {
+        val analysis = AnalysisParser.parseAny(validJson)
+        assertTrue(analysis.memoryCitations.isEmpty())
+    }
+
     @Test
     fun `strip fence handles language tag`() {
         assertEquals("{\"a\":1}", AnalysisParser.stripFence("```json\n{\"a\":1}\n```"))
