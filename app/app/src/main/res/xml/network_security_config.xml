@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置（v1.7.1 终检补全）：
+  默认禁止明文流量（targetSdk 36 策略，公网 API 必须 https），
+  但允许 localhost/127.0.0.1 明文——本地部署的模型服务（LM Studio / Ollama 等）
+  默认跑 http://localhost:xxxx，此前会被 OkHttp 拦截并误报"连接超时"。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

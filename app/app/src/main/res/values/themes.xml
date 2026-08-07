@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 应用主题：由 GtjTheme 全权接管配色，此处仅提供无 ActionBar 的宿主主题 -->
+    <style name="Theme.Wenyan" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!-- v1.6.3 沉浸式手势小白条：导航栏透明（防冷启动闪白条；运行时由 enableEdgeToEdge 接管） -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

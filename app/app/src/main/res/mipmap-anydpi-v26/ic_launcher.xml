@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 「温言」启动图标 v1.6.1：AI 设计原稿位图版（暖橙渐变圆角底 + 3D 微笑气泡，白框外框）
+     前景=去水印原稿缩至 66% 居中（气泡收进 66dp 安全区），背景=外框白 #EAEAEA（与前景无缝），
+     monochrome=手绘气泡 + Q 形微笑（Android 13 主题图标），
+     各密度 PNG 见 mipmap-{mdpi..xxxhdpi}/ic_launcher_*.png，由 scripts/render_icon_v161.py 生成 -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
+</adaptive-icon>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v1.7.3 FileProvider 路径白名单：
+     files-path crash/   → 崩溃诊断日志 last_crash.txt（导出分享）
+     cache-path downloads/ → 更新检查下载的 APK（唤起安装器） -->
+<paths>
+    <files-path name="crash" path="crash/" />
+    <cache-path name="downloads" path="downloads/" />
+</paths>

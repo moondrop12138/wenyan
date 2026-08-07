@@ -1,0 +1,18 @@
+# NOTICE
+
+## 知识库来源
+
+本仓库 `app/app/src/main/assets/knowledge/` 下的 40 份知识文档（`knowledge/` 20 份 + `practical/` 20 份）衍生自开源项目 **goutoujunshi · 狗头军师**：
+
+- 上游仓库：https://github.com/powerycy/goutoujunshi
+- 上游许可证：[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+
+> Required Notice: Copyright 2026 powerycy.
+
+根据上游许可证要求，任何分发本仓库部分或全部内容的行为，都必须同时附带本 NOTICE 与 LICENSE（或上游许可证 URL）。
+
+## 本仓库许可
+
+本仓库整体（包括但不限于 Android 应用代码、UI 与文档）在 [LICENSE](LICENSE)（PolyForm Noncommercial License 1.0.0）下发布，仅限**非商业用途**。
+
+如需商业使用，请联系上游知识库作者 powerycy 及本仓库维护者获取授权。

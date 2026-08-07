@@ -1,0 +1,754 @@
+package com.wenyan.app.container
+
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
+import com.wenyan.app.data.db.TargetEntity
+import com.wenyan.app.data.image.ImageCompressor
+import com.wenyan.app.data.repository.ConversationRepository
+import com.wenyan.app.data.repository.ProfileRepository
+import com.wenyan.app.data.repository.ProviderRepository
+import com.wenyan.app.domain.ConversationState
+import com.wenyan.app.domain.ConversationStateTracker
+import com.wenyan.app.domain.MemoryExtractor
+import com.wenyan.app.knowledge.CrisisDetector
+import com.wenyan.app.knowledge.KnowledgeEngine
+import com.wenyan.app.llm.AnalysisParser
+import com.wenyan.app.llm.ChatHistoryMessage
+import com.wenyan.app.llm.ChatRequest
+import com.wenyan.app.llm.CoachAnalysis
+import com.wenyan.app.llm.LlmClient
+import com.wenyan.app.llm.LlmEvent
+import com.wenyan.app.prompt.PromptBuilder
+import com.wenyan.app.ui.contract.AnalysisMode
+import com.wenyan.app.ui.contract.ChatMessageUi
+import com.wenyan.app.ui.contract.ChatRepository
+import com.wenyan.app.ui.contract.LlmError
+import com.wenyan.app.ui.contract.SessionSummaryUi
+import com.wenyan.app.ui.contract.StreamEvent
+import com.wenyan.app.ui.contract.StreamingState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+
+/**
+ * 对话 Repository 真实实现（AC-04/05/06/07/08/13/14/15）
+ *
+ * sendText 编排：危机预检 → 知识路由 → prompt 三层拼装 → LLM 流 → 持久化 → 五步法解析。
+ * analyzeImages 双通道（v1.6.1 多图）：主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述。
+ * v1.3.1：async 发送族在应用级 appScope 收集（Activity 销毁/息屏不中断），
+ * 流式增量经 streamingState 推送；persistUser=false 供失败重试（用户消息不重复落库）。
+ */
+class RealChatRepository(
+    private val context: Context,
+    private val dataStore: DataStoreSettings,
+    private val conversationRepository: ConversationRepository,
+    private val profileRepository: ProfileRepository,
+    private val providerRepository: ProviderRepository,
+    private val knowledgeEngine: KnowledgeEngine,
+    private val promptBuilder: PromptBuilder,
+    private val imageCompressor: ImageCompressor,
+) : ChatRepository {
+
+    private val sessionId = MutableStateFlow<Long?>(null)
+
+    /** v1.3 对话状态机：本地结构化跟踪，驱动同题追问不复读 */
+    private val stateTracker = ConversationStateTracker()
+
+    /** v1.2.1 会话标题生成 scope：独立于发送流，发射即返回不阻塞 UI；失败静默 */
+    private val titleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** v1.7.2 自动记忆提炼 scope：独立于发送流，不阻塞主流程；失败静默（仿 titleScope） */
+    private val memoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * v1.3.1 应用级发送 scope：不随 Activity/ViewModel 销毁，息屏/退后台回答继续完成并落库。
+     * 进程被杀则无法续跑（系统回收，除非前台服务——MVP 不做）。
+     */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** v1.3.1 流式状态中枢：async 发送族在 appScope 收集后推送，ViewModel 订阅映射 */
+    private val _streamingState = MutableStateFlow(StreamingState())
+    override val streamingState: StateFlow<StreamingState> = _streamingState.asStateFlow()
+
+    /** v1.3.1 当前流式收集 job（stop 取消用；appScope 生命周期不受 UI 影响） */
+    private var streamJob: Job? = null
+
+    private val currentModelId = dataStore.currentModelId
+    private val visionModelId = dataStore.visionModelId
+
+    override val messages: Flow<List<ChatMessageUi>> =
+        sessionId.flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else conversationRepository.observeMessages(id).map { list ->
+                list.map { UiMappers.toChatMessage(it) }
+            }
+        }
+
+    override val currentSessionId: Flow<Long?> = sessionId
+
+    override val sessions: Flow<List<SessionSummaryUi>> =
+        combine(
+            conversationRepository.observeAllSessions(),
+            conversationRepository.observeFirstUserMessages(),
+            // v1.7.2 第三路：全档案 → 会话归属档案名（抽屉 Tag）
+            profileRepository.observeTargets(),
+        ) { sessions, firstMessages, targets ->
+            val firstBySession = firstMessages.associateBy { it.sessionId }
+            val targetNameById = targets.associate { it.id to it.codeName }
+            sessions.mapNotNull { s ->
+                val first = firstBySession[s.id]
+                // v1.2.1 三级回退：DB 标题（主模型拟定）> 首条 USER 前 30 字 > "新会话"
+                val title = SessionTitle.resolveSessionTitle(s.title, first?.firstUserText)
+                SessionSummaryUi(
+                    id = s.id,
+                    title = title,
+                    createdAt = s.createdAt,
+                    targetName = s.targetId?.let { targetNameById[it] },
+                    targetId = s.targetId,
+                )
+            }
+        }
+
+    override val currentModelName: Flow<String> =
+        combine(currentModelId, providerRepository.observeAllModels()) { id, models ->
+            models.firstOrNull { it.id == id }?.name ?: "未配置"
+        }
+
+    override fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent> =
+        sendTextFlow(text, mode, persistUser = true)
+
+    /** v1.3.1 persistUser=false 供失败重试：用户消息首次已落库，重试不重复落库、不重复更新状态机 */
+    private fun sendTextFlow(text: String, mode: AnalysisMode, persistUser: Boolean): Flow<StreamEvent> = flow {
+        // AC-13：危机关键词本地预检，命中即转介，不调 LLM
+        val crisis = CrisisDetector.detect(text)
+        if (crisis.isNotEmpty()) {
+            emit(StreamEvent.Analysis(UiMappers.toCoachCard(parseSafety(crisis.first()))))
+            emit(StreamEvent.Done)
+            return@flow
+        }
+
+        val sid = ensureSession()
+        if (persistUser) {
+            conversationRepository.addMessage(sid, "USER", "text", text)
+        }
+
+        // v1.6 全部输入统一四段结构 JSON（无 freetext 分支）
+
+        // v1.6 对话状态机全模式常开：同题判定与状态前缀对所有输入生效
+        val previousState = ConversationState.fromJson(conversationRepository.getSessionState(sid))
+        // 新话题信号：本地判定与进行中话题不延续（如粘贴完整聊天记录换题）
+        val wasNewTopic = previousState.hasActiveTopic &&
+            !stateTracker.isSameTopic(previousState, text)
+        // v1.3.1 重试（persistUser=false）不重复推进状态机，state 保持当前值，prompt 注入一致
+        val state = if (persistUser) {
+            stateTracker.onUserInput(previousState, text).also {
+                conversationRepository.updateSessionState(sid, it.toJson())
+            }
+        } else {
+            previousState
+        }
+        val statePrefix = stateTracker.buildStatePrefix(state)
+
+        val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
+        val profile = profileRepository.getProfile()
+        // v1.7.2 会话归属档案优先（老会话 targetId=null → 空档案 = 现状行为）
+        // v1.7.3 注入链路改读事实表：resolveTargetWithMemory 内部惰性搬移 note→facts 后
+        //   target.copy(note = facts.joinToString("；").take(2000))，PromptBuilder 零改动。
+        val target = resolveTargetWithMemory(sid)
+        val system = promptBuilder.buildSystem(profile, target, knowledge)
+        val history = buildHistory(sid, text)
+        val user = when (mode) {
+            AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
+            // REPLY/RELAYED/GREETING 共用简短输入模板（§3.3）：
+            // 模型在 prompt 内做最终语境判断，拿不准时反问兜底。
+            // messages 层已带全量历史，这里再把最近几轮拼成简短上下文，
+            // 帮助模型在单条 user 消息里也能抓住对话走向。
+            AnalysisMode.REPLY, AnalysisMode.RELAYED, AnalysisMode.GREETING -> {
+                val recentContext = history.takeLast(6)
+                    .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
+                    .takeIf { it.isNotBlank() }
+                promptBuilder.buildUserReply(text, recentContext, statePrefix)
+            }
+        }
+
+        val client = resolveClient() ?: run {
+            emit(StreamEvent.Error(noConfigError()))
+            return@flow
+        }
+
+        client.client.stream(
+            ChatRequest(client.model, system, user, history = history),
+        ).collect { event ->
+            when (event) {
+                is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
+                is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                is LlmEvent.Done -> {
+                    // v1.6 统一结构化落库：解析失败不落库（Room 无脏数据），流结束置 Done
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
+                    if (analysis != null) {
+                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
+                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        // v1.7.2：新话题自动提炼记忆（仅 persistUser=true 首轮；开关关/无档案/同题追问跳过）
+                        if (persistUser && shouldExtractMemory(sid, state, text)) {
+                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText) }
+                        }
+                        // v1.6 状态回填走卡片字段：结论摘要=advice.core（空则 empathy 首句），话术=reply
+                        val newState = stateTracker.onModelReply(
+                            state = state,
+                            topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
+                                summarizeTopic(text, analysis)
+                            } else {
+                                state.topicSummary
+                            },
+                            conclusion = summarizeConclusion(analysis),
+                            reply = analysis.reply,
+                        )
+                        conversationRepository.updateSessionState(sid, newState.toJson())
+                        val card = UiMappers.toCoachCard(analysis)
+                        emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
+                    }
+                    emit(StreamEvent.Done)
+                }
+                is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
+            }
+        }
+    }
+
+    override fun analyzeImages(
+        uris: List<Uri>,
+        text: String,
+        mode: AnalysisMode,
+    ): Flow<StreamEvent> = analyzeImagesFlow(uris, text, mode, persistUser = true)
+
+    /** v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库 */
+    private fun analyzeImagesFlow(
+        uris: List<Uri>,
+        text: String,
+        mode: AnalysisMode,
+        persistUser: Boolean,
+    ): Flow<StreamEvent> = flow {
+        // v1.3.1 图文同发：配文先过危机预检（命中即转介，不落库、不发 LLM）
+        val caption = text.trim()
+        if (caption.isNotEmpty()) {
+            val crisis = CrisisDetector.detect(caption)
+            if (crisis.isNotEmpty()) {
+                emit(StreamEvent.Analysis(UiMappers.toCoachCard(parseSafety(crisis.first()))))
+                emit(StreamEvent.Done)
+                return@flow
+            }
+        }
+
+        // v1.6.1 多图：全部压缩成功才进入落库（任一失败 → 整体报错，未写任何消息，ViewModel 恢复整批待发送）
+        val dataUrls = mutableListOf<String>()
+        for (uri in uris) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: run {
+                    emit(StreamEvent.Error(LlmError("READ_FAILED", "图片读取失败，请重试", false)))
+                    return@flow
+                }
+            val dataUrl = try {
+                imageCompressor.compressToDataUrl(bytes)
+            } catch (e: ImageCompressor.ImageTooLargeException) {
+                emit(StreamEvent.Error(LlmError("TOO_LARGE", e.message ?: "图片过大", false)))
+                return@flow
+            } catch (e: Exception) {
+                emit(StreamEvent.Error(LlmError("COMPRESS_FAILED", "图片处理失败，请重试", false)))
+                return@flow
+            }
+            dataUrls.add(dataUrl)
+        }
+
+        val sid = ensureSession()
+        // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻多条用户气泡）；重试跳过
+        if (persistUser) {
+            dataUrls.forEach { conversationRepository.addMessage(sid, "USER", "image", it) }
+            if (caption.isNotEmpty()) {
+                conversationRepository.addMessage(sid, "USER", "text", caption)
+            }
+        }
+
+        // 主模型是否支持视觉 → 通道 A 直读
+        val mainModel = resolveModel()
+        if (mainModel?.supportsVision == true) {
+            runVisionDirect(sid, dataUrls, caption, mode).collect { emit(it) }
+        } else {
+            // 通道 B：先调视觉模型转述（配文已作为独立消息在历史里，确认转述后模型可见）
+            val vision = resolveVisionClient()
+            if (vision == null) {
+                emit(StreamEvent.Error(LlmError("NO_VISION", "未配置视觉模型，请在设置中选择", false)))
+                return@flow
+            }
+            val transcription = StringBuilder()
+            vision.client.stream(
+                ChatRequest(
+                    model = vision.model,
+                    system = "你是截图文字提取器。只输出截图中的文字，尽量保留说话人、顺序与间隔，不添加任何解释。",
+                    userText = "请提取这几张聊天截图中的全部文字，按截图顺序输出。",
+                    imageDataUrls = dataUrls,
+                )
+            ).collect { event ->
+                when (event) {
+                    is LlmEvent.Delta -> transcription.append(event.text)
+                    is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                    is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
+                    is LlmEvent.Done -> {
+                        if (transcription.isBlank()) {
+                            emit(StreamEvent.Error(LlmError("EMPTY", "模型未提取到文字，请重试或重新选图", true)))
+                        } else {
+                            emit(StreamEvent.Transcription(transcription.toString()))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun confirmTranscription(transcription: String): Flow<StreamEvent> = flow {
+        val sid = ensureSession()
+        conversationRepository.addMessage(sid, "USER", "transcription", transcription)
+
+        val (knowledge, _) = knowledgeEngine.buildInjection(transcription)
+        val profile = profileRepository.getProfile()
+        // v1.7.2 会话归属档案优先；v1.7.3 注入改读事实表
+        val target = resolveTargetWithMemory(sid)
+        val system = promptBuilder.buildSystem(profile, target, knowledge)
+        val user = promptBuilder.buildUserTranscription(transcription)
+        val history = buildHistory(sid, transcription)
+
+        val client = resolveClient() ?: run {
+            emit(StreamEvent.Error(noConfigError()))
+            return@flow
+        }
+        client.client.stream(ChatRequest(client.model, system, user, history = history)).collect { event ->
+            when (event) {
+                is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
+                is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                is LlmEvent.Done -> {
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
+                    if (analysis != null) {
+                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        // v1.7.2 转述确认同样自动提炼（素材取 transcription）
+                        val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
+                        if (shouldExtractMemory(sid, stateNow, transcription)) {
+                            memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText) }
+                        }
+                        emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
+                    }
+                    emit(StreamEvent.Done)
+                }
+                is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
+            }
+        }
+    }
+
+    override suspend fun deleteMessage(messageId: Long) =
+        conversationRepository.deleteMessage(messageId)
+
+    override suspend fun switchSession(sessionId: Long) {
+        this.sessionId.value = sessionId
+    }
+
+    override suspend fun startNewSession() {
+        this.sessionId.value = null
+    }
+
+    override suspend fun deleteSession(sessionId: Long) {
+        conversationRepository.deleteSession(sessionId)
+        if (this.sessionId.value == sessionId) {
+            this.sessionId.value = null
+        }
+    }
+
+    override fun cancel() {
+        // v1.3.1 取消应用级流式收集 job；用户消息已落库（persistUser=true）的不受影响
+        streamJob?.cancel()
+        streamJob = null
+        _streamingState.update { it.copy(streaming = false) }
+    }
+
+    // ===== v1.3.1 后台续跑 async 发送族 =====
+
+    override fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean) {
+        if (_streamingState.value.streaming) return
+        _streamingState.value = StreamingState(streaming = true)
+        streamJob = appScope.launch {
+            sendTextFlow(text, mode, persistUser).collect { event ->
+                applyStreamEvent(event)
+            }
+        }
+    }
+
+    override fun analyzeImagesAsync(
+        uris: List<Uri>,
+        text: String,
+        mode: AnalysisMode,
+        persistUser: Boolean,
+    ) {
+        if (_streamingState.value.streaming) return
+        _streamingState.value = StreamingState(streaming = true)
+        streamJob = appScope.launch {
+            analyzeImagesFlow(uris, text, mode, persistUser).collect { event ->
+                applyStreamEvent(event)
+            }
+        }
+    }
+
+    override fun confirmTranscriptionAsync(transcription: String) {
+        if (_streamingState.value.streaming) return
+        _streamingState.value = StreamingState(streaming = true)
+        streamJob = appScope.launch {
+            confirmTranscription(transcription).collect { event ->
+                applyStreamEvent(event)
+            }
+        }
+    }
+
+    /** 流式事件 → streamingState 中枢（与 ChatViewModel 原 collect 分支一一对应） */
+    private fun applyStreamEvent(event: StreamEvent) {
+        when (event) {
+            is StreamEvent.Delta -> _streamingState.update { it.copy(text = it.text + event.text) }
+            is StreamEvent.Thinking -> _streamingState.update { it.copy(thinking = it.thinking + event.text) }
+            is StreamEvent.Analysis -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+            is StreamEvent.Transcription -> _streamingState.update {
+                it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false)
+            }
+            is StreamEvent.Error -> _streamingState.update { it.copy(streaming = false, error = event.error) }
+            StreamEvent.Done -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+        }
+    }
+
+    // ===== 私有辅助 =====
+
+    /**
+     * 构建同会话全量历史消息（注入 LLM 请求的 messages 层）。
+     *
+     * - text → 原文；image → 占位文本；transcription → 带前缀全文；
+     *   freetext（assistant 自由文本）→ 原文截断；
+     *   analysis（assistant 结构化卡片 JSON）→ 提取 reply 字段作为 assistant 历史，解析失败跳过
+     * - 剔除末尾与当前消息重复的 USER 条目（当前消息已由 userText 单独传入）
+     * - 超长兜底：粗估 (system+user+history)/4 > [HISTORY_TOKEN_LIMIT] 时从最早轮次成对丢弃，
+     *   并在头部插入一条仅模型可见的省略提示
+     */
+    private suspend fun buildHistory(sid: Long, currentUserContent: String): List<ChatHistoryMessage> {
+        val entities = conversationRepository.listMessages(sid)
+        val mapped = entities.mapNotNull { e ->
+            when (e.type) {
+                "text" -> ChatHistoryMessage(e.role.lowercase(), e.content)
+                "image" -> ChatHistoryMessage(e.role.lowercase(), IMAGE_PLACEHOLDER)
+                "transcription" -> ChatHistoryMessage(e.role.lowercase(), "[截图转述] ${e.content}")
+                "freetext" -> ChatHistoryMessage(e.role.lowercase(), e.content.take(600))
+                "analysis" -> runCatching { AnalysisParser.parse(e.content).reply }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { ChatHistoryMessage("assistant", it) }
+                else -> null
+            }
+        }
+
+        // 去掉末尾与当前消息重复的 USER 条目（发送前已写库）。
+        // v1.3.1 图文同发：image 占位 + text 配文两条都要去，故循环 drop 连续末尾 USER。
+        val trimmed = mapped.toMutableList()
+        while (trimmed.isNotEmpty() && trimmed.last().role == "user" &&
+            (trimmed.last().content == currentUserContent
+                || trimmed.last().content == IMAGE_PLACEHOLDER
+                || trimmed.last().content == "[截图转述] $currentUserContent")
+        ) {
+            trimmed.removeAt(trimmed.lastIndex)
+        }
+
+        // 超长兜底：从最早轮次成对丢弃
+        val result = trimmed.toMutableList()
+        var estimated = result.sumOf { it.content.length } / 4
+        var truncated = false
+        while (estimated > HISTORY_TOKEN_LIMIT && result.size > 2) {
+            result.removeAt(0)
+            // 尽量成对丢弃（user + assistant），保持轮次完整
+            if (result.size > 2) result.removeAt(0)
+            truncated = true
+            estimated = result.sumOf { it.content.length } / 4
+        }
+        if (truncated) {
+            Log.w("RealChatRepository", "history truncated to ${result.size} messages (~$estimated tokens)")
+            result.add(0, ChatHistoryMessage("user", "[注：更早的对话已因长度限制省略]"))
+        }
+        return result
+    }
+
+    private suspend fun ensureSession(): Long {
+        sessionId.value?.let { return it }
+        val id = conversationRepository.createSession(
+            scenarioTag = null,
+            refDocs = emptyList(),
+            // v1.7.2：新会话绑定当前激活档案（切档案只影响新会话）
+            targetId = dataStore.getActiveTargetId(),
+        )
+        sessionId.value = id
+        return id
+    }
+
+    /**
+     * v1.7.2 解析会话归属档案：会话 targetId → 档案（含 note 记忆正文）；
+     * 老会话 targetId=null → 返回 null（空档案 = 现状行为，不报错）。
+     */
+    private suspend fun resolveTarget(sid: Long): TargetEntity? =
+        conversationRepository.getSession(sid)?.targetId?.let { profileRepository.getTarget(it) }
+
+    /**
+     * v1.7.3 注入用档案解析：在 resolveTarget 基础上把记忆注入文本换成事实表内容。
+     * memoryText 内部惰性搬移（note→facts，幂等）后 facts.joinToString("；").take(2000)；
+     * 以 target.copy(note = memoryText) 传给 PromptBuilder（PromptBuilder 零改动）。
+     * 失败静默回退原档案（note 可能为空 = 现状行为）。
+     */
+    private suspend fun resolveTargetWithMemory(sid: Long): TargetEntity? {
+        val target = resolveTarget(sid) ?: return null
+        val memory = runCatching { profileRepository.memoryText(target.id) }.getOrDefault(target.note)
+        return if (memory == target.note) target else target.copy(note = memory)
+    }
+
+    private suspend fun resolveClient(): ResolvedClient? {
+        val model = resolveModel() ?: return null
+        val provider = providerRepository.getProvider(model.providerId) ?: return null
+        val apiKey = providerRepository.decryptApiKey(provider.id) ?: return null
+        return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey))
+    }
+
+    private suspend fun resolveModel() = currentModelId.first()?.let { providerRepository.getModel(it) }
+
+    private suspend fun resolveVisionClient(): ResolvedClient? {
+        val id = visionModelId.first() ?: return null
+        val model = providerRepository.getModel(id) ?: return null
+        val provider = providerRepository.getProvider(model.providerId) ?: return null
+        val apiKey = providerRepository.decryptApiKey(provider.id) ?: return null
+        return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey))
+    }
+
+    /**
+     * v1.3.1 通道 A（主模型直读图片）：支持图文同发。
+     * - 纯图：保持原提示（四段结构 JSON 卡片）；
+     * - 图文同发：mode=FIVE_STEP → buildUserText（聊天记录模板），其余 → buildUserReply（简短输入模板）；
+     * - v1.6 全部统一 STRUCTURED，完成解析后落库直渲；
+     * - v1.6.1 多图：dataUrls 一次请求全量直读（content 数组多 image_url）。
+     */
+    private suspend fun runVisionDirect(
+        sid: Long,
+        dataUrls: List<String>,
+        text: String,
+        mode: AnalysisMode,
+    ): Flow<StreamEvent> = flow {
+        val profile = profileRepository.getProfile()
+        // v1.7.2 会话归属档案优先；v1.7.3 注入改读事实表
+        val target = resolveTargetWithMemory(sid)
+        val system = promptBuilder.buildSystem(profile, target, "")
+        val client = resolveClient() ?: run {
+            emit(StreamEvent.Error(noConfigError()))
+            return@flow
+        }
+        val history = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER })
+        val userText = when {
+            text.isBlank() -> "以下是用户聊天截图，请按四段结构分析。"
+            mode == AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
+            else -> {
+                val recentContext = history.takeLast(6)
+                    .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
+                    .takeIf { it.isNotBlank() }
+                promptBuilder.buildUserReply(text, recentContext)
+            }
+        }
+        client.client.stream(
+            ChatRequest(
+                model = client.model,
+                system = system,
+                userText = userText,
+                imageDataUrls = dataUrls,
+                history = history,
+            )
+        ).collect { event ->
+            when (event) {
+                is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
+                is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                is LlmEvent.Done -> {
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
+                    if (analysis != null) {
+                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        // v1.7.2 通道 A 直读同样自动提炼（素材取 transcription 转述文本）
+                        val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
+                        if (shouldExtractMemory(sid, stateNow, text)) {
+                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText) }
+                        }
+                        emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
+                    }
+                    emit(StreamEvent.Done)
+                }
+                is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
+            }
+        }
+    }
+
+    private fun parseSafety(hit: String) = AnalysisParser.parseAny(
+        """{"input_kind":"user_question","empathy":"","reply":"","reply_timing":"","facts":{"known":[],"assumed":[],"unknown":[]},"advice":{"tag":"","core":"","reasons":[],"styles":[]},"actions":[],"citations":[],"safety_override":true,"safety_message":"检测到可能涉及安全风险的表述（$hit）。请优先确保自己的人身安全：离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。","token_estimate":0}"""
+    )
+
+    private fun noConfigError(): LlmError =
+        LlmError("NO_CONFIG", "请先在设置中配置 API Key 与主模型", false)
+
+    // ===== v1.2.1 会话标题生成辅助 =====
+
+    /**
+     * 首轮回复完成后由主模型拟定会话标题（幂等，失败静默）。
+     *
+     * - 幂等：DB 已有非空 title 直接跳过（防第二/后续轮重复生成）
+     * - 素材：首句用户输入 + 首条回复；STRUCTURED 时 fullText 是 JSON，取 reply 字段
+     * - 调用：复用流式接口收集首个 Done（标题短，SSE 开销可忽略），20s 超时兜底
+     * - 失败：静默留空 → 抽屉走 resolveSessionTitle 首句回退；下轮 Done 天然重试
+     */
+    private suspend fun generateTitleOnce(
+        sid: Long,
+        userText: String,
+        replyFullText: String,
+        isStructured: Boolean,
+    ) {
+        if (conversationRepository.getSession(sid)?.title?.isNotBlank() == true) return
+        val replyMaterial = if (isStructured) {
+            runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault("")
+        } else {
+            replyFullText
+        }
+        val (userLine, replyLine) = SessionTitle.buildTitleMaterial(userText, replyMaterial)
+        if (userLine.isBlank()) return
+
+        val title = runCatching {
+            withTimeout(TITLE_TIMEOUT_MS) {
+                val client = resolveClient() ?: return@withTimeout null
+                client.client.stream(
+                    ChatRequest(
+                        model = client.model,
+                        system = TITLE_SYSTEM_PROMPT,
+                        userText = SessionTitle.buildTitlePrompt(userLine, replyLine),
+                        temperature = 0.3,
+                    ),
+                ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
+            }
+        }.getOrNull()?.let { SessionTitle.sanitizeTitle(it) }?.takeIf { it.isNotBlank() }
+
+        if (title != null) {
+            conversationRepository.updateSessionTitle(sid, title)
+            Log.i("RealChatRepository", "session $sid title generated: $title")
+        } else {
+            Log.w("RealChatRepository", "session $sid title generation failed/skipped, fallback to first message")
+        }
+    }
+
+    // ===== v1.6 对话状态摘要辅助（结构化来源） =====
+
+    /**
+     * 新话题时提炼话题摘要：取用户输入的前 24 字（足够模型对齐"在聊什么"）。
+     * 模型输出仅作补充——empathy 首句（空则 advice.core）关键词追加在后面，总长控制在 40 字内。
+     */
+    private fun summarizeTopic(userInput: String, analysis: CoachAnalysis): String {
+        val base = userInput.replace(Regex("\\s+"), " ").take(24)
+        val firstSentence = analysis.empathy.ifBlank { analysis.advice.core }
+            .replace(Regex("[#*>`\\-]"), "")
+            .split(Regex("[。！？\n]"))
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            ?.take(16)
+            .orEmpty()
+        return if (firstSentence.isBlank()) base else "$base｜$firstSentence".take(40)
+    }
+
+    /**
+     * 提炼本轮结论摘要：advice.core（空则 empathy 首句，至多 40 字），作为"已给结论"记入状态。
+     */
+    private fun summarizeConclusion(analysis: CoachAnalysis): String =
+        analysis.advice.core.ifBlank {
+            analysis.empathy.split(Regex("[。！？\n]")).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        }.replace(Regex("[#*>`\\-]"), "").take(40)
+
+    // ===== v1.7.2 自动记忆提炼辅助 =====
+
+    /**
+     * 自动提炼节流判定（纯判定，不写状态）：
+     * - 开关关闭 → 跳过
+     * - 会话无归属档案 / 档案不存在 → 跳过（老会话 null 不提炼）
+     * - 首话题或新话题（!isSameTopic）→ 提炼；同题追问 → 跳过（避免每轮都调 LLM）
+     */
+    private suspend fun shouldExtractMemory(sid: Long, state: ConversationState, userInput: String): Boolean {
+        if (!dataStore.memoryAutoEnabled.first()) return false
+        val targetId = conversationRepository.getSession(sid)?.targetId ?: return false
+        if (profileRepository.getTarget(targetId) == null) return false
+        return !state.hasActiveTopic || !stateTracker.isSameTopic(state, userInput)
+    }
+
+    /**
+     * 执行一次记忆提炼（独立 scope + 幂等 + 失败静默 + 20s 超时，仿 generateTitleOnce）：
+     * 调主模型（temperature=0.3）→ parseFacts 防御解析 → mergeFacts 去重（≤50 条）→ 仅新增逐条 INSERT。
+     * 失败静默 Log.w；重复触发因 mergeFacts 去重不会重复插入。
+     */
+    private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String) {
+        runCatching {
+            withTimeout(MEMORY_TIMEOUT_MS) {
+                val targetId = conversationRepository.getSession(sid)?.targetId ?: return@withTimeout
+                val target = profileRepository.getTarget(targetId) ?: return@withTimeout
+                // v1.7.3 提炼前确保惰性搬移完成（老 note 进事实表），existing 从事实表读取
+                profileRepository.migrateNoteToFactsOnce(targetId)
+                val existing = profileRepository.getFacts(targetId).map { it.text }
+                val reply = runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault(replyFullText)
+                val prompt = MemoryExtractor.buildPrompt(userInput, reply, existing.joinToString("；"))
+                val client = resolveClient() ?: return@withTimeout
+                val json = client.client.stream(
+                    ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
+                ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
+                val facts = MemoryExtractor.parseFacts(json ?: "")
+                val merged = MemoryExtractor.mergeFacts(existing, facts)
+                val toAdd = merged.drop(existing.size)
+                if (toAdd.isNotEmpty()) {
+                    if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
+                        Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
+                    } else {
+                        toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
+                            .forEach { profileRepository.addFact(targetId, it) }
+                        Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
+                    }
+                }
+            }
+        }.onFailure { Log.w("RealChatRepository", "memory extraction failed", it) }
+    }
+
+    private data class ResolvedClient(val model: String, val client: LlmClient)
+
+    private companion object {
+        /** 历史消息 token 上限（粗估，字符数/4），超出从最早轮次成对丢弃 */
+        const val HISTORY_TOKEN_LIMIT = 24_000
+        /** 历史中的图片消息占位文本 */
+        const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
+
+        /** v1.2.1：标题生成超时（毫秒），超时静默回退首句截断 */
+        const val TITLE_TIMEOUT_MS = 20_000L
+        /** v1.2.1：标题生成 system prompt，只输出标题本身 */
+        const val TITLE_SYSTEM_PROMPT = "你是会话标题生成器。只输出标题本身，不要任何解释、引号、标点或表情。"
+
+        /** v1.7.2：记忆提炼超时（毫秒），超时静默不追加 */
+        const val MEMORY_TIMEOUT_MS = 20_000L
+        /** v1.7.2：记忆提炼 system prompt，只输出 JSON */
+        const val MEMORY_SYSTEM_PROMPT = "你是记忆提炼器。只输出 JSON，不加解释。"
+    }
+}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 及以下的备份规则（配合 allowBackup=false 全禁，与 data_extraction_rules 对应）。
+  聊天记录为隐私数据，任何备份通道（云备份/ADB 备份）一律排除。
+-->
+<full-backup-content>
+    <exclude domain="root" />
+</full-backup-content>

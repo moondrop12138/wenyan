@@ -1,0 +1,82 @@
+# ===== Gradle / Android 构建产物 =====
+.gradle/
+build/
+build.*/
+.gdh*/
+gthome/
+pch/
+gt2/
+app/build/
+app/build.*/
+app/release/
+*.apk
+*.aab
+*.jks
+*.keystore
+*.lock
+
+# ===== 本地配置（含机器特定路径）=====
+local.properties
+keystore.properties
+*.properties.local
+# keystore 加密备份（含密钥本体，绝不入库）
+*keystore-backup*.zip
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# ===== Kotlin / Java =====
+*.class
+*.log
+.kotlin/
+
+# ===== 项目运行时 =====
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ===== 工作区记忆与决策（隐私）=====
+.workbuddy/
+
+# ===== 构建缓存/归档目录（补全）=====
+app/gt*/
+app/gh*/
+app/build-old/
+app/app/build*/
+
+# ===== 调试/缓存残留（开发过程产生）=====
+app/.proj-cache*/
+app/build-lock*/
+app/build-old*/
+app/build-old-root/
+app/_*.txt
+app/gt*/
+app/gh*/
+
+# ===== 残留缓存（补全）=====
+app/c/
+app/pc*/
+app/pch/
+app/gt*/
+app/gh*/
+app/gt/
+
+# ===== 开发过程产物（公开仓库不含，本地保留）=====
+# 设计过程稿（图标迭代/画布导出/原型）
+outputs/
+# 图标生成等一次性脚本（含本地密钥痕迹，勿公开）
+scripts/
+# 单屏设计说明（过程文档）
+overview.md
+# 发布归档（APK 备份与发布说明，本地保留）
+dist/
+# 本机专用构建封装（WorkBuddy safe-delete 规避，含 JDK 绝对路径）
+app/scripts/run_gradle.sh
+
+# 排障产物（勿入库）
+app/tools/
+app/gdh-fresh/
+app/*.txt

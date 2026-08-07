@@ -1,0 +1,100 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant VM as ChatViewModel
+    participant CR as RealChatRepository
+    participant DS as DataStoreSettings
+    participant Conv as ConversationRepository
+    participant Prof as ProfileRepository
+    participant D as MemoryFactDao
+    participant PB as PromptBuilder
+    participant LLM as LlmClient
+
+    U->>VM: 发送文本
+    VM->>CR: sendTextAsync(text, mode)
+    CR->>CR: ensureSession()
+    CR->>DS: getActiveTargetId()
+    DS-->>CR: activeId(Long?)
+    CR->>Conv: createSession(null, [], activeId)
+    Conv-->>CR: sid
+    CR->>Conv: getSession(sid)
+    Conv-->>CR: session.targetId
+    alt targetId != null
+        CR->>Prof: getTarget(targetId)
+        Prof-->>CR: target
+        CR->>Prof: memoryText(targetId)（含惰性搬移 note→facts）
+        Prof-->>CR: facts.joinToString("；").take(2000)
+        CR-->>CR: target.copy(note = memoryText)
+    else targetId == null（老会话）
+        CR-->>CR: target = null（空档案 = 现状行为）
+    end
+    CR->>PB: buildSystem(profile, target, knowledge)
+    PB-->>CR: system（target.memory = facts + memoryRule）
+    CR->>LLM: stream(ChatRequest(...))
+    LLM-->>CR: LlmEvent.Done(fullText)
+
+    Note over CR: ===== 时序图② 回复完成 → 解析溯源 + 自动提炼 =====
+
+    CR->>CR: AnalysisParser.parseAny(fullText)
+    CR-->>CR: CoachAnalysis(memoryCitations=…)
+    CR->>Conv: addMessage(ASSISTANT, analysis)
+    CR->>Conv: updateSessionState(sid, newState)
+    CR->>CR: shouldExtractMemory(sid, state, userInput)
+    CR->>DS: memoryAutoEnabled.first()
+    DS-->>CR: true（默认开）
+    CR->>Conv: getSession(sid)?.targetId
+    CR->>CR: ConversationStateTracker.isSameTopic(state, userInput)
+    CR-->>CR: false（首话题/新话题 → 提炼；同题追问 → 跳过）
+    CR->>CR: memoryScope.launch { extractMemoryOnce(...) }  // 不阻塞主流程
+    CR->>Prof: getFacts(targetId)
+    Prof-->>CR: existing: List<String>
+    CR->>CR: MemoryExtractor.buildPrompt(userInput, reply, existing.join("；"))
+    CR->>LLM: stream(ChatRequest(提炼, temperature=0.3))
+    LLM-->>CR: Done.json（{"facts":[...]}）
+    CR->>CR: MemoryExtractor.parseFacts(json)
+    CR->>CR: MemoryExtractor.mergeFacts(existing, facts, 50)
+    alt 有新事实（≤50 条）
+        CR->>D: 逐条 insert（新增事实）
+        CR-->>CR: Log.i("memory extracted: +N facts")
+    else 超上限
+        CR-->>CR: 静默丢弃新事实 Log.w
+    end
+    Note over CR: 失败静默 Log.w / 20s 超时 / 开关关=跳过 / 无档案=跳过
+    CR-->>VM: StreamEvent.Analysis(CoachCard(memoryCitations)) / Done
+
+    Note over U,LLM: ===== 时序图③ 设置页记忆 CRUD + 档案详情页 =====
+
+    U->>VM: （另起：SettingsScreen / SettingsViewModel / RealSettingsRepository）
+    Note over VM: 新建 → createTarget(name)：saveTarget + 无激活则 setActiveTargetId
+    Note over VM: 切换激活 → setActiveTarget(id) + Toast「已切换到「X」的记忆」
+    Note over VM: 删除 → deleteTarget(id)：删激活项 → setActiveTargetId(剩余第一个/null)
+    U->>VM: 档案行「编辑」→ 跳 MemoryEdit(targetId)
+    VM->>Prof: migrateNoteToFactsOnce(targetId) + getFacts(targetId)
+    VM-->>U: 详情页：名称/MBTI/分数/关系状态/timeline + 事实列表
+    U->>VM: 保存结构化字段
+    VM->>Prof: updateTarget(entity.copy(全字段))
+    U->>VM: 事实行「编辑」/「删除」
+    VM->>Prof: updateFact(factId, text) / deleteFact(factId)
+
+    Note over U,LLM: ===== 时序图④ 会话抽屉分组 =====
+
+    U->>CR: （另起：SessionDrawerContent(sessions)）
+    CR->>CR: sessions.groupBy { it.targetName ?: "未关联" }
+    CR-->>U: 组头（档案名）+ 组内时间倒序；未关联组放最后
+
+    Note over U,LLM: ===== 时序图⑤ 崩溃落盘导出 =====
+
+    Note over CR: 崩溃 → WenyanApp.installCrashLogger → CrashLogStore.writeCrash
+    Note over CR: → filesDir/crash/last_crash.txt（时间戳+线程+堆栈+缓冲全文）
+    Note over CR: 设置页「导出诊断日志」→ ShareIntent + FileProvider
+
+    Note over U,LLM: ===== 时序图⑥ 更新检查下载安装 =====
+
+    U->>CR: 设置页「检查更新」
+    CR->>CR: UpdateChecker.check() → UpdateClient.fetchLatest()
+    CR-->>CR: GET /repos/moondrop12138/wenyan/releases/latest
+    alt 版本高于当前
+        CR-->>U: AlertDialog(版本说明+去下载) → 下载 APK → FileProvider + ACTION_VIEW
+    else 无新版/失败
+        CR-->>U: 静默或 Toast（UPDATE_* 错误码）
+    end
