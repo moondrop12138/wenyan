@@ -80,8 +80,11 @@ android {
         //  档案结构化字段编辑页 MemoryEdit + 记忆引用溯源 memory_citations + 会话按档案分组 /
         //  Room 迁移自动化测试 + UI 测试/@Preview + 崩溃日志本地兜底（导出诊断）/
         //  应用内更新检查（GitHub Releases 直连 + 下载安装）+ LazyColumn key 冲突 P0 修复
-        versionCode = 28
-        versionName = "1.7.3"
+        // v1.7.4 记忆链路修复（评审 4 bug）：note→facts 搬移改 merge 语义+Mutex（老 note 不丢/并发不重）/
+        //  提炼 per-target 互斥（同档案并发不重复插入）/ 删档案解绑会话 targetId（防悬空）/
+        //  addFact 悬空防御 + 档案详情页前置搬移 + 抽屉新建会话按钮内容右移 12dp
+        versionCode = 29
+        versionName = "1.7.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
