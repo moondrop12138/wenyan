@@ -189,6 +189,7 @@ class ProviderEditViewModelTest {
         override suspend fun deleteTarget(id: Long) = Unit
         override suspend fun setActiveTarget(id: Long) = Unit
         override suspend fun setMemoryAutoEnabled(enabled: Boolean) = Unit
+        override suspend fun ensureMigrated(targetId: Long) = Unit
         // v1.7.3 事实/详情/导出/更新（本测试不使用，空实现）
         override fun observeFacts(targetId: Long): Flow<List<com.wenyan.app.ui.contract.MemoryFactUi>> =
             MutableStateFlow(emptyList())

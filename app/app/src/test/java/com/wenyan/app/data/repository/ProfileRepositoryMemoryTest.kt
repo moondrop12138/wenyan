@@ -9,6 +9,7 @@ import com.wenyan.app.data.db.TargetEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -150,16 +151,41 @@ class ProfileRepositoryMemoryTest {
     }
 
     @Test
-    fun `migrateNoteToFactsOnce skips blank note and skips when facts exist`() = runTest {
+    fun `migrateNoteToFactsOnce skips blank note`() = runTest {
         val repo = newRepo()
         val id = repo.saveTarget(TargetEntity(codeName = "小A", note = ""))
         repo.migrateNoteToFactsOnce(id)
         assertEquals(0, repo.countFacts(id))
-        // 已有事实时不再搬移（防覆盖）
-        val id2 = repo.saveTarget(TargetEntity(codeName = "小B", note = "旧 note 内容"))
-        repo.addFact(id2, "已提炼事实")
+        assertEquals("", repo.getTarget(id)?.note)
+    }
+
+    /** v1.7.4 BUG-1 回归：已有事实时不再跳过——老 note 与手工事实 merge 并存，不丢不重 */
+    @Test
+    fun `migrateNoteToFactsOnce merges legacy note with existing facts`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = "她喜欢猫。她怕黑"))
+        repo.addFact(id, "已提炼事实")
+        repo.migrateNoteToFactsOnce(id)
+        // FakeMemoryFactDao 排序：id DESC（最新在前）→ 搬移插入的在后
+        assertEquals(listOf("她怕黑", "她喜欢猫", "已提炼事实"), repo.getFacts(id).map { it.text })
+        assertEquals("", repo.getTarget(id)?.note)
+        // 与已有事实重叠的段不重复插入
+        val id2 = repo.saveTarget(TargetEntity(codeName = "小B", note = "她喜欢猫。她怕黑"))
+        repo.addFact(id2, "她喜欢猫")
         repo.migrateNoteToFactsOnce(id2)
-        assertEquals(listOf("已提炼事实"), repo.getFacts(id2).map { it.text })
+        assertEquals(2, repo.countFacts(id2))
+        assertEquals("", repo.getTarget(id2)?.note)
+    }
+
+    /** v1.7.4 并发回归：8 个并发搬移只插一份（FakeMemoryFactDao.insert 带挂起点模拟真实交错） */
+    @Test
+    fun `concurrent migrateNoteToFactsOnce inserts facts only once`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A", note = "她喜欢猫。她怕黑；她爱读书"))
+        val jobs = (1..8).map { launch { repo.migrateNoteToFactsOnce(id) } }
+        jobs.forEach { it.join() }
+        assertEquals(3, repo.countFacts(id))
+        assertEquals("", repo.getTarget(id)?.note)
     }
 
     @Test
@@ -265,6 +291,15 @@ class ProfileRepositoryMemoryTest {
         repo.updateFact(factId, "  她怕黑  ")
         assertEquals("她怕黑", repo.getFacts(id).single().text)
     }
+
+    /** v1.7.4 BUG-4 回归：悬空 targetId（档案已删）添加事实为 no-op，不触发 FK 约束异常 */
+    @Test
+    fun `addFact for missing target is no-op`() = runTest {
+        val repo = newRepo()
+        val id = repo.addFact(999L, "悬空事实")
+        assertEquals(0L, id)
+        assertEquals(0, repo.countFacts(999L))
+    }
 }
 
 /** 内存 TargetDao（observeAll 用 MutableStateFlow 模拟 Room Flow 响应式刷新） */
@@ -292,6 +327,12 @@ private class FakeTargetDao : TargetDao {
 
     override suspend fun deleteById(id: Long) {
         store.removeAll { it.id == id }
+        _flow.value = store.sortedByDescending { it.id }.toList()
+    }
+
+    override suspend fun clearNote(id: Long) {
+        val idx = store.indexOfFirst { it.id == id }
+        if (idx >= 0) store[idx] = store[idx].copy(note = "")
         _flow.value = store.sortedByDescending { it.id }.toList()
     }
 
@@ -345,6 +386,8 @@ private class FakeMemoryFactDao : MemoryFactDao {
     override suspend fun getById(id: Long): MemoryFactEntity? = store.firstOrNull { it.id == id }
 
     override suspend fun insert(entity: MemoryFactEntity): Long {
+        // v1.7.4：插入前挂起点模拟真实 Room IO 并发交错（migrate 并发测试依赖：检查-插入非原子）
+        kotlinx.coroutines.yield()
         val e = entity.copy(id = nextId++)
         store.add(e)
         refresh()

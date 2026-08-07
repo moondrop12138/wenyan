@@ -61,6 +61,12 @@ interface SettingsRepository {
     /** 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条），无剩余 → null */
     suspend fun deleteTarget(id: Long)
 
+    /**
+     * v1.7.4 打开档案详情前确保老 note 搬移完成（merge 语义幂等）：
+     * 防「升级后先手工加事实，再首次注入」时老 note 内容永不搬移、静默丢失。
+     */
+    suspend fun ensureMigrated(targetId: Long)
+
     /** 切换激活档案 */
     suspend fun setActiveTarget(id: Long)
 

@@ -31,6 +31,10 @@ interface TargetDao {
     @Query("DELETE FROM target WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    /** v1.7.4 定向清空 note（惰性搬移完成后；只动 note 列，不覆盖整行防并发编辑字段丢失） */
+    @Query("UPDATE target SET note = '' WHERE id = :id")
+    suspend fun clearNote(id: Long)
+
     @Query("DELETE FROM target")
     suspend fun clear()
 }

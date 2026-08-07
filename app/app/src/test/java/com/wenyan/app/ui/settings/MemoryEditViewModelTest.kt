@@ -23,6 +23,7 @@ import org.junit.Test
 /**
  * v1.7.4 MemoryEditViewModel 前置搬移测试（fake SettingsRepository）：
  * 打开档案详情页 init 即触发 ensureMigrated（老 note 数据不再因手工加事实而丢失）。
+ * 注意：fake 类名避开 FakeSettingsRepository（同包 JVM 类名冲突会引发符号解析错乱）。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MemoryEditViewModelTest {

@@ -93,13 +93,20 @@ class RealSettingsRepository(
         profileRepository.updateTarget(e.copy(codeName = name.trim()))
     }
 
-    /** v1.7.2 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条，id DESC=最新）；无剩余 → null */
+    /**
+     * v1.7.2 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条，id DESC=最新）；无剩余 → null
+     * v1.7.4：删前先解绑其全部会话的 targetId（session 无 FK，防悬空引用）
+     */
     override suspend fun deleteTarget(id: Long) {
         profileRepository.deleteTarget(id)
+        conversationRepository.unbindSessionTarget(id)
         if (dataStore.getActiveTargetId() == id) {
             dataStore.setActiveTargetId(profileRepository.observeTargets().first().firstOrNull()?.id)
         }
     }
+
+    /** v1.7.4 档案详情页打开前搬移老 note（merge 幂等；MemoryEditViewModel init 调用） */
+    override suspend fun ensureMigrated(targetId: Long) = profileRepository.migrateNoteToFactsOnce(targetId)
 
     override suspend fun setActiveTarget(id: Long) = dataStore.setActiveTargetId(id)
 

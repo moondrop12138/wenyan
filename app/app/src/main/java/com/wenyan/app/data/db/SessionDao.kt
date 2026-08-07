@@ -35,4 +35,8 @@ interface SessionDao {
     /** v1.2.1：更新会话标题（主模型拟定） */
     @Query("UPDATE session SET title = :title WHERE id = :id")
     suspend fun updateTitle(id: Long, title: String)
+
+    /** v1.7.4 删档案时解绑其全部会话（session.targetId 无 FK，防悬空引用：记忆注入静默失效 + 抽屉分组错乱） */
+    @Query("UPDATE session SET targetId = NULL WHERE targetId = :id")
+    suspend fun unbindTarget(id: Long)
 }

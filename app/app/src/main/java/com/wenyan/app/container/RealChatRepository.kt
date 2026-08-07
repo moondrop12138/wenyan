@@ -46,7 +46,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 对话 Repository 真实实现（AC-04/05/06/07/08/13/14/15）
@@ -77,6 +80,13 @@ class RealChatRepository(
 
     /** v1.7.2 自动记忆提炼 scope：独立于发送流，不阻塞主流程；失败静默（仿 titleScope） */
     private val memoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * v1.7.4 提炼并发互斥（per-target）：同档案提炼串行（读快照 → LLM → 插入非原子，
+     * 并发会基于同一快照重复插入）；不同档案互不阻塞。锁对象常驻不清理（每档案一个
+     * Mutex，内存可忽略；避免并发下 remove 竞态）。
+     */
+    private val extractMutexes = ConcurrentHashMap<Long, Mutex>()
 
     /**
      * v1.3.1 应用级发送 scope：不随 Activity/ViewModel 销毁，息屏/退后台回答继续完成并落库。
@@ -701,32 +711,36 @@ class RealChatRepository(
     /**
      * 执行一次记忆提炼（独立 scope + 幂等 + 失败静默 + 20s 超时，仿 generateTitleOnce）：
      * 调主模型（temperature=0.3）→ parseFacts 防御解析 → mergeFacts 去重（≤50 条）→ 仅新增逐条 INSERT。
-     * 失败静默 Log.w；重复触发因 mergeFacts 去重不会重复插入。
+     * v1.7.4：per-target Mutex 串行化（锁等待计入 20s 超时；同档案并发触发时后者基于最新 facts 提炼，
+     * 不会重复插入）。失败静默 Log.w；重复触发因 mergeFacts 去重不会重复插入。
      */
     private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String) {
         runCatching {
             withTimeout(MEMORY_TIMEOUT_MS) {
                 val targetId = conversationRepository.getSession(sid)?.targetId ?: return@withTimeout
                 val target = profileRepository.getTarget(targetId) ?: return@withTimeout
-                // v1.7.3 提炼前确保惰性搬移完成（老 note 进事实表），existing 从事实表读取
-                profileRepository.migrateNoteToFactsOnce(targetId)
-                val existing = profileRepository.getFacts(targetId).map { it.text }
-                val reply = runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault(replyFullText)
-                val prompt = MemoryExtractor.buildPrompt(userInput, reply, existing.joinToString("；"))
-                val client = resolveClient() ?: return@withTimeout
-                val json = client.client.stream(
-                    ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
-                ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
-                val facts = MemoryExtractor.parseFacts(json ?: "")
-                val merged = MemoryExtractor.mergeFacts(existing, facts)
-                val toAdd = merged.drop(existing.size)
-                if (toAdd.isNotEmpty()) {
-                    if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
-                        Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
-                    } else {
-                        toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
-                            .forEach { profileRepository.addFact(targetId, it) }
-                        Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
+                val mutex = extractMutexes.getOrPut(targetId) { Mutex() }
+                mutex.withLock {
+                    // v1.7.3 提炼前确保惰性搬移完成（老 note 进事实表），existing 从事实表读取
+                    profileRepository.migrateNoteToFactsOnce(targetId)
+                    val existing = profileRepository.getFacts(targetId).map { it.text }
+                    val reply = runCatching { AnalysisParser.parse(replyFullText).reply }.getOrDefault(replyFullText)
+                    val prompt = MemoryExtractor.buildPrompt(userInput, reply, existing.joinToString("；"))
+                    val client = resolveClient() ?: return@withLock
+                    val json = client.client.stream(
+                        ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
+                    ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
+                    val facts = MemoryExtractor.parseFacts(json ?: "")
+                    val merged = MemoryExtractor.mergeFacts(existing, facts)
+                    val toAdd = merged.drop(existing.size)
+                    if (toAdd.isNotEmpty()) {
+                        if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
+                            Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
+                        } else {
+                            toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
+                                .forEach { profileRepository.addFact(targetId, it) }
+                            Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
+                        }
                     }
                 }
             }

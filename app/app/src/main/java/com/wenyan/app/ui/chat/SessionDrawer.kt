@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -88,7 +89,10 @@ fun SessionDrawerContent(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(vertical = 12.dp),
+                // v1.7.4：内容右移 12dp（截图反馈微调；offset 只平移绘制不占布局，右缘余量充足无溢出）
+                modifier = Modifier
+                    .padding(vertical = 12.dp)
+                    .offset(x = 12.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Add,

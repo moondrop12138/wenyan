@@ -71,6 +71,8 @@ class FakeSettingsRepository : SettingsRepository {
         targetsFlow.value = targetsFlow.value.map { it.copy(isActive = it.id == id) }
     }
 
+    override suspend fun ensureMigrated(targetId: Long) = Unit
+
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) {
         memoryAutoFlow.value = enabled
     }

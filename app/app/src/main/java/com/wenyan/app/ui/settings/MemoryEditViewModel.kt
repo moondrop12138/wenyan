@@ -55,6 +55,11 @@ class MemoryEditViewModel(
         private set
 
     init {
+        // v1.7.4：打开详情页先搬移老 note（merge 幂等）——防「先手工加事实、再首访」时老数据永不搬移；
+        // 搬移插入的 facts 会经 observeFacts Flow 自动刷新展示
+        viewModelScope.launch {
+            repo.ensureMigrated(targetId)
+        }
         viewModelScope.launch {
             repo.targets.collectLatest { list ->
                 target = list.firstOrNull { it.id == targetId }

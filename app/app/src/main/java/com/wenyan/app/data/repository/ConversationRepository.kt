@@ -70,6 +70,9 @@ class ConversationRepository(
         sessionDao.deleteById(id)
     }
 
+    /** v1.7.4 删档案解绑会话归属（防悬空 targetId：记忆注入静默失效 + 抽屉分组错乱） */
+    suspend fun unbindSessionTarget(targetId: Long) = sessionDao.unbindTarget(targetId)
+
     suspend fun clearAll() {
         messageDao.clear()
         sessionDao.clear()

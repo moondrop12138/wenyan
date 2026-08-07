@@ -9,6 +9,8 @@ import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.domain.MemoryExtractor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 档案数据访问（F1 建档持久化，AC-03）
@@ -24,6 +26,12 @@ class ProfileRepository(
     private val targetDao: TargetDao,
     private val memoryFactDao: MemoryFactDao,
 ) {
+    /**
+     * v1.7.4 搬移互斥锁：检查-插入-清空三步非原子，注入链与提炼链并发会重复插入；
+     * 锁内重读保证幂等（第二个协程等锁后 note 已空 → 直接跳过）。
+     * 搬移频率低（一次成功即清空 note），全局单锁足够。
+     */
+    private val migrateMutex = Mutex()
     fun observeProfile(): Flow<ProfileEntity?> = profileDao.observeLatest()
 
     /** v1.7.2 全档案（id DESC，最新在前） */
@@ -57,8 +65,15 @@ class ProfileRepository(
     suspend fun getFacts(targetId: Long): List<MemoryFactEntity> =
         memoryFactDao.listByTarget(targetId)
 
-    suspend fun addFact(targetId: Long, text: String): Long =
-        memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = text.trim()))
+    /**
+     * v1.7.4：悬空 targetId（档案已删）防御——memory_fact 表 FK 为 NO ACTION，
+     * 竞态下 INSERT 会抛 SQLiteConstraintException（手工入口无 runCatching 会崩溃）；
+     * 返回 0L 表示未插入。
+     */
+    suspend fun addFact(targetId: Long, text: String): Long {
+        if (getTarget(targetId) == null) return 0L
+        return memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = text.trim()))
+    }
 
     suspend fun updateFact(factId: Long, text: String) {
         val entity = memoryFactDao.getById(factId) ?: return
@@ -70,19 +85,24 @@ class ProfileRepository(
     suspend fun countFacts(targetId: Long): Int = memoryFactDao.listByTarget(targetId).size
 
     /**
-     * v1.7.3 惰性搬移（幂等）：老 note 数据首访时拆分为 facts 后清空 note。
-     * - note 空 → 跳过；facts 非空（已搬移）→ 跳过（幂等）；
+     * v1.7.4 惰性搬移（幂等 + 并发安全）：老 note 数据首访时拆分为 facts 后清空 note。
+     * - note 空 → 跳过；锁内重读 target/facts（防并发重复）
+     * - **merge 语义**（BUG-1 修复）：不再因「已有 facts」跳过——老 note 与现有 facts 去重合并，
+     *   仅插 delta（用户升级后先手工加过事实，老 note 内容也不会丢失）
      * - 拆分 ≤50 条逐条插入；单条 ≤40 字（splitNoteToFacts 内截断）；
-     * - 完成后清空 note（列保留防旧数据回滚）。
+     * - 完成后定向清空 note（targetDao.clearNote，只动 note 列）
      * 调用方 runCatching 包一层，失败静默（不阻塞主流程）。
      */
     suspend fun migrateNoteToFactsOnce(targetId: Long) {
-        val target = getTarget(targetId) ?: return
-        if (target.note.isBlank()) return
-        if (countFacts(targetId) > 0) return
-        val segments = MemoryExtractor.splitNoteToFacts(target.note).take(MemoryExtractor.DEFAULT_FACT_LIMIT)
-        segments.forEach { memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = it)) }
-        updateTarget(target.copy(note = ""))
+        migrateMutex.withLock {
+            val target = getTarget(targetId) ?: return
+            if (target.note.isBlank()) return
+            val existing = getFacts(targetId).map { it.text }
+            val segments = MemoryExtractor.splitNoteToFacts(target.note).take(MemoryExtractor.DEFAULT_FACT_LIMIT)
+            val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.size)
+            toAdd.forEach { memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = it)) }
+            targetDao.clearNote(targetId)
+        }
     }
 
     /**
