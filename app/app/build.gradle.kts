@@ -83,8 +83,9 @@ android {
         // v1.7.4 记忆链路修复（评审 4 bug）：note→facts 搬移改 merge 语义+Mutex（老 note 不丢/并发不重）/
         //  提炼 per-target 互斥（同档案并发不重复插入）/ 删档案解绑会话 targetId（防悬空）/
         //  addFact 悬空防御 + 档案详情页前置搬移 + 抽屉新建会话按钮内容右移 12dp
-        versionCode = 29
-        versionName = "1.7.4"
+        // v1.7.5 API Key 编辑页掩码回显：解密回填输入框（默认掩码+显隐开关），未修改不重加密
+        versionCode = 30
+        versionName = "1.7.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
