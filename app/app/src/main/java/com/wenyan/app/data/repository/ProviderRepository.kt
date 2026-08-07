@@ -34,7 +34,7 @@ class ProviderRepository(
 
     suspend fun getModel(id: Long): ModelEntity? = modelDao.getById(id)
 
-    /** 新增提供商；apiKey 明文传入，内部加密存储 */
+    /** 新增提供商；apiKey 明文传入，内部加密存储；baseUrl 经规范化（非法字符时原样兜底，由 UI 层预检拦截） */
     suspend fun addProvider(
         name: String,
         baseUrl: String,
@@ -46,7 +46,7 @@ class ProviderRepository(
         return providerDao.insert(
             ProviderEntity(
                 name = name,
-                baseUrl = baseUrl,
+                baseUrl = ProviderUrlNormalizer.normalize(baseUrl) ?: baseUrl,
                 apiKeyEncrypted = encrypted,
                 isPreset = isPreset,
                 sortOrder = sortOrder,

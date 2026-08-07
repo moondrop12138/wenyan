@@ -17,13 +17,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 
-/** 错误文案映射（SPEC 5.2 / llm-contract §4，全项目唯一文案源，design-pages 页面7） */
+/**
+ * 错误文案映射（SPEC 5.2 / llm-contract §4，全项目唯一文案源，design-pages 页面7）
+ * v1.7.x 修复：code 实为 LlmErrorCode 枚举名（toLlmError 传入 code.name），此前误按 "401"/"404" 数字匹配全部落空，
+ * 导致 401/404 也一律显示"模型返回错误"且不出现"去设置检查 API Key"按钮、不可重试错误也显示重试。
+ */
 private data class ErrorUi(
     val title: String,
     val body: String,
@@ -32,17 +37,31 @@ private data class ErrorUi(
     val showRetry: Boolean = true,
 )
 
-private fun errorUi(code: String, fallback: String): ErrorUi = when {
-    code == "401" -> ErrorUi("API Key 无效", "请到设置检查你的 API Key", hasSettings = true, showCancel = true, showRetry = false)
-    code == "403" -> ErrorUi("服务拒绝访问", "请检查账户状态")
-    code == "404" -> ErrorUi("模型不存在", "请检查模型名（可能已退役）", hasSettings = true, showRetry = false)
-    code == "429" -> ErrorUi("请求过于频繁或额度已用尽", "稍后重试", showCancel = true)
-    code.startsWith("5") -> ErrorUi("模型服务异常", "请稍后重试", showCancel = true)
-    code == "timeout" || code == "disconnect" -> ErrorUi("连接中断", "可重试或停止", showCancel = true)
+private fun errorUi(code: String, fallback: String): ErrorUi = when (code) {
+    LlmErrorCode.UNAUTHORIZED.name ->
+        ErrorUi("API Key 无效", "请到设置检查你的 API Key", hasSettings = true, showCancel = true, showRetry = false)
+    LlmErrorCode.FORBIDDEN.name -> ErrorUi("服务拒绝访问", "请检查账户状态")
+    LlmErrorCode.MODEL_NOT_FOUND.name ->
+        ErrorUi("模型不存在", "请检查模型名（可能已退役）", hasSettings = true, showRetry = false)
+    LlmErrorCode.RATE_LIMITED.name -> ErrorUi("请求过于频繁或额度已用尽", "稍后重试", showCancel = true)
+    LlmErrorCode.SERVER_ERROR.name -> ErrorUi("模型服务异常", "请稍后重试", showCancel = true)
+    LlmErrorCode.CONNECT_TIMEOUT.name, LlmErrorCode.READ_TIMEOUT.name, "timeout", "disconnect" ->
+        ErrorUi("连接中断", "可重试或停止", showCancel = true)
     // v1.7.1 终检：非 localhost 明文地址被网络安全策略拦截（对应 LlmErrorCode.UNSUPPORTED_URL）
-    code == "UNSUPPORTED_URL" -> ErrorUi("地址不受支持", "仅支持 https:// 地址；本地模型服务请填 http://localhost", hasSettings = true, showRetry = false)
+    LlmErrorCode.UNSUPPORTED_URL.name ->
+        ErrorUi("地址不受支持", "仅支持 https:// 地址；本地模型服务请填 http://localhost", hasSettings = true, showRetry = false)
+    LlmErrorCode.EMPTY_CONTENT.name, LlmErrorCode.PARSE_ERROR.name ->
+        ErrorUi("响应异常", "模型未返回可用内容，可重试或更换模型", showCancel = true)
     else -> ErrorUi("模型返回错误", fallback, showCancel = true)
 }
+
+/** 认证/配置类错误码（图标用 muted 而非 danger） */
+private val AUTH_LIKE_CODES = setOf(
+    LlmErrorCode.UNAUTHORIZED.name,
+    LlmErrorCode.FORBIDDEN.name,
+    LlmErrorCode.MODEL_NOT_FOUND.name,
+    LlmErrorCode.UNSUPPORTED_URL.name,
+)
 
 /**
  * AI 气泡内错误卡（design-pages 页面7）：主体 surfaceElevated + border，dangerSoft 仅图标点缀。
@@ -70,7 +89,7 @@ fun ErrorCard(
                     Icons.Outlined.ErrorOutline,
                     contentDescription = null,
                     modifier = Modifier.size(22.dp),
-                    tint = if (error.code == "401" || error.code == "403" || error.code == "404") p.muted else p.danger,
+                    tint = if (error.code in AUTH_LIKE_CODES) p.muted else p.danger,
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(ui.title, style = GtjType.Subtitle, color = p.fg)

@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.wenyan.app.data.repository.ProviderUrlNormalizer
+import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.SettingsRepository
@@ -111,6 +113,7 @@ class ProviderEditViewModel(
 
     private fun doTestConnection() {
         if (testing) return
+        if (!normalizeOrReject()) return
         testing = true
         testResult = null
         viewModelScope.launch {
@@ -151,11 +154,35 @@ class ProviderEditViewModel(
         pendingAction = null
     }
 
-    private fun errorToResult(err: LlmError): TestResult = when {
-        err.code == "401" -> TestResult(ok = false, warn = false, message = "API Key 无效，请检查")
-        err.code == "429" -> TestResult(ok = false, warn = true, message = "请求过于频繁或额度已用尽，稍后重试")
-        err.code.startsWith("5") -> TestResult(ok = false, warn = true, message = "模型服务异常，请稍后重试")
-        err.code == "timeout" -> TestResult(ok = false, warn = true, message = "连接超时，请检查网络或服务地址")
+    /**
+     * Base URL 预检（v1.7.x）：规范化并回写输入框；含非法字符（逗号/空格等）→ 显示错误并阻止继续。
+     * @return true 表示可继续
+     */
+    private fun normalizeOrReject(): Boolean {
+        val normalized = ProviderUrlNormalizer.normalize(baseUrl)
+        if (normalized == null) {
+            testResult = TestResult(
+                ok = false,
+                warn = true,
+                message = "Base URL 包含非法字符（如逗号、空格），请全选删除后重新输入",
+            )
+            return false
+        }
+        if (normalized != baseUrl) baseUrl = normalized
+        return true
+    }
+
+    /** v1.7.x 测试连接结果分级：code 为 LlmErrorCode 枚举名（此前误按 "401"/"404" 数字匹配导致全落空） */
+    private fun errorToResult(err: LlmError): TestResult = when (err.code) {
+        LlmErrorCode.UNAUTHORIZED.name -> TestResult(ok = false, warn = false, message = "API Key 无效，请检查")
+        LlmErrorCode.FORBIDDEN.name -> TestResult(ok = false, warn = false, message = "服务拒绝访问，请检查账户状态")
+        LlmErrorCode.MODEL_NOT_FOUND.name -> TestResult(ok = false, warn = false, message = "模型不存在，请检查模型名（可能已退役）")
+        LlmErrorCode.RATE_LIMITED.name -> TestResult(ok = false, warn = true, message = "请求过于频繁或额度已用尽，稍后重试")
+        LlmErrorCode.SERVER_ERROR.name -> TestResult(ok = false, warn = true, message = "模型服务异常，请稍后重试")
+        LlmErrorCode.CONNECT_TIMEOUT.name, LlmErrorCode.READ_TIMEOUT.name ->
+            TestResult(ok = false, warn = true, message = "连接超时，请检查网络或服务地址")
+        LlmErrorCode.UNSUPPORTED_URL.name ->
+            TestResult(ok = false, warn = true, message = "地址不受支持，仅支持 https://；本地服务请填 http://localhost")
         else -> TestResult(ok = false, warn = true, message = err.message.ifBlank { "连接失败" })
     }
 

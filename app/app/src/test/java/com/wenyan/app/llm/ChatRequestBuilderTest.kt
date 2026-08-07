@@ -1,6 +1,7 @@
 package com.wenyan.app.llm
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.json.JSONArray
@@ -21,7 +22,8 @@ class ChatRequestBuilderTest {
         val body = JSONObject(ChatRequestBuilder.build(request))
         assertEquals("deepseek-v4-pro", body.getString("model"))
         assertEquals(true, body.getBoolean("stream"))
-        assertEquals(0.7, body.getDouble("temperature"), 0.0001)
+        // v1.7.x：不再发送 temperature（thinking-only 模型如 Kimi Code 只允许 1，发送 0.7 会 400）
+        assertFalse(body.has("temperature"))
 
         val messages = body.getJSONArray("messages")
         assertEquals(2, messages.length())

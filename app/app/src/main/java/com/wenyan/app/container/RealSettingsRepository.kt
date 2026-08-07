@@ -7,6 +7,7 @@ import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
+import com.wenyan.app.data.repository.ProviderUrlNormalizer
 import com.wenyan.app.data.update.UpdateCheckResult
 import com.wenyan.app.data.update.UpdateChecker
 import com.wenyan.app.llm.ChatRequest
@@ -229,7 +230,10 @@ class RealSettingsRepository(
                 )
             ).toList()
             events.filterIsInstance<LlmEvent.Failed>().firstOrNull()?.let {
-                UiMappers.toLlmError(it.error)
+                // v1.7.x：透传服务端真实错误正文（detail），否则 404 等只能看到笼统文案
+                val base = UiMappers.toLlmError(it.error)
+                if (it.detail.isNotBlank()) base.copy(message = "${base.message}（${it.detail}）")
+                else base
             }
         }
     }
@@ -243,7 +247,8 @@ class RealSettingsRepository(
 
     override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) {
         val entity = providerRepository.getProvider(id) ?: return
-        providerRepository.updateProvider(entity.copy(name = name, baseUrl = baseUrl))
+        val normalized = ProviderUrlNormalizer.normalize(baseUrl) ?: baseUrl
+        providerRepository.updateProvider(entity.copy(name = name, baseUrl = normalized))
         if (!apiKey.isNullOrBlank()) {
             providerRepository.updateProviderApiKey(id, apiKey)
         }

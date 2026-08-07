@@ -22,6 +22,10 @@ data class ChatRequest(
     val userText: String,
     /** v1.6.1 多图：一次请求可携带最多 [MAX_IMAGES_PER_REQUEST] 张图（content 数组多 image_url part） */
     val imageDataUrls: List<String> = emptyList(),
+    /**
+     * 历史兼容字段：v1.7.x 起不再写入请求体（thinking-only 模型只允许 temperature=1）。
+     * 保留参数避免改调用方；如需服务端调整，请直接用 system prompt 约束。
+     */
     val temperature: Double = 0.7,
     /** 同会话历史消息，注入在 system 之后、当前 user 之前 */
     val history: List<ChatHistoryMessage> = emptyList(),
@@ -64,7 +68,9 @@ object ChatRequestBuilder {
         val body = JSONObject()
         body.put("model", request.model)
         body.put("stream", true)
-        body.put("temperature", request.temperature)
+        // v1.7.x 不再发送 temperature：Kimi Code 等 thinking-only 模型只允许 temperature=1，
+        // 发送 0.7/0.3 会被 400 拒绝（invalid temperature: only 1 is allowed）。不传则服务端用默认值，
+        // 对所有 OpenAI 兼容服务通用。temperature 字段保留仅作历史兼容，不再入 body。
 
         val messages = JSONArray()
         val systemMsg = JSONObject()
