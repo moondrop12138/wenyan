@@ -140,6 +140,56 @@ class ProviderEditViewModelTest {
         assertEquals(listOf(1L to false), repo.connectionStatusCalls)
     }
 
+    // ===== v1.7.5 编辑模式 API Key 掩码回显 =====
+
+    @Test
+    fun `edit mode reveals saved api key`() = runTest(dispatcher) {
+        val repo = FakeSettingsRepository().apply {
+            providers.value = listOf(
+                ProviderInfo(5, "OpenAI", "https://api.openai.com", apiKeyConfigured = true, isPreset = false, sortOrder = 0),
+            )
+            apiKeyValue = "sk-test-123"
+        }
+        val vm = ProviderEditViewModel(repo, providerId = 5L)
+        advanceUntilIdle()
+        assertEquals("sk-test-123", vm.apiKey)
+        assertEquals("OpenAI", vm.name)
+    }
+
+    @Test
+    fun `saving unchanged api key does not re-encrypt`() = runTest(dispatcher) {
+        val repo = FakeSettingsRepository().apply {
+            providers.value = listOf(
+                ProviderInfo(5, "OpenAI", "https://api.openai.com", apiKeyConfigured = true, isPreset = false, sortOrder = 0),
+            )
+            apiKeyValue = "sk-test-123"
+        }
+        val vm = ProviderEditViewModel(repo, providerId = 5L)
+        advanceUntilIdle()
+        vm.privacyAck = true
+        vm.save {}
+        advanceUntilIdle()
+        // key 未修改 → updateProvider 收到 null（不重加密）；名称正常更新
+        assertEquals(listOf(Triple(5L, "OpenAI", null)), repo.providerUpdates)
+    }
+
+    @Test
+    fun `changing api key persists new value`() = runTest(dispatcher) {
+        val repo = FakeSettingsRepository().apply {
+            providers.value = listOf(
+                ProviderInfo(5, "OpenAI", "https://api.openai.com", apiKeyConfigured = true, isPreset = false, sortOrder = 0),
+            )
+            apiKeyValue = "sk-old"
+        }
+        val vm = ProviderEditViewModel(repo, providerId = 5L)
+        advanceUntilIdle()
+        vm.privacyAck = true
+        vm.apiKey = "sk-new"
+        vm.save {}
+        advanceUntilIdle()
+        assertEquals(listOf(Triple(5L, "OpenAI", "sk-new")), repo.providerUpdates)
+    }
+
     /** 轻量内存版 SettingsRepository（仅测试 ProviderEditViewModel 所需行为） */
     private class FakeSettingsRepository : SettingsRepository {
         override val providers = MutableStateFlow<List<ProviderInfo>>(emptyList())
@@ -158,6 +208,7 @@ class ProviderEditViewModelTest {
         var testConnectionCalls = 0
         var testConnectionResult: LlmError? = null
         val connectionStatusCalls = mutableListOf<Pair<Long, Boolean>>()
+        val providerUpdates = mutableListOf<Triple<Long, String, String?>>()
 
         override suspend fun setCurrentModel(id: Long) = Unit
         override suspend fun setVisionModel(id: Long) = Unit
@@ -167,7 +218,12 @@ class ProviderEditViewModelTest {
             return testConnectionResult
         }
         override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long = 1L
-        override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) = Unit
+        override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) {
+            providerUpdates.add(Triple(id, name, apiKey))
+        }
+        // v1.7.5 编辑回显用：默认无 key，测试可配置
+        var apiKeyValue: String? = null
+        override suspend fun getProviderApiKey(providerId: Long): String? = apiKeyValue
         override suspend fun deleteProvider(id: Long) = Unit
         override suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean) {
             addedModels.add(Triple(providerId, name, supportsVision))

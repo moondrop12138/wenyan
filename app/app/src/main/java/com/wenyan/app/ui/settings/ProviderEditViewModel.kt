@@ -33,6 +33,12 @@ class ProviderEditViewModel(
     var apiKey by mutableStateOf("")
     var showKey by mutableStateOf(false)
 
+    /**
+     * v1.7.5 编辑模式解密回显的原始 key（供保存时判断是否修改过）：
+     * 未修改 → 保存传 null 不重加密；清空 → 传 null 不覆盖（保持原行为）。
+     */
+    private var originalApiKey: String? = null
+
     var models by mutableStateOf<List<ModelInfo>>(emptyList())
     var newModelName by mutableStateOf("")
 
@@ -69,12 +75,25 @@ class ProviderEditViewModel(
                 }
             }
             viewModelScope.launch {
+                // v1.7.5 掩码回显：解密已保存 key 回填输入框（UI 默认 isSecret 掩码，点眼睛才见明文）；
+                // 解密失败/无 key → 保持空白；originalApiKey 供保存时判断是否修改
+                val decrypted = repo.getProviderApiKey(providerId)
+                if (!decrypted.isNullOrBlank()) {
+                    originalApiKey = decrypted
+                    apiKey = decrypted
+                }
+            }
+            viewModelScope.launch {
                 repo.models.collect { list ->
                     models = list.filter { it.providerId == providerId }
                 }
             }
         }
     }
+
+    /** v1.7.5 保存用 key：未修改（== 原解密值）→ null 不重加密；清空 → null 不覆盖；新值 → 传明文 */
+    private fun apiKeyToPersist(): String? =
+        apiKey.takeIf { it.isNotBlank() && it != originalApiKey }
 
     fun toggleKeyVisibility() {
         showKey = !showKey
@@ -99,7 +118,7 @@ class ProviderEditViewModel(
             val id = if (isNew) {
                 repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
             } else {
-                repo.updateProvider(providerId, name, baseUrl, apiKey.ifBlank { null })
+                repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
                 providerId
             }
             testResult = when (val err = repo.testConnection(id)) {
@@ -215,7 +234,7 @@ class ProviderEditViewModel(
             val id = if (isNew) {
                 repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
             } else {
-                repo.updateProvider(providerId, name, baseUrl, apiKey.ifBlank { null })
+                repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
                 providerId
             }
             // v1.6.3 保存后立即测试连接并写入红绿灯状态：成功绿灯，失败/未填 Key 红灯

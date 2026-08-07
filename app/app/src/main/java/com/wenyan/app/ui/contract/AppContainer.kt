@@ -24,6 +24,13 @@ interface SettingsRepository {
     suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long
     suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?)
     suspend fun deleteProvider(id: Long)
+
+    /**
+     * v1.7.5 取提供商已保存的明文 API Key（编辑页掩码回显用）。
+     * 存储层仍是 Keystore 加密；解密结果仅进内存输入框 state，不落盘。
+     */
+    suspend fun getProviderApiKey(providerId: Long): String?
+
     suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean)
     suspend fun deleteModel(id: Long)
     /**

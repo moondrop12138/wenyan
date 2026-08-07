@@ -253,6 +253,10 @@ class RealSettingsRepository(
         providerRepository.deleteProvider(id)
     }
 
+    /** v1.7.5 编辑页掩码回显：解密已保存 key（仅内存输入框，存储层仍是 Keystore 加密） */
+    override suspend fun getProviderApiKey(providerId: Long): String? =
+        providerRepository.decryptApiKey(providerId)
+
     override suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean) {
         providerRepository.addModel(providerId, name, supportsVision)
     }
