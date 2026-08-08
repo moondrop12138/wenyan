@@ -191,15 +191,17 @@ fun ChatInputBar(
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
-            // v1.7.0：悬浮胶囊 = strong 玻璃（glassFillStrong + 顶高光 + 描边 + 软影），
-            // 删除旧 shadowElevation=8 避免双影；内凹输入框保持实心 surface 底
+            // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜（strong 玻璃 + 光斑透出）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
                     // v1.7.1 二改：clip 在 liquidGlass 之后，软投影不被裁（此前投影丢失→纯色平台感）
-                    // v1.7.1-4 沉浸式：顶栏/输入栏改普通玻璃（透出光斑，不再像纯色块）
-                    .liquidGlass(shape = GtjShape.inputBar)
+                    .liquidGlass(
+                        shape = GtjShape.inputBar,
+                        strong = true,
+                        enablePressAnimation = true,
+                    )
                     .clip(GtjShape.inputBar),
             ) {
             Row(

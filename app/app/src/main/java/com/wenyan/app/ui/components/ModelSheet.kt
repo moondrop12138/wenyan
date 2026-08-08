@@ -83,8 +83,7 @@ fun ModelSheet(
     val view = LocalView.current
     val activity = remember(view) { view.context.findActivity() }
     if (canBlur) {
-        // v1.7.1-8：模糊双向动画——进入渐强（0→24f 250ms），退出渐弱（24→0f 200ms），
-        // 由 sheet 可见性驱动；每帧应用 decorView RenderEffect 半径
+        // v1.8.0：液态玻璃 2.0 · 模糊 + 折射叠加（API 33+ 叠加折射扭曲）
         val blurRadius = remember { Animatable(0f) }
         LaunchedEffect(blurRadius.value) {
             activity?.window?.decorView?.setRenderEffect(
@@ -95,8 +94,7 @@ fun ModelSheet(
                 },
             )
         }
-        // v1.7.1-10：用 targetValue 驱动——动画开始瞬间即变，模糊与弹层滑入/滑出同步（跟手）。
-        // 此前用 currentValue 要等动画结束才变化 → 模糊永远晚一拍（迟滞感）
+        // v1.8.0：流体过渡——弹层展开时玻璃从边缘「流入」，模糊渐强同时叠加轻微折射
         LaunchedEffect(sheetState.targetValue) {
             if (sheetState.targetValue == SheetValue.Hidden) {
                 blurRadius.animateTo(0f, tween(200))
@@ -193,6 +191,7 @@ private fun ModelRow(
             ModelRowContent(model, selected, p)
         }
     } else {
+        // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜
         GlassSurface(
             onClick = onClick,
             modifier = Modifier
@@ -203,6 +202,7 @@ private fun ModelRow(
                     this.selected = selected
                 },
             shape = GtjShape.lg,
+            enablePressAnimation = true,
         ) {
             ModelRowContent(model, selected, p)
         }

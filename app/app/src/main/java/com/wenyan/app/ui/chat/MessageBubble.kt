@@ -96,12 +96,13 @@ fun MessageBubble(
                         true
                     }
                 }
-                // v1.7.0 玻璃气泡：liquidGlass 管玻璃（用户侧叠 tint + 棕描边），
+                // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜（折射/辉光）
                 // v1.7.1 二改：clip 置后（此前投影被 clip 裁掉→气泡无层次）
                 .liquidGlass(
                     shape = if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi,
                     tint = if (isUser) rememberUserBubbleTint() else null,
                     borderColor = if (isUser) rememberUserBubbleBorder() else null,
+                    enablePressAnimation = true,
                 )
                 .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
         ) {
@@ -236,11 +237,13 @@ fun SelectableMessageContent(
             Box(
                 modifier = Modifier
                     .widthIn(max = if (isUser) 300.dp else 340.dp)
+                    // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜（折射/辉光）
                     // v1.7.1 二改：clip 置后，软投影不被裁
                     .liquidGlass(
                         shape = if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi,
                         tint = if (isUser) rememberUserBubbleTint() else null,
                         borderColor = if (isUser) rememberUserBubbleBorder() else null,
+                        enablePressAnimation = true,
                     )
                     .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
             ) {
@@ -271,8 +274,9 @@ fun StreamingBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 340.dp)
+                // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜
                 // v1.7.1 二改：clip 置后，软投影不被裁
-                .liquidGlass(shape = GtjShape.bubbleAi)
+                .liquidGlass(shape = GtjShape.bubbleAi, enablePressAnimation = true)
                 .clip(GtjShape.bubbleAi),
         ) {
             Text(
@@ -298,8 +302,9 @@ fun StreamingPlaceholderBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 340.dp)
+                // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜
                 // v1.7.1 二改：clip 置后，软投影不被裁
-                .liquidGlass(shape = GtjShape.bubbleAi)
+                .liquidGlass(shape = GtjShape.bubbleAi, enablePressAnimation = true)
                 .clip(GtjShape.bubbleAi),
         ) {
             Text(

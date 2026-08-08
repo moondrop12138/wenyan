@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -67,6 +66,7 @@ import com.wenyan.app.ui.components.ThickDivider
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.GlowBackground
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlowState
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.TargetUi
@@ -116,13 +116,16 @@ fun SettingsScreen(
         }
     }
 
+    // v1.8.0：液态玻璃 2.0 · 光斑状态共享
+    val glowState = rememberGlowState()
+
     // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        GlowBackground()
+        GlowBackground(onGlowPositionsChanged = glowState::update)
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            // v1.7.1 二改续：顶栏悬浮胶囊（与聊天页/输入栏同款 strong 玻璃）
+            // v1.8.0 液态玻璃 2.0：顶栏悬浮胶囊（光斑交互 + 边缘透镜）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,8 +136,11 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        // v1.7.1-4 沉浸式：顶栏改普通玻璃
-                        .liquidGlass(shape = GtjShape.inputBar)
+                        .liquidGlass(
+                            shape = GtjShape.inputBar,
+                            glowPositions = glowState.positions,
+                            glowIntensities = glowState.intensities,
+                        )
                         .clip(GtjShape.inputBar),
                 ) {
                     Row(
@@ -228,8 +234,10 @@ fun SettingsScreen(
             item {
                 // v1.7.2 自动记忆开关行（玻璃行 + Switch，默认开）
                 GlassSurface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RectangleShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -300,14 +308,23 @@ fun SettingsScreen(
                 )
             }
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                // v1.8.0：清除全部档案也统一为玻璃卡片样式（与提供商/设置行一致）
+                GlassSurface(
+                    onClick = vm::requestWipe,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
                 ) {
-                    Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.fgSecondary)
-                    Spacer(Modifier.width(12.dp))
-                    Text("清除全部档案", style = GtjType.Body, color = p.danger, modifier = Modifier.weight(1f))
-                    GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "清除全部档案", onClick = vm::requestWipe, tint = p.danger, iconSize = 20.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    ) {
+                        Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.danger)
+                        Spacer(Modifier.width(12.dp))
+                        Text("清除全部档案", style = GtjType.Body, color = p.danger, modifier = Modifier.weight(1f))
+                        Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(20.dp), tint = p.danger)
+                    }
                 }
             }
             item {
@@ -400,8 +417,10 @@ private fun SettingsRow(
     GlassSurface(
         onClick = onClick ?: {},
         enabled = onClick != null,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RectangleShape,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = GtjShape.md,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

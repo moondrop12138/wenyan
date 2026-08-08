@@ -55,6 +55,7 @@ import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.components.SecondaryButton
 import com.wenyan.app.ui.components.glass.GlowBackground
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlowState
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.navigation.rememberViewModel
@@ -77,13 +78,16 @@ fun ProviderEditScreen(
     }
     val p = LocalGtjColors.current
 
+    // v1.8.0：液态玻璃 2.0 · 光斑状态共享
+    val glowState = rememberGlowState()
+
     // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        GlowBackground()
+        GlowBackground(onGlowPositionsChanged = glowState::update)
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            // v1.7.1 二改续：顶栏悬浮胶囊（与聊天页/输入栏同款 strong 玻璃）
+            // v1.8.0 液态玻璃 2.0：顶栏悬浮胶囊（光斑交互 + 边缘透镜）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -94,8 +98,11 @@ fun ProviderEditScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        // v1.7.1-4 沉浸式：顶栏改普通玻璃
-                        .liquidGlass(shape = GtjShape.inputBar)
+                        .liquidGlass(
+                            shape = GtjShape.inputBar,
+                            glowPositions = glowState.positions,
+                            glowIntensities = glowState.intensities,
+                        )
                         .clip(GtjShape.inputBar),
                 ) {
                     Row(

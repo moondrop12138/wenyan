@@ -87,8 +87,8 @@ android {
         // v1.7.6 BYOK 兼容性加固：移除 temperature（Kimi Code/OpenAI 推理模型只允许 1，发 0.7/0.3 必 400）/
         //  Base URL 规范化+非法字符校验（ProviderUrlNormalizer：trim/去尾斜杠/剥 /chat/completions）/
         //  错误码枚举匹配修复（ErrorCard/测试连接红绿灯原按 "401"/"404" 数字匹配全落空）+ 测试连接透传服务端 detail
-        versionCode = 31
-        versionName = "1.7.6"
+        versionCode = 32
+        versionName = "1.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

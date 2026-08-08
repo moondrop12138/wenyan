@@ -87,7 +87,10 @@ import com.wenyan.app.ui.components.TranscriptionCard
 import com.wenyan.app.ui.components.TypingIndicator
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.GlowState
+import com.wenyan.app.ui.components.glass.LiquidGlassContainer
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlowState
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.MessageType
@@ -219,6 +222,9 @@ fun ChatScreen(
             }
         },
     ) {
+    // v1.8.0：液态玻璃 2.0 · 光斑状态共享（供玻璃组件交互）
+    val glowState = rememberGlowState()
+
     // v1.7.1：根 Box 加主题背景（防 App 内主题与系统主题脱节时透明 Scaffold 露出暗色 windowBackground）；光斑画在背景之上
     // v1.7.1-5：blur 提升到整个背景层（含顶栏/输入栏/消息区），抽屉打开时全部渐强模糊
     Box(
@@ -229,7 +235,7 @@ fun ChatScreen(
                 renderEffect = contentBlur
             },
     ) {
-        GlowBackground()
+        GlowBackground(onGlowPositionsChanged = glowState::update)
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -239,6 +245,7 @@ fun ChatScreen(
                 onModelClick = { showModelSheet = true },
                 onSettings = onOpenSettings,
                 onMenu = { scope.launch { drawerState.open() } },
+                glowState = glowState,
             )
         },
         bottomBar = {
@@ -568,6 +575,7 @@ private fun ChatTopBar(
     onModelClick: () -> Unit,
     onSettings: () -> Unit,
     onMenu: () -> Unit,
+    glowState: GlowState? = null,
 ) {
     val p = LocalGtjColors.current
     val reduced = rememberReducedMotion()
@@ -610,8 +618,12 @@ private fun ChatTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                // v1.7.1-4 沉浸式：顶栏改普通玻璃（透出光斑，不再像纯色块）
-                .liquidGlass(shape = GtjShape.inputBar)
+                // v1.8.0 液态玻璃 2.0：光斑交互 + 边缘透镜
+                .liquidGlass(
+                    shape = GtjShape.inputBar,
+                    glowPositions = glowState?.positions ?: emptyList(),
+                    glowIntensities = glowState?.intensities ?: emptyList(),
+                )
                 .clip(GtjShape.inputBar),
         ) {
         Row(

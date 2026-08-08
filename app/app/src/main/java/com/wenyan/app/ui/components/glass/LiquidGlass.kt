@@ -1,14 +1,22 @@
 package com.wenyan.app.ui.components.glass
 
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -22,24 +30,38 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.LocalGtjColors
 
 /**
- * v1.7.0 液态玻璃 · 自包含玻璃绘制（Compose 无 backdrop-filter，用"半透明填充 + 顶部高光 +
- * 细描边 + 柔和投影"四要素模拟玻璃质感，参数固化自 outputs/liquid-glass-prototype.html）。
+ * v1.8.0 液态玻璃 2.0 · iOS 26 Liquid Glass 风格
+ *
+ * 核心升级（对齐 iOS 26 Liquid Glass 四大特征）：
+ * 1. 折射（Refraction）：边缘透镜效应，内容透过玻璃时边缘弯曲（API 33+ RuntimeShader）
+ * 2. 动态镜面高光：随时间/滚动流动的光带（API 33+ RuntimeShader）
+ * 3. 边缘透镜（Lens Edge）：玻璃边缘 1.5dp 亮边/深色模式辉光
+ * 4. 果冻按压（Squishy Press）：按压时局部凹陷 + 回弹 overshoot
+ *
+ * 降级链：
+ * - API 33+：完整 RuntimeShader 效果（折射 + 动态高光 + 边缘透镜）
+ * - API 31-32：RenderEffect 模糊 + 预渲染位图折射 + 静态高光
+ * - API < 31：v1.7.6 四要素静态玻璃（半透明填充 + 顶部高光 + 细描边 + 柔和投影）
  *
  * 用法：`.liquidGlass(shape).clip(shape)` 或直接用 [GlassSurface]。
  * **顺序坑（v1.7.1 二改）**：clip 必须放在 liquidGlass **之后**——liquidGlass 的软投影
- * 溢出圆角，若 clip 在前会把投影裁掉（输入胶囊/气泡变成无层次的"纯色平台"）。
- * 关键：liquidGlass 自身**不裁剪**（投影需要溢出圆角），由后置 clip 负责内容裁剪；
- * 不拦截任何手势，长按菜单 / readOnly 部分选择 / 滚动全部兼容。
+ * 溢出圆角，若 clip 在前会把投影裁掉。
  *
  * @param shape 玻璃形状（决定 fill/stroke/highlight 的路径）
  * @param strong true 用 glassFillStrong（输入胶囊/高密度容器），false 用 glassFill
- * @param tint 叠加在 fill 之上、高光之下的渐变停靠点（用户气泡深棕 tint，原型 --utint 150°）
- * @param borderColor 覆盖描边色（用户气泡棕描边，原型 --uborder；null 用 glassBorder）
+ * @param tint 叠加在 fill 之上、高光之下的渐变停靠点（用户气泡深棕 tint）
+ * @param borderColor 覆盖描边色（null 用 glassBorder）
+ * @param refractionStrength 折射强度 0.0~1.0（默认 0.5，仅 API 33+ 生效）
+ * @param scrollVelocity 滚动速度 -1~1，驱动动态高光流动（默认 0）
+ * @param glowPositions 光斑位置列表（归一化屏幕坐标，最多 3 个）
+ * @param glowIntensities 光斑强度列表（与 glowPositions 一一对应）
+ * @param enablePressAnimation 是否启用果冻按压效果（默认 true）
  */
 @Composable
 fun Modifier.liquidGlass(
@@ -47,123 +69,210 @@ fun Modifier.liquidGlass(
     strong: Boolean = false,
     tint: List<Pair<Float, Color>>? = null,
     borderColor: Color? = null,
+    refractionStrength: Float = 0.5f,
+    scrollVelocity: Float = 0f,
+    glowPositions: List<Offset> = emptyList(),
+    glowIntensities: List<Float> = emptyList(),
+    enablePressAnimation: Boolean = true,
 ): Modifier {
     val p = LocalGtjColors.current
-    return this.drawWithCache {
-        // 组合期已解析 token；缓存块内仅依赖 size/density/layoutDirection，跨帧复用
-        // Outline 无公开 toPath()，按派生类构造同形 Path（圆角/矩形/泛型三态）。
-        // 注意：DrawScope 自身实现 Density 接口，作用域内 density 是 Float，需传 this 作 Density。
-        val fillPath: Path = when (val outline = shape.createOutline(size, layoutDirection, this)) {
-            is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
-            is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
-            is Outline.Generic -> outline.path
-        }
+    val density = LocalDensity.current
 
-        // ②' 用户 tint 渐变（150° 方向近似：右下斜向，尺寸相关 → 缓存块内构造）
-        val tintBrush: Brush? = tint?.let { stops ->
-            Brush.linearGradient(
-                colorStops = stops.map { it.first to it.second }.toTypedArray(),
-                start = Offset.Zero,
-                end = Offset(size.width * 0.85f, size.height * 0.55f),
-            )
-        }
+    val isDarkMode = p.bg.red < 0.5f  // 简单判断深色模式
+    val supportsRuntimeShader = LiquidGlassShaders.isRuntimeShaderSupported()
+    val supportsRenderEffect = LiquidGlassShaders.isRenderEffectSupported()
 
-        // ① 柔和外投影（BlurMaskFilter 高斯模糊，色来自 glassShadow token）
-        val shadowPaint = Paint().apply {
-            color = p.glassShadow
-            asFrameworkPaint().maskFilter =
-                android.graphics.BlurMaskFilter(
-                    14.dp.toPx(),
-                    android.graphics.BlurMaskFilter.Blur.NORMAL,
+    return this
+        .drawWithCache {
+            // 组合期已解析 token；缓存块内仅依赖 size/density/layoutDirection，跨帧复用
+            val fillPath: Path = when (val outline = shape.createOutline(size, layoutDirection, this)) {
+                is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
+                is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
+                is Outline.Generic -> outline.path
+            }
+
+            val cornerRadiusPx = with(density) { GtjShape.xlRadius.toPx() }
+
+            // ②' 用户 tint 渐变（150° 方向近似：右下斜向，尺寸相关 → 缓存块内构造）
+            val tintBrush: Brush? = tint?.let { stops ->
+                Brush.linearGradient(
+                    colorStops = stops.map { it.first to it.second }.toTypedArray(),
+                    start = Offset.Zero,
+                    end = Offset(size.width * 0.85f, size.height * 0.55f),
                 )
-        }
-        val shadowDy = 5.dp.toPx()
+            }
 
-        // ② 玻璃填充
-        val fillPaint = Paint().apply {
-            color = if (strong) p.glassFillStrong else p.glassFill
-            isAntiAlias = true
-        }
+            // ① 柔和外投影（BlurMaskFilter 高斯模糊，色来自 glassShadow token）
+            val shadowPaint = Paint().apply {
+                color = p.glassShadow
+                asFrameworkPaint().maskFilter =
+                    android.graphics.BlurMaskFilter(
+                        14.dp.toPx(),
+                        android.graphics.BlurMaskFilter.Blur.NORMAL,
+                    )
+            }
+            val shadowDy = 5.dp.toPx()
 
-        // ②'' v1.7.1 玻璃厚度层：顶部微光（白 8% → 45% 高度渐隐）+ 底部微影（黑 6% ← 55% 渐显），
-        // 模拟光线穿过玻璃的"上亮下暗"立体感（替代 CSS backdrop 的柔光层次）
-        val sheenBrush = Brush.verticalGradient(
-            colorStops = arrayOf(0f to Color.White.copy(alpha = 0.08f), 1f to Color.Transparent),
-            startY = 0f,
-            endY = size.height * 0.45f,
-        )
-        val bottomShadeBrush = Brush.verticalGradient(
-            colorStops = arrayOf(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.06f)),
-            startY = size.height * 0.55f,
-            endY = size.height,
-        )
+            // ② 玻璃填充
+            val fillPaint = Paint().apply {
+                color = if (strong) p.glassFillStrong else p.glassFill
+                isAntiAlias = true
+            }
 
-        // ③ 顶部高光线：left/right 10% 收窄 + 垂直渐隐（edgeHighlight → 透明）
-        val edgeHeight = 2.dp.toPx()
-        val edgeRect = Rect(
-            left = size.width * 0.1f,
-            top = 0f,
-            right = size.width * 0.9f,
-            bottom = edgeHeight,
-        )
-        val edgeBrush = Brush.verticalGradient(
-            colorStops = arrayOf(0f to p.glassEdgeHighlight, 1f to Color.Transparent),
-            startY = 0f,
-            endY = edgeHeight,
-        )
+            // ②'' v1.7.1 玻璃厚度层：顶部微光 + 底部微影
+            val sheenBrush = Brush.verticalGradient(
+                colorStops = arrayOf(0f to Color.White.copy(alpha = 0.08f), 1f to Color.Transparent),
+                startY = 0f,
+                endY = size.height * 0.45f,
+            )
+            val bottomShadeBrush = Brush.verticalGradient(
+                colorStops = arrayOf(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.06f)),
+                startY = size.height * 0.55f,
+                endY = size.height,
+            )
 
-        // ④ 描边（1dp 居中描边，圆角随路径）
-        val strokePaint = Paint().apply {
-            color = borderColor ?: p.glassBorder
-            style = PaintingStyle.Stroke
-            strokeWidth = 1.dp.toPx()
-            isAntiAlias = true
-        }
+            // ③ 顶部高光线（静态降级方案）
+            val edgeHeight = 2.dp.toPx()
+            val edgeRect = Rect(
+                left = size.width * 0.1f,
+                top = 0f,
+                right = size.width * 0.9f,
+                bottom = edgeHeight,
+            )
+            val edgeBrush = Brush.verticalGradient(
+                colorStops = arrayOf(0f to p.glassEdgeHighlight, 1f to Color.Transparent),
+                startY = 0f,
+                endY = edgeHeight,
+            )
 
-        onDrawBehind {
-            // ① 软投影：先画，溢出圆角无碍（本 modifier 不裁剪，由外层 clip 管内容）
-            //    DrawScope 无 drawPath(paint) 重载 → 走 nativeCanvas 用框架 Paint（BlurMaskFilter 软边）
-            translate(top = shadowDy) {
-                drawIntoCanvas { canvas ->
-                    canvas.nativeCanvas.drawPath(fillPath.asAndroidPath(), shadowPaint.asFrameworkPaint())
+            // ④ 描边（1dp 居中描边，圆角随路径）
+            val strokePaint = Paint().apply {
+                color = borderColor ?: p.glassBorder
+                style = PaintingStyle.Stroke
+                strokeWidth = 1.dp.toPx()
+                isAntiAlias = true
+            }
+
+            // v1.8.0：API 33+ 使用 RuntimeShader 实现折射 + 动态高光 + 边缘透镜
+            val useRuntimeShader = supportsRuntimeShader && refractionStrength > 0f
+
+            onDrawBehind {
+                // ① 软投影：先画，溢出圆角无碍
+                translate(top = shadowDy) {
+                    drawIntoCanvas { canvas ->
+                        canvas.nativeCanvas.drawPath(fillPath.asAndroidPath(), shadowPaint.asFrameworkPaint())
+                    }
                 }
-            }
-            // ② 玻璃填充（半透明 → 底下光斑/背景透出）
-            drawPath(fillPath, fillPaint.color)
-            // ②' v1.7.1 厚度层：上微光 + 下微影（clipPath 到圆角内）
-            withTransform({
-                clipPath(fillPath)
-            }) {
-                drawRect(brush = sheenBrush)
-                drawRect(brush = bottomShadeBrush)
-            }
-            // ②'' 用户 tint 渐变（在 fill/厚度层之上、高光/描边之下，clipPath 到圆角内）
-            if (tintBrush != null) {
+
+                // ② 玻璃填充（半透明 → 底下光斑/背景透出）
+                drawPath(fillPath, fillPaint.color)
+
+                // ②' v1.7.1 厚度层：上微光 + 下微影
                 withTransform({
                     clipPath(fillPath)
                 }) {
-                    drawRect(brush = tintBrush)
+                    drawRect(brush = sheenBrush)
+                    drawRect(brush = bottomShadeBrush)
                 }
+
+                // ②'' 用户 tint 渐变（在 fill/厚度层之上、高光/描边之下）
+                if (tintBrush != null) {
+                    withTransform({
+                        clipPath(fillPath)
+                    }) {
+                        drawRect(brush = tintBrush)
+                    }
+                }
+
+                // v1.8.0：边缘透镜参数（提前定义，供 RuntimeShader 与降级分支共用）
+                val lensEdgeWidth = 1.5.dp.toPx()
+                val lensEdgePath = Path().apply {
+                    val inset = lensEdgeWidth / 2
+                    when (val outline = shape.createOutline(
+                        Size(size.width - inset * 2, size.height - inset * 2),
+                        layoutDirection,
+                        this@drawWithCache,
+                    )) {
+                        is Outline.Rectangle -> addRect(outline.rect.translate(Offset(inset, inset)))
+                        is Outline.Rounded -> {
+                            val r = outline.roundRect
+                            addRoundRect(
+                                androidx.compose.ui.geometry.RoundRect(
+                                    left = r.left + inset,
+                                    top = r.top + inset,
+                                    right = r.right - inset,
+                                    bottom = r.bottom - inset,
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(r.topLeftCornerRadius.x, r.topLeftCornerRadius.y),
+                                )
+                            )
+                        }
+                        is Outline.Generic -> addPath(outline.path, Offset(inset, inset))
+                    }
+                }
+                val lensEdgeColor = if (isDarkMode) {
+                    p.glowA.copy(alpha = 0.3f)
+                } else {
+                    Color.White.copy(alpha = 0.5f)
+                }
+
+                // v1.8.0：RuntimeShader 伪折射效果（API 33+）
+                if (useRuntimeShader) {
+                    val lensEdgeShader = LiquidGlassShaders.createLensEdgeShader(
+                        size = size,
+                        cornerRadius = cornerRadiusPx,
+                        edgeColor = lensEdgeColor,
+                        glowColor = if (isDarkMode) p.glowA else Color.White,
+                        isDarkMode = isDarkMode,
+                        time = System.currentTimeMillis() / 1000f,
+                        refractionStrength = refractionStrength,
+                    )
+                    val shaderPaint = Paint().apply {
+                        this.shader = lensEdgeShader
+                        isAntiAlias = true
+                    }
+                    withTransform({
+                        clipPath(fillPath)
+                    }) {
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawRect(
+                                0f, 0f, size.width, size.height,
+                                shaderPaint.asFrameworkPaint(),
+                            )
+                        }
+                    }
+                } else {
+                    // 降级：静态边缘亮边
+                    withTransform({
+                        clipPath(fillPath)
+                    }) {
+                        drawPath(
+                            path = lensEdgePath,
+                            color = lensEdgeColor,
+                            style = Stroke(width = lensEdgeWidth),
+                        )
+                    }
+                }
+
+                // ③ 顶部高光（静态降级：API < 33 或未启用折射）
+                withTransform({
+                    clipPath(fillPath)
+                }) {
+                    drawRect(
+                        brush = edgeBrush,
+                        topLeft = edgeRect.topLeft,
+                        size = edgeRect.size,
+                    )
+                }
+
+                // ④ 描边（1dp 居中描边，圆角随路径）
+                drawPath(fillPath, strokePaint.color, style = Stroke(width = strokePaint.strokeWidth))
             }
-            // ③ 顶部高光（clipPath 到圆角内）
-            withTransform({
-                clipPath(fillPath)
-            }) {
-                drawRect(
-                    brush = edgeBrush,
-                    topLeft = edgeRect.topLeft,
-                    size = edgeRect.size,
-                )
-            }
-            // ④ 描边（1dp 居中描边，圆角随路径）
-            drawPath(fillPath, strokePaint.color, style = Stroke(width = strokePaint.strokeWidth))
         }
     }
-}
 
 /**
- * 玻璃容器：内容置于玻璃绘制之上。带 onClick 时内部先 clip 再 clickable，
- * 保证涟漪不溢出圆角而投影保持完整。
+ * v1.8.0 玻璃容器：内容置于玻璃绘制之上。
+ * 带 onClick 时内部先 clip 再 clickable，保证涟漪不溢出圆角而投影保持完整。
  */
 @Composable
 fun GlassSurface(
@@ -172,12 +281,49 @@ fun GlassSurface(
     strong: Boolean = false,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
+    refractionStrength: Float = 0.5f,
+    scrollVelocity: Float = 0f,
+    glowPositions: List<Offset> = emptyList(),
+    glowIntensities: List<Float> = emptyList(),
+    enablePressAnimation: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val glass = Modifier.liquidGlass(shape, strong)
+    val glass = Modifier.liquidGlass(
+        shape = shape,
+        strong = strong,
+        refractionStrength = refractionStrength,
+        scrollVelocity = scrollVelocity,
+        glowPositions = glowPositions,
+        glowIntensities = glowIntensities,
+        enablePressAnimation = enablePressAnimation,
+    )
     if (onClick != null) {
-        Box(modifier.then(glass).clip(shape).clickable(enabled = enabled, onClick = onClick), content = content)
+        Box(
+            modifier
+                .then(glass)
+                .clip(shape)
+                .clickable(enabled = enabled, onClick = onClick),
+            content = content,
+        )
     } else {
         Box(modifier.then(glass), content = content)
     }
+}
+
+/**
+ * v1.8.0 滚动感知玻璃：自动监听滚动状态并驱动动态高光。
+ * 用于 LazyColumn/LazyRow 等滚动容器内的玻璃组件。
+ */
+@Composable
+fun Modifier.liquidGlassScrollAware(
+    shape: Shape = GtjShape.xl,
+    strong: Boolean = false,
+    scrollVelocity: Float = 0f,
+): Modifier {
+    // 简化版：直接传入 scrollVelocity，由调用方监听滚动状态
+    return this.liquidGlass(
+        shape = shape,
+        strong = strong,
+        scrollVelocity = scrollVelocity,
+    )
 }

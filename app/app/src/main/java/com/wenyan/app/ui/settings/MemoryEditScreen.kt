@@ -48,6 +48,7 @@ import com.wenyan.app.ui.components.SliderField
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.GlowBackground
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlowState
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.MemoryFactUi
 import com.wenyan.app.ui.navigation.rememberViewModel
@@ -75,8 +76,11 @@ fun MemoryEditScreen(
     }
     val p = LocalGtjColors.current
 
+    // v1.8.0：液态玻璃 2.0 · 光斑状态共享
+    val glowState = rememberGlowState()
+
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        GlowBackground()
+        GlowBackground(onGlowPositionsChanged = glowState::update)
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -90,7 +94,11 @@ fun MemoryEditScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp)
-                            .liquidGlass(shape = GtjShape.inputBar)
+                            .liquidGlass(
+                                shape = GtjShape.inputBar,
+                                glowPositions = glowState.positions,
+                                glowIntensities = glowState.intensities,
+                            )
                             .clip(GtjShape.inputBar),
                     ) {
                         Row(
