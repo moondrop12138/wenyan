@@ -10,26 +10,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shape
 import com.wenyan.app.ui.theme.GtjShape
 
 /**
- * v1.8.0 液态玻璃容器 · 统一封装滚动感知、光斑交互、按压动画
+ * v1.8.0 液态玻璃容器 · 统一封装滚动感知与按压动画
  *
  * 这是液态玻璃 2.0 的统一入口，自动处理：
  * - 滚动速度 → 动态高光流动
- * - 光斑位置 → 玻璃局部亮度提升
  * - 按压手势 → 果冻弹性形变
+ *
+ * v1.8.1 B4：移除 glowState 光斑交互——该链路为 dead path
+ * （liquidGlass 接收光斑参数后从未使用），且每帧重组开销大。
  *
  * 用法：
  * ```kotlin
- * val glowState = rememberGlowState()
- * GlowBackground(onGlowPositionsChanged = glowState::update)
- *
  * LiquidGlassContainer(
  *     listState = listState,  // 可选，滚动容器传入
- *     glowState = glowState,  // 可选，光斑交互
  * ) {
  *     // 内容
  * }
@@ -43,7 +40,6 @@ fun LiquidGlassContainer(
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     listState: LazyListState? = null,
-    glowState: GlowState? = null,
     refractionStrength: Float = 0.5f,
     enablePressAnimation: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
@@ -60,17 +56,11 @@ fun LiquidGlassContainer(
         }
     }
 
-    // 光斑位置（从 GlowState 读取）
-    val glowPositions: List<Offset> = glowState?.positions ?: emptyList()
-    val glowIntensities: List<Float> = glowState?.intensities ?: emptyList()
-
     val glass = Modifier.liquidGlass(
         shape = shape,
         strong = strong,
         refractionStrength = refractionStrength,
         scrollVelocity = scrollVelocity,
-        glowPositions = glowPositions,
-        glowIntensities = glowIntensities,
         enablePressAnimation = enablePressAnimation,
     )
 
@@ -92,7 +82,7 @@ fun LiquidGlassContainer(
  *
  * 用法：
  * ```kotlin
- * Box(Modifier.liquidGlassContainer(listState = listState, glowState = glowState)) {
+ * Box(Modifier.liquidGlassContainer(listState = listState)) {
  *     // 内容
  * }
  * ```
@@ -102,7 +92,6 @@ fun Modifier.liquidGlassContainer(
     shape: Shape = GtjShape.xl,
     strong: Boolean = false,
     listState: LazyListState? = null,
-    glowState: GlowState? = null,
     refractionStrength: Float = 0.5f,
     enablePressAnimation: Boolean = true,
 ): Modifier {
@@ -115,16 +104,11 @@ fun Modifier.liquidGlassContainer(
         }
     }
 
-    val glowPositions: List<Offset> = glowState?.positions ?: emptyList()
-    val glowIntensities: List<Float> = glowState?.intensities ?: emptyList()
-
     return this.liquidGlass(
         shape = shape,
         strong = strong,
         refractionStrength = refractionStrength,
         scrollVelocity = scrollVelocity,
-        glowPositions = glowPositions,
-        glowIntensities = glowIntensities,
         enablePressAnimation = enablePressAnimation,
     )
 }

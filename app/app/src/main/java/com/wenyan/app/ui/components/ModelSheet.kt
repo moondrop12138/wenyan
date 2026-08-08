@@ -1,11 +1,6 @@
 package com.wenyan.app.ui.components
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.os.Build
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,20 +24,15 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -75,43 +65,11 @@ fun ModelSheet(
     val p = LocalGtjColors.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    // v1.7.1-7：液态玻璃 + 真高斯模糊（渐入）——直接对 Activity decorView 做 RenderEffect，
-    // 半径 0→24f 由弱渐强（250ms）；**坑**：dialog window context 是 ContextThemeWrapper，
-    // 必须沿 ContextWrapper 链 findActivity（as? Activity 必为 null）
+    // v1.8.1 B3 修复：移除 decorView 全屏模糊——项目记忆明令「两套模糊机制不可并存（会叠加）」，
+    // 抽屉模糊走 graphicsLayer，弹层再走 decorView.setRenderEffect 既叠加又有 onDispose 误清抽屉的风险。
+    // ModalBottomSheet 自带 scrim 遮罩已足够承担背景压暗职责。API 31+ 玻璃容器透出光斑保留。
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val sheetColor = if (canBlur) p.glassFillStrong else p.surfaceElevated
-    val view = LocalView.current
-    val activity = remember(view) { view.context.findActivity() }
-    if (canBlur) {
-        // v1.8.0：液态玻璃 2.0 · 模糊 + 折射叠加（API 33+ 叠加折射扭曲）
-        val blurRadius = remember { Animatable(0f) }
-        LaunchedEffect(blurRadius.value) {
-            activity?.window?.decorView?.setRenderEffect(
-                if (blurRadius.value > 0.5f) {
-                    android.graphics.RenderEffect.createBlurEffect(blurRadius.value, blurRadius.value, android.graphics.Shader.TileMode.DECAL)
-                } else {
-                    null
-                },
-            )
-        }
-        // v1.8.0：流体过渡——弹层展开时玻璃从边缘「流入」，模糊渐强同时叠加轻微折射
-        LaunchedEffect(sheetState.targetValue) {
-            if (sheetState.targetValue == SheetValue.Hidden) {
-                blurRadius.animateTo(0f, tween(200))
-            } else {
-                blurRadius.animateTo(24f, tween(250))
-            }
-        }
-    }
-    DisposableEffect(activity) {
-        onDispose {
-            // 弹层销毁兜底清除，否则主界面持续模糊。
-            // 注意：setRenderEffect 是 API 31+，低版本必须守卫——否则关闭弹层直接 NoSuchMethodError 崩溃
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                activity?.window?.decorView?.setRenderEffect(null)
-            }
-        }
-    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -269,11 +227,4 @@ private fun ModelRowContent(
                 }
             }
         }
-}
-
-/** v1.7.1-6：沿 ContextWrapper 链向上找 Activity（Dialog 的 context 是 ContextThemeWrapper）。 */
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }

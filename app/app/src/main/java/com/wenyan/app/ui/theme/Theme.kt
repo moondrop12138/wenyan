@@ -7,9 +7,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowInsetsControllerCompat
+
+/** v1.8.1 B5：显式深色模式标记（替代 bg.red 启发式，陶土棕/中性灰背景下不会误判） */
+val LocalGtjIsDark = staticCompositionLocalOf { false }
 
 /** 主题模式（DataStore.theme：light / dark / system，SPEC §8） */
 enum class ThemeMode(val key: String) {
@@ -53,7 +57,7 @@ fun GtjTheme(
             }
         }
     }
-    CompositionLocalProvider(LocalGtjColors provides palette) {
+    CompositionLocalProvider(LocalGtjColors provides palette, LocalGtjIsDark provides dark) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = GtjTypography,

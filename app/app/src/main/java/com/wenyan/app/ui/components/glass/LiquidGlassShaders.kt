@@ -3,10 +3,8 @@ package com.wenyan.app.ui.components.glass
 import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 
 /**
  * v1.8.0 液态玻璃 2.0 · AGSL Shader 工厂
@@ -15,9 +13,10 @@ import androidx.compose.ui.graphics.toArgb
  * - 折射（Refraction）：边缘透镜效应，内容透过玻璃时边缘弯曲
  * - 动态镜面高光（Dynamic Specular）：随时间/滚动流动的光带
  * - 边缘透镜（Lens Edge）：玻璃边缘的亮边/辉光
- * - 光斑交互（Glow Interaction）：光斑位置影响玻璃局部亮度
  *
- * 降级策略：API < 33 时返回 null，调用方回退到位图方案或 v1.7.6 四要素。
+ * v1.8.1 B4：移除光斑交互（Glow Interaction）——链路未接通且每帧重组开销大，已删 dead path。
+ *
+ * 降级策略：API < 33 或 AGSL 编译失败时返回 null，调用方回退到静态亮边方案。
  */
 object LiquidGlassShaders {
 
@@ -183,39 +182,6 @@ object LiquidGlassShaders {
     """
 
     /**
-     * 光斑交互 Shader：光斑位置影响玻璃局部亮度与形变。
-     * uniform:
-     *   uResolution: vec2
-     *   uGlowPositions: vec3[3] - 3 个光斑的屏幕位置（归一化）
-     *   uGlowIntensities: float[3] - 光斑强度
-     *   uGlassBounds: vec4 - 玻璃在屏幕中的位置（归一化 xywh）
-     */
-    private const val GLOW_INTERACTION_SHADER = """
-        uniform float2 uResolution;
-        uniform float3 uGlowPositions[3];
-        uniform float uGlowIntensities[3];
-        uniform float4 uGlassBounds;
-
-        half4 main(float2 fragCoord) {
-            float2 uv = fragCoord / uResolution;
-            float2 screenPos = uGlassBounds.xy + uv * uGlassBounds.zw;
-
-            float totalGlow = 0.0;
-            for (int i = 0; i < 3; i++) {
-                float2 glowPos = uGlowPositions[i].xy;
-                float dist = distance(screenPos, glowPos);
-                float glowRadius = 0.3; // 光斑影响半径
-                float influence = smoothstep(glowRadius, 0.0, dist) * uGlowIntensities[i];
-                totalGlow += influence;
-            }
-
-            // 光斑经过时玻璃局部提亮 + 轻微形变感（通过亮度变化模拟）
-            totalGlow = clamp(totalGlow, 0.0, 0.3);
-            return half4(1.0, 1.0, 1.0, totalGlow);
-        }
-    """
-
-    /**
      * 创建折射 Shader（API 33+）
      * @param contentShader 内容 Shader（通常是 BitmapShader 或 Compose 的 layer shader）
      */
@@ -266,46 +232,20 @@ object LiquidGlassShaders {
         isDarkMode: Boolean,
         time: Float = 0f,
         refractionStrength: Float = 0.5f,
-    ): RuntimeShader {
-        return RuntimeShader(LENS_EDGE_SHADER).apply {
-            setFloatUniform("uResolution", size.width, size.height)
-            setFloatUniform("uRadius", cornerRadius)
-            setFloatUniform("uEdgeColor", edgeColor.red, edgeColor.green, edgeColor.blue, edgeColor.alpha)
-            setFloatUniform("uGlowColor", glowColor.red, glowColor.green, glowColor.blue, glowColor.alpha)
-            setFloatUniform("uIsDarkMode", if (isDarkMode) 1f else 0f)
-            setFloatUniform("uTime", time)
-            setFloatUniform("uRefractionStrength", refractionStrength)
-        }
-    }
-
-    /**
-     * 创建光斑交互 Shader（API 33+）
-     */
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    fun createGlowInteractionShader(
-        size: Size,
-        glowPositions: List<Offset>,
-        glowIntensities: List<Float>,
-        glassBounds: androidx.compose.ui.geometry.Rect,
-    ): RuntimeShader {
-        require(glowPositions.size == 3 && glowIntensities.size == 3) {
-            "Exactly 3 glow positions and intensities required"
-        }
-        return RuntimeShader(GLOW_INTERACTION_SHADER).apply {
-            setFloatUniform("uResolution", size.width, size.height)
-            // 注意：AGSL 数组 uniform 需要逐个设置
-            glowPositions.forEachIndexed { i, pos ->
-                setFloatUniform("uGlowPositions[$i]", pos.x, pos.y, 0f)
+    ): RuntimeShader? {
+        // v1.8.1 B2 修复：个别 ROM 上 AGSL 编译失败抛 IllegalArgumentException，
+        // 调用点在绘制路径（onDrawBehind），必须 runCatching 回退，否则直接崩溃
+        return runCatching {
+            RuntimeShader(LENS_EDGE_SHADER).apply {
+                setFloatUniform("uResolution", size.width, size.height)
+                setFloatUniform("uRadius", cornerRadius)
+                setFloatUniform("uEdgeColor", edgeColor.red, edgeColor.green, edgeColor.blue, edgeColor.alpha)
+                setFloatUniform("uGlowColor", glowColor.red, glowColor.green, glowColor.blue, glowColor.alpha)
+                setFloatUniform("uIsDarkMode", if (isDarkMode) 1f else 0f)
+                setFloatUniform("uTime", time)
+                setFloatUniform("uRefractionStrength", refractionStrength)
             }
-            glowIntensities.forEachIndexed { i, intensity ->
-                setFloatUniform("uGlowIntensities[$i]", intensity)
-            }
-            setFloatUniform(
-                "uGlassBounds",
-                glassBounds.left, glassBounds.top,
-                glassBounds.width, glassBounds.height,
-            )
-        }
+        }.getOrNull()
     }
 
     /**

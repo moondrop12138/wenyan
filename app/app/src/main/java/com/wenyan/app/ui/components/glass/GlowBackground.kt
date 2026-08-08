@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -38,23 +37,21 @@ private val GLOWS = listOf(
 )
 
 /**
- * v1.8.0 液态玻璃 2.0 · 全屏光斑层（支持外部读取光斑位置）
+ * v1.8.0 液态玻璃 2.0 · 全屏光斑层
  *
  * 渲染在页面内容之下（根 Box 首子）；玻璃半透明填充让光斑透出形成"液体"氛围。
  * - 动画：withInfiniteAnimationFrameNanos 手动驱动（系统"移除动画"时自动暂停帧回调），
  *   3 个光斑 sin 错相漂移，只触发 Canvas 重绘不触发重组。
  * - reducedMotion：静态光斑（t=0 初始位置）。
  * - 性能：3 个 radialGradient 每帧重绘，软边由渐变自带（无需真 blur）。
- *
- * v1.8.0 新增：
- * - [onGlowPositionsChanged] 回调：每帧输出 3 个光斑的归一化屏幕位置与强度，
- *   供玻璃组件（liquidGlass）读取，实现「光斑穿过玻璃」的交互效果。
  * - 光斑强度随时间轻微波动，模拟「呼吸感」。
+ *
+ * v1.8.1 B4：移除 onGlowPositionsChanged/GlowState——该链路为 dead path
+ * （liquidGlass 接收光斑参数后从未使用），且每帧写 state 导致 60fps 全屏重组。
  */
 @Composable
 fun GlowBackground(
     modifier: Modifier = Modifier,
-    onGlowPositionsChanged: ((positions: List<Offset>, intensities: List<Float>) -> Unit)? = null,
 ) {
     val p = LocalGtjColors.current
     val reduced = rememberReducedMotion()
@@ -74,21 +71,14 @@ fun GlowBackground(
         val t = frameNanos / 1e9f
         val colors = listOf(p.glowA, p.glowB, p.glowC)
 
-        val positions = mutableListOf<Offset>()
-        val intensities = mutableListOf<Float>()
-
         GLOWS.forEachIndexed { i, g ->
             val speed = t / g.period * 2f * PI.toFloat()
             val cx = g.xRatio * w + sin(speed + g.phase) * g.ampRatio * w
             val cy = g.yRatio * h + sin(speed * 0.7f + g.phase) * g.ampRatio * w * 0.6f
             val radius = g.radiusRatio * w
 
-            // v1.8.0：归一化位置输出（供玻璃交互）
-            positions.add(Offset(cx / w, cy / h))
-
-            // v1.8.0：光斑强度「呼吸」波动（0.7~1.0 之间缓慢变化）
+            // 光斑强度「呼吸」波动（0.7~1.0 之间缓慢变化）
             val breathe = 0.85f + 0.15f * sin(speed * 0.3f + g.phase * 2f)
-            intensities.add(breathe)
 
             // v1.7.1：三段衰减（中心亮 → 中段半透明 → 边缘透明），模拟 CSS blur 的柔和漫射
             drawCircle(
@@ -105,35 +95,5 @@ fun GlowBackground(
                 center = Offset(cx, cy),
             )
         }
-
-        // v1.8.0：输出光斑位置与强度，供玻璃组件读取
-        onGlowPositionsChanged?.invoke(positions, intensities)
     }
-}
-
-/**
- * v1.8.0 光斑状态持有者：在页面层级共享光斑位置，避免每帧重组。
- *
- * 用法：
- * ```kotlin
- * val glowState = rememberGlowState()
- * GlowBackground(onGlowPositionsChanged = glowState::update)
- * // 玻璃组件读取 glowState.positions / glowState.intensities
- * ```
- */
-class GlowState {
-    var positions by mutableStateOf<List<Offset>>(emptyList())
-        private set
-    var intensities by mutableStateOf<List<Float>>(emptyList())
-        private set
-
-    fun update(positions: List<Offset>, intensities: List<Float>) {
-        this.positions = positions
-        this.intensities = intensities
-    }
-}
-
-@Composable
-fun rememberGlowState(): GlowState {
-    return remember { GlowState() }
 }

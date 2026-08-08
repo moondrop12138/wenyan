@@ -87,8 +87,13 @@ android {
         // v1.7.6 BYOK 兼容性加固：移除 temperature（Kimi Code/OpenAI 推理模型只允许 1，发 0.7/0.3 必 400）/
         //  Base URL 规范化+非法字符校验（ProviderUrlNormalizer：trim/去尾斜杠/剥 /chat/completions）/
         //  错误码枚举匹配修复（ErrorCard/测试连接红绿灯原按 "401"/"404" 数字匹配全落空）+ 测试连接透传服务端 detail
-        versionCode = 32
-        versionName = "1.8.0"
+        // v1.8.1 液态玻璃 2.0 修复包：B1 SSE 重试连接泄漏（currentEventSource+awaitClose）/
+        //  B2 RuntimeShader AGSL 编译失败 runCatching 回退静态亮边 + drawWithCache 内一次创建（不再每帧重建）/
+        //  B3 弹层 decorView 模糊整体移除（两套模糊并存叠加 + 每帧重启协程 + onDispose 误清抽屉）/
+        //  B4 删光斑 dead path（glowPositions 接收后从未使用却引发 60fps 全屏重组）/
+        //  B5 isDarkMode 改读 LocalGtjIsDark 显式 token（不再靠 bg.red 启发式猜）
+        versionCode = 33
+        versionName = "1.8.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

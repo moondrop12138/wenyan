@@ -32,7 +32,6 @@ import com.wenyan.app.ui.components.GhostButton
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.components.glass.GlowBackground
-import com.wenyan.app.ui.components.glass.rememberGlowState
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -63,12 +62,11 @@ fun OnboardingScreen(
         label = "progress",
     )
 
-    // v1.8.0：液态玻璃 2.0 · 光斑状态共享
-    val glowState = rememberGlowState()
+    // v1.8.1 B4：移除 glowState 光斑共享——dead path 且每帧重组开销大
 
     // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        GlowBackground(onGlowPositionsChanged = glowState::update)
+        GlowBackground()
     Scaffold(containerColor = Color.Transparent) { padding ->
         Column(
             modifier = Modifier

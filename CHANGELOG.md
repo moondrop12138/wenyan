@@ -2,6 +2,17 @@
 
 「温言」版本历史。版本命名：`vX.Y.Z`（功能）与 `vX.Y.Z-N`（同版本迭代构建）。
 
+## v1.8.1（2026-08-08）— 液态玻璃 2.0 + 修复包
+
+**液态玻璃 2.0（v1.8.0 合入）**：iOS 26 风格边缘伪折射（API 33+ AGSL RuntimeShader，色散条纹+动态波纹）；按压效果移除；设置页方框玻璃统一为圆角卡片。
+
+**修复包（B1–B5）**：
+- **B1 SSE 连接泄漏**：重试时递归创建新 EventSource，取消逻辑仍 cancel 首次旧引用 → 重试中的 OkHttp 长连接不释放。改 `currentEventSource` 持有当前实例 + `awaitClose` 释放
+- **B2 RuntimeShader 崩溃 + 每帧重建**：个别 ROM AGSL 编译失败在绘制路径直接崩溃；改 `runCatching` 回退静态亮边，且 shader 移入 `drawWithCache` 缓存块一次创建（不再每帧重建）
+- **B3 弹层模糊冲突**：`LaunchedEffect(blurRadius.value)` 每帧取消重建协程 + 每帧全屏模糊；且 onDispose 误清主界面抽屉模糊（两套模糊并存叠加）。按「两套模糊不可并存」原则整体移除弹层 decorView 模糊，保留 ModalBottomSheet scrim 遮罩
+- **B4 光斑 dead path**：`glowPositions/glowIntensities` 接收后从未使用，却经 `GlowState` 每帧写 state 引发 60fps 全屏重组。删 dead path（参数/回调/GlowState/未用 shader 全清）
+- **B5 深色模式启发式**：`bg.red < 0.5f` 在陶土棕/中性灰下误判 → 改读 `LocalGtjIsDark` 显式 token（Theme 层解析后下发）
+
 ## v1.7.6（2026-08-07）— BYOK 兼容性加固
 
 - **移除 temperature 参数**：Kimi Code / OpenAI 等推理模型（thinking-only）只允许 temperature=1，此前固定发送 0.7/0.3 会被 400 拒绝 → 请求体不再发送该字段（对所有 OpenAI 兼容服务通用，服务端采用默认值）

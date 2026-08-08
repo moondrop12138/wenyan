@@ -5,7 +5,6 @@ import com.wenyan.app.llm.LlmEvent.Done
 import com.wenyan.app.llm.LlmEvent.Failed
 import com.wenyan.app.log.AppLogger
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -41,6 +40,9 @@ class LlmClient(
         var attempt = 0
         val startedAt = System.currentTimeMillis()
         var deltaCount = 0
+        // v1.8.1 B1 修复：持有当前 EventSource 引用。重试时 launchAttempt 会创建新实例，
+        // 若仍 cancel 首次的旧引用，重试中的 OkHttp 长连接在用户取消时不释放（连接泄漏）
+        var currentEventSource: EventSource? = null
         val provider = runCatching { java.net.URI(baseUrl).host }.getOrNull() ?: baseUrl
         AppLogger.i(
             "llm_request_start",
@@ -105,13 +107,13 @@ class LlmClient(
                     }
                 }
             }
-            coroutineContext[Job]?.invokeOnCompletion {
-                if (it is CancellationException) eventSource.cancel()
-            }
+            // 每次发起都更新为当前实例，取消时 cancel 的永远是最新的那个
+            currentEventSource = eventSource
         }
 
         launchAttempt()
-        awaitClose()
+        // v1.8.1 B1 修复：flow 取消/关闭时释放当前连接（含重试中的新连接）
+        awaitClose { currentEventSource?.cancel() }
     }.catch { e ->
         if (e is CancellationException) throw e
         emit(Failed(LlmErrorCode.UNKNOWN, e.message ?: ""))

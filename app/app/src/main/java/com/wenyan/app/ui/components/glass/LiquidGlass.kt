@@ -1,16 +1,9 @@
 package com.wenyan.app.ui.components.glass
 
-import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -34,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.LocalGtjIsDark
 
 /**
  * v1.8.0 液态玻璃 2.0 · iOS 26 Liquid Glass 风格
@@ -59,9 +53,9 @@ import com.wenyan.app.ui.theme.LocalGtjColors
  * @param borderColor 覆盖描边色（null 用 glassBorder）
  * @param refractionStrength 折射强度 0.0~1.0（默认 0.5，仅 API 33+ 生效）
  * @param scrollVelocity 滚动速度 -1~1，驱动动态高光流动（默认 0）
- * @param glowPositions 光斑位置列表（归一化屏幕坐标，最多 3 个）
- * @param glowIntensities 光斑强度列表（与 glowPositions 一一对应）
  * @param enablePressAnimation 是否启用果冻按压效果（默认 true）
+ *
+ * v1.8.1 B4：移除 glowPositions/glowIntensities——dead path（接收后从未使用）且引发 60fps 重组。
  */
 @Composable
 fun Modifier.liquidGlass(
@@ -71,16 +65,14 @@ fun Modifier.liquidGlass(
     borderColor: Color? = null,
     refractionStrength: Float = 0.5f,
     scrollVelocity: Float = 0f,
-    glowPositions: List<Offset> = emptyList(),
-    glowIntensities: List<Float> = emptyList(),
     enablePressAnimation: Boolean = true,
 ): Modifier {
     val p = LocalGtjColors.current
     val density = LocalDensity.current
 
-    val isDarkMode = p.bg.red < 0.5f  // 简单判断深色模式
+    // v1.8.1 B5：深色模式改读显式 token（Theme 层解析后下发），不再靠 bg.red 启发式猜（陶土棕/中性灰会误判）
+    val isDarkMode = LocalGtjIsDark.current
     val supportsRuntimeShader = LiquidGlassShaders.isRuntimeShaderSupported()
-    val supportsRenderEffect = LiquidGlassShaders.isRenderEffectSupported()
 
     return this
         .drawWithCache {
@@ -216,16 +208,21 @@ fun Modifier.liquidGlass(
                 }
 
                 // v1.8.0：RuntimeShader 伪折射效果（API 33+）
-                if (useRuntimeShader) {
-                    val lensEdgeShader = LiquidGlassShaders.createLensEdgeShader(
+                // v1.8.1 B2 修复：shader 在 drawWithCache 缓存块内创建一次（跨帧复用，不再每帧重建）；
+                // createLensEdgeShader 失败返回 null（个别 ROM AGSL 编译失败）→ 回退静态亮边分支
+                val lensEdgeShader = if (useRuntimeShader) {
+                    LiquidGlassShaders.createLensEdgeShader(
                         size = size,
                         cornerRadius = cornerRadiusPx,
                         edgeColor = lensEdgeColor,
                         glowColor = if (isDarkMode) p.glowA else Color.White,
                         isDarkMode = isDarkMode,
-                        time = System.currentTimeMillis() / 1000f,
                         refractionStrength = refractionStrength,
                     )
+                } else {
+                    null
+                }
+                if (lensEdgeShader != null) {
                     val shaderPaint = Paint().apply {
                         this.shader = lensEdgeShader
                         isAntiAlias = true
@@ -241,7 +238,7 @@ fun Modifier.liquidGlass(
                         }
                     }
                 } else {
-                    // 降级：静态边缘亮边
+                    // 降级：静态边缘亮边（API < 33 / 折射关闭 / AGSL 编译失败）
                     withTransform({
                         clipPath(fillPath)
                     }) {
@@ -283,8 +280,6 @@ fun GlassSurface(
     enabled: Boolean = true,
     refractionStrength: Float = 0.5f,
     scrollVelocity: Float = 0f,
-    glowPositions: List<Offset> = emptyList(),
-    glowIntensities: List<Float> = emptyList(),
     enablePressAnimation: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -293,8 +288,6 @@ fun GlassSurface(
         strong = strong,
         refractionStrength = refractionStrength,
         scrollVelocity = scrollVelocity,
-        glowPositions = glowPositions,
-        glowIntensities = glowIntensities,
         enablePressAnimation = enablePressAnimation,
     )
     if (onClick != null) {
