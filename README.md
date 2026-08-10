@@ -6,7 +6,7 @@
 
 它不是虚拟恋人，也不替你读心——它帮你把"凭感觉"变成"看证据"。
 
-> 📥 **下载**：见 [Releases](https://github.com/moondrop12138/wenyan/releases)——Android 装 `.apk`，Windows 装 `*-windows.exe`（内嵌运行环境，双击即装，无需单独装 Java）。两端数据各自本地存储，互不同步。
+> 📥 **下载**：两端独立发布、互不影响——Android 见 [v 系列 Release](https://github.com/moondrop12138/wenyan/releases) 装 `.apk`；Windows 桌面版见 [desktop-v 系列 Release](https://github.com/moondrop12138/wenyan/releases?q=desktop) 装 `*-windows.exe`（内嵌运行环境，双击即装，无需单独装 Java）。两端数据各自本地存储，互不同步。
 
 > ⚠️ **非商业使用声明**：本仓库知识库部分衍生自 [powerycy/goutoujunshi](https://github.com/powerycy/goutoujunshi)（PolyForm Noncommercial 1.0.0），因此**本仓库整体采用非商业许可**，详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
 
