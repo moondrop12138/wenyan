@@ -52,6 +52,30 @@ object GtjType {
     )
 }
 
+/**
+ * v1.8.2 editorial 衬线字体系（编辑排版风）：
+ * 仅用于「空状态大标题 / 回答文章标题与引文 / 序号数字」，正文保持 sans。
+ * 零资源方案：FontFamily.Serif 走系统衬线（Android 通常回退思源宋体/Noto Serif），
+ * 桌面共享层不涉及（桌面版前端 CSS 自带 serif 栈）。
+ */
+object EditorialType {
+    /** 刊头大标题：空状态「今天想聊点什么？」/ 回答文章主标题（30sp Bold，两行内） */
+    val Display = TextStyle(
+        fontSize = 30.sp, fontWeight = FontWeight.Bold,
+        lineHeight = 41.sp, letterSpacing = (-0.5).sp, fontFamily = FontFamily.Serif,
+    )
+    /** 军师建议引文级强调（大字衬线，可作 pullquote） */
+    val Quote = TextStyle(
+        fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+        lineHeight = 29.sp, letterSpacing = 0.sp, fontFamily = FontFamily.Serif,
+    )
+    /** 衬线序号：索引壹/贰/叁、行动清单 01/02、理由编号 1.2.3 */
+    val No = TextStyle(
+        fontSize = 15.sp, fontWeight = FontWeight.Bold,
+        lineHeight = 23.sp, letterSpacing = 0.sp, fontFamily = FontFamily.Serif,
+    )
+}
+
 /** Material3 Typography 映射（供 M3 组件使用，如 Button/TextField）。 */
 val GtjTypography = Typography(
     displaySmall = GtjType.Display,

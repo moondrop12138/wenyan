@@ -92,8 +92,11 @@ android {
         //  B3 弹层 decorView 模糊整体移除（两套模糊并存叠加 + 每帧重启协程 + onDispose 误清抽屉）/
         //  B4 删光斑 dead path（glowPositions 接收后从未使用却引发 60fps 全屏重组）/
         //  B5 isDarkMode 改读 LocalGtjIsDark 显式 token（不再靠 bg.red 启发式猜）
-        versionCode = 33
-        versionName = "1.8.1"
+        // v1.8.2 editorial 排版包：E1 空状态改编辑排版（中文数字日期+短规则线+衬线标题+壹贰叁索引）/
+        //  E2 回答卡改回信文章（刊头+衬线大标题+四段：接住你/事实核查/军师建议/行动清单）/
+        //  E3 流式预览同步编辑化；粘贴/截图入口由输入栏回形针承接
+        versionCode = 34
+        versionName = "1.8.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

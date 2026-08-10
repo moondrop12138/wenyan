@@ -1,10 +1,10 @@
 # 温言桌面版打包脚本：installDist → 精简 JRE（jdeps+jlink）→ jpackage app-image → exe 安装包
 # 用法：powershell -File desktop/packaging/package.ps1 [-SkipInstaller]
-# 产物：desktop/dist-package/温言-1.8.1/（绿色版）+ desktop/dist-package/温言-1.8.1.exe（安装包）
+# 产物：desktop/dist-package/温言-1.8.2/（绿色版）+ desktop/dist-package/温言-1.8.2.exe（安装包）
 param([switch]$SkipInstaller)
 
 $ErrorActionPreference = 'Stop'
-$VERSION = '1.8.1'
+$VERSION = '1.8.2'
 $APP_NAME = '温言'
 $JDK = 'C:\Users\Khalil\Android\jdk-21.0.12+8'
 $ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # app/

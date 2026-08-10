@@ -338,81 +338,127 @@ function appendAnalysisCard(raw, animate){
   }
   col.appendChild(buildCard(a));
 }
+// v1.8.2：回答渲染改为 editorial 回信文章（刊头 + 衬线大标题 + 四段结构）
+function secKicker(cn, en){
+  const k = el('div','sec-kicker');
+  k.appendChild(el('span','kicker', cn));
+  k.appendChild(el('span','en label', en));
+  return k;
+}
+function factGroup(label, cls, items){
+  const g = el('div','fact-group');
+  g.appendChild(el('div','fg-label label', label));
+  items.forEach(t => {
+    const it = el('div','fact-item');
+    it.appendChild(el('span','mk ' + cls));
+    it.appendChild(el('span','txt', esc(t)));
+    g.appendChild(it);
+  });
+  return g;
+}
+function nowHM(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
 function buildCard(a){
-  const card = el('div','msg-ai glass edge');
-  if (a.empathy) card.appendChild(el('div','lead', esc(a.empathy)));
-  // facts
-  const facts = a.facts || {};
-  const chips = [];
-  (facts.known||[]).forEach(t => chips.push(['已知',t]));
-  (facts.assumed||[]).forEach(t => chips.push(['推测',t]));
-  (facts.unknown||[]).forEach(t => chips.push(['未知',t]));
-  if (chips.length){
-    const wrap = el('div');
-    wrap.appendChild(el('span','sec','先分清事实'));
-    const row = el('div','facts-row'); row.style.marginTop = '6px';
-    chips.forEach(([k,t]) => row.appendChild(el('span','fchip', esc(`${k} · ${t}`))));
-    wrap.appendChild(row);
-    card.appendChild(wrap);
-  }
-  // advice
+  const card = el('div','msg-ai editorial');
+  // 刊头：短规则线 + 温言·回信 + 时间
+  const top = el('div','coach-top');
+  const l = el('div','l');
+  l.appendChild(el('hr','rule-short'));
+  l.appendChild(el('span','kicker','温言 · 回信'));
+  top.appendChild(l);
+  top.appendChild(el('span','caption', nowHM()));
+  card.appendChild(top);
+  // 衬线大标题 = 军师建议核心句
   const adv = a.advice || {};
+  const core = adv.core || '';
+  if (core) card.appendChild(el('h2','displayLg coach-headline', esc(core)));
+  // ① 接住你
+  if (a.empathy){
+    const s = el('section','coach-sec');
+    s.appendChild(secKicker('接住你','EMPATHY'));
+    s.appendChild(el('p','body empathy-body', esc(a.empathy)));
+    card.appendChild(s);
+  }
+  // ② 先分清事实
+  const facts = a.facts || {};
+  const hasFacts = (facts.known||[]).length || (facts.assumed||[]).length || (facts.unknown||[]).length;
+  if (hasFacts){
+    const s = el('section','coach-sec');
+    s.appendChild(secKicker('先分清事实','FACT CHECK'));
+    const box = el('div','factbox');
+    if ((facts.known||[]).length) box.appendChild(factGroup('已知','known', facts.known));
+    if ((facts.assumed||[]).length) box.appendChild(factGroup('推测','assumed', facts.assumed));
+    if ((facts.unknown||[]).length) box.appendChild(factGroup('未知','unknown', facts.unknown));
+    s.appendChild(box);
+    card.appendChild(s);
+  }
+  // ③ 军师建议
   const styles = adv.styles || [];
-  if (adv.core || styles.length){
-    const ac = el('div','advice-card');
-    ac.appendChild(el('span','sec', adv.tag ? `军师建议 · ${esc(adv.tag)}` : '军师建议'));
-    if (adv.core) ac.appendChild(el('div','core-txt', esc(adv.core)));
+  if (adv.tag || (adv.reasons||[]).length || styles.length || adv.replyTiming){
+    const s = el('section','coach-sec');
+    s.appendChild(secKicker('军师建议','COLUMN'));
+    if (adv.tag) s.appendChild(el('span','tag', esc(adv.tag)));
     if ((adv.reasons||[]).length){
-      const ul = el('ul','reason-list');
-      adv.reasons.forEach(r => ul.appendChild(el('li','',esc(r))));
-      ac.appendChild(ul);
+      const ul = el('ol','reason-list');
+      adv.reasons.forEach((r, i) => {
+        const li = el('li');
+        li.appendChild(el('span','no', (i + 1) + '.'));
+        li.appendChild(el('span','tx', esc(r)));
+        ul.appendChild(li);
+      });
+      s.appendChild(ul);
     }
     if (styles.length){
       const tabs = el('div','style-tabs');
-      const coreTxt = el('div','core-txt', esc(styles[0].text || ''));
-      styles.forEach((st,i) => {
-        const b = el('button','sty' + (i===0?' on':''), esc(st.label || `风格${i+1}`));
+      const box = el('div','script-box');
+      box.appendChild(el('div','caption','可以直接发'));
+      const txt = el('p','txt', esc(styles[0].text || ''));
+      box.appendChild(txt);
+      const copy = el('button','copy-link','复制话术');
+      copy.onclick = () => navigator.clipboard.writeText(txt.textContent).then(()=>toast('已复制'));
+      box.appendChild(copy);
+      styles.forEach((st, i) => {
+        const b = el('button','style-tab' + (i === 0 ? ' active' : ''), esc(st.label || ('风格' + (i + 1))));
         b.onclick = () => {
-          tabs.querySelectorAll('.sty').forEach((x,j)=>x.classList.toggle('on', j===i));
-          coreTxt.textContent = st.text || '';
+          tabs.querySelectorAll('.style-tab').forEach((x, j) => x.classList.toggle('active', j === i));
+          txt.textContent = st.text || '';
         };
         tabs.appendChild(b);
       });
-      ac.appendChild(tabs); ac.appendChild(coreTxt);
-      // 复制成品话术
-      const copy = el('button','copy-btn','复制话术');
-      copy.onclick = () => {
-        navigator.clipboard.writeText(coreTxt.textContent).then(()=>toast('已复制'));
-      };
-      ac.appendChild(copy);
+      s.appendChild(tabs);
+      s.appendChild(box);
     }
-    card.appendChild(ac);
+    if (adv.replyTiming) s.appendChild(el('div','caption','发送时机：' + esc(adv.replyTiming)));
+    card.appendChild(s);
   }
-  // actions
+  // ④ 行动清单
   if ((a.actions||[]).length){
-    const wrap = el('div');
-    wrap.appendChild(el('span','sec','现在可以做什么'));
-    const list = el('div','actions-list'); list.style.marginTop='6px';
-    a.actions.forEach(it => {
-      const row = el('div','action-item');
-      if (it.label) row.appendChild(el('span','lbl', esc(it.label)));
-      row.appendChild(document.createTextNode(it.text || ''));
-      list.appendChild(row);
+    const s = el('section','coach-sec');
+    s.appendChild(secKicker('行动清单','TAKEAWAYS'));
+    const ul = el('ol','todo-list');
+    a.actions.forEach((it, i) => {
+      const li = el('li');
+      li.appendChild(el('span','no', String(i + 1).padStart(2,'0') + '.'));
+      li.appendChild(el('span','tx', esc(it.text || '')));
+      ul.appendChild(li);
     });
-    wrap.appendChild(list);
-    card.appendChild(wrap);
+    s.appendChild(ul);
+    s.appendChild(el('div','todo-end'));
+    card.appendChild(s);
   }
-  // reply（首选风格成品话术，无 styles 时兜底）
+  // reply 兜底（无 styles 时）
   if (a.reply && !styles.length){
-    const ac = el('div','advice-card');
-    ac.appendChild(el('span','sec','可以回'));
-    const txt = el('div','core-txt', esc(a.reply));
-    ac.appendChild(txt);
-    if (a.replyTiming) ac.appendChild(el('div','cite', esc(a.replyTiming)));
-    const copy = el('button','copy-btn','复制话术');
+    const s = el('section','coach-sec');
+    s.appendChild(secKicker('可以回','REPLY'));
+    const box = el('div','script-box');
+    box.appendChild(el('p','txt', esc(a.reply)));
+    const copy = el('button','copy-link','复制话术');
     copy.onclick = () => navigator.clipboard.writeText(a.reply).then(()=>toast('已复制'));
-    ac.appendChild(copy);
-    card.appendChild(ac);
+    box.appendChild(copy);
+    s.appendChild(box);
+    card.appendChild(s);
   }
   // 引用 / 安全
   if ((a.citations||[]).length)
@@ -425,22 +471,35 @@ function buildCard(a){
   return card;
 }
 
-// ===== 空状态 =====
-const EXAMPLES = [
-  ['关系升温','他为什么突然冷淡了？'],
-  ['表白时机','要不要主动表白？'],
-  ['关系判断','他是不是在养鱼？'],
-  ['自然推进','怎么自然地推进关系？'],
+// ===== 空状态（v1.8.2 editorial：中文数字日期 + 壹贰叁索引） =====
+const EMPTY_INDEX = [
+  '帮我分析一段聊天记录',
+  '这句话该怎么回比较好',
+  '我们之间最近有点不对劲',
 ];
+const CN_NUMERALS = ['壹','贰','叁'];
+const CN_DIGITS = ['〇','一','二','三','四','五','六','七','八','九'];
+function toCnNumber(n){
+  if (n < 10) return CN_DIGITS[n];
+  const t = Math.floor(n / 10), o = n % 10;
+  return (t > 1 ? CN_DIGITS[t] : '') + '十' + (o > 0 ? CN_DIGITS[o] : '');
+}
+function editorialDate(){
+  const d = new Date();
+  const y = String(d.getFullYear()).split('').map(c => CN_DIGITS[+c]).join('');
+  const h = d.getHours();
+  const when = h <= 4 ? '夜' : h <= 10 ? '晨' : h <= 16 ? '午' : h <= 18 ? '夕' : '夜';
+  return `${y}年${toCnNumber(d.getMonth() + 1)}月${toCnNumber(d.getDate())}日 · ${when}`;
+}
 function renderEmpty(){
-  $('mottoDate').textContent = new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});
+  $('mottoDate').textContent = editorialDate();
   const g = $('exampleGrid'); g.innerHTML = '';
-  EXAMPLES.forEach(([tag,q]) => {
-    const c = el('button','ecard glass edge');
-    c.appendChild(el('span','tag', esc(tag)));
-    c.appendChild(el('span','q', esc(q)));
-    c.onclick = () => { $('inputBox').value = q; $('inputBox').focus(); autoGrow(); };
-    g.appendChild(c);
+  EMPTY_INDEX.forEach((q, i) => {
+    const item = el('button','empty-item');
+    item.appendChild(el('span','no', CN_NUMERALS[i]));
+    item.appendChild(el('span','tx', esc(q)));
+    item.onclick = () => { $('inputBox').value = q; $('inputBox').focus(); autoGrow(); };
+    g.appendChild(item);
   });
 }
 

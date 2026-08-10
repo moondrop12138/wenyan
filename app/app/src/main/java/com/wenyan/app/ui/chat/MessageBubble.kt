@@ -5,13 +5,18 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.LruCache
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -28,9 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -263,63 +270,79 @@ fun SelectableMessageContent(
     }
 }
 
-/** 流式中的 AI 气泡（打字机增量文本，design-pages 页面1；v1.7.0 玻璃 + AI 圆角） */
+/** v1.8.2 流式 AI 文章（editorial 回信风格：刊头 + 打字机段落，替代玻璃气泡） */
 @Composable
 fun StreamingBubble(
     text: String,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 340.dp)
-                // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜
-                // v1.7.1 二改：clip 置后，软投影不被裁
-                .liquidGlass(shape = GtjShape.bubbleAi, enablePressAnimation = true)
-                .clip(GtjShape.bubbleAi),
-        ) {
-            Text(
-                text = text,
-                style = GtjType.Body,
-                color = p.fg,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(24.dp)
+                    .height(3.dp)
+                    .background(p.accent),
             )
+            Spacer(Modifier.width(10.dp))
+            Text("温言 · 回信", style = GtjType.Label.copy(fontSize = 12.sp), color = p.accent)
+            Spacer(Modifier.weight(1f))
+            Text(formatNowTime(), style = GtjType.Caption, color = p.meta)
         }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = text,
+            style = GtjType.Body.copy(lineHeight = 26.sp),
+            color = p.fgSecondary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    drawRect(
+                        color = p.accent,
+                        topLeft = Offset(0f, 0f),
+                        size = Size(2.dp.toPx(), size.height),
+                    )
+                }
+                .padding(start = 16.dp),
+        )
     }
 }
 
 /**
- * 流式期间占位气泡（reply 还没产出，模型还在写 JSON 的 steps 部分）：
- * 避免把原始 JSON 当正文展示——这是"思考代码"问题的另一半。
+ * v1.8.2 流式期间占位（reply 还没产出，模型还在写 JSON 的 steps 部分）：
+ * editorial 化：规则线 + 温言·回信 + 组织语言省略号
  */
 @Composable
 fun StreamingPlaceholderBubble(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .widthIn(max = 340.dp)
-                // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜
-                // v1.7.1 二改：clip 置后，软投影不被裁
-                .liquidGlass(shape = GtjShape.bubbleAi, enablePressAnimation = true)
-                .clip(GtjShape.bubbleAi),
-        ) {
-            Text(
-                text = "正在组织语言…",
-                style = GtjType.Body,
-                color = p.muted,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-        }
+                .width(24.dp)
+                .height(3.dp)
+                .background(p.accent),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text("温言 · 回信", style = GtjType.Label.copy(fontSize = 12.sp), color = p.accent)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "正在组织语言…",
+            style = GtjType.BodySm,
+            color = p.muted,
+        )
     }
 }
 
 /** v1.7.0 用户气泡正文：14sp / 行距 1.7（原型 buser 13px/1.7，略放大保可读性） */
 internal val UserBubbleTextStyle: androidx.compose.ui.text.TextStyle =
     GtjType.Body.copy(fontSize = 14.sp, lineHeight = 24.sp)
+
+/** 流式刊头时间戳（HH:mm） */
+private fun formatNowTime(): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
 
 /** data URL 解码缓存（按 byteCount 计量，32MB 上限），避免 LazyColumn 滚动重组时重复解码 */
 private object DataUrlBitmapCache {

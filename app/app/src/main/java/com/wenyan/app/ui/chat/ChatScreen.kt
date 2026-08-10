@@ -270,11 +270,9 @@ fun ChatScreen(
                 },
         ) {
             if (messages.isEmpty() && !streaming && transcription == null && lastError == null) {
+                // v1.8.2 editorial 空状态：粘贴/截图入口由输入栏回形针承接
                 ChatEmptyState(
                     onExampleClick = vm::onInputChange,
-                    onPasteText = vm::onInputChange,
-                    // v1.3.1 统一走待发送预览流程（v1.6.1 多图，选完照片停到输入框上方，不直接发）
-                    onImagesPicked = vm::addPendingImages,
                 )
             } else {
                 LazyColumn(
