@@ -37,6 +37,9 @@ import java.net.URI
 const val DESKTOP_VERSION = "1.8.1"
 
 fun main() {
+    // 更新检查走系统代理（本机 Git 代理场景直连 api.github.com 会失败；用户走系统代理时 HttpURLConnection 自动生效）
+    System.setProperty("java.net.useSystemProxies", "true")
+
     val service = WenyanService()
     // 首次启动注入预设提供商/模型（幂等）
     runBlocking { service.seedIfEmpty() }

@@ -58,6 +58,8 @@ object DesktopUpdateChecker {
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.setRequestProperty("Accept", "application/vnd.github+json")
+        // 代理：Main 启动时开启 java.net.useSystemProxies=true，
+        // openConnection() 自动走系统代理（本机 Git 代理 127.0.0.1:7890 场景）
         try {
             if (conn.responseCode !in 200..299) return null
             val text = conn.inputStream.bufferedReader().use { it.readText() }
