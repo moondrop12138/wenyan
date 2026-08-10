@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wenyan.app.ui.theme.EditorialType
@@ -44,19 +43,18 @@ fun ChatEmptyState(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
+    // v1.8.2-fix：版心左对齐（editorial 排版：垂直居中 + 内容左对齐，日期/规则线/标题/索引统一左缘）
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        // 日期行：中文数字 + 时辰（editorial empty-date）
+        // 日期行：中文数字 + 时辰（editorial empty-date，左对齐）
         Text(
             text = formatEditorialDate(),
             style = GtjType.Caption.copy(letterSpacing = 0.14f.sp),
             color = p.muted,
-            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
         // 短规则线（rule-short 24×3 accent）
@@ -67,12 +65,11 @@ fun ChatEmptyState(
                 .background(p.accent),
         )
         Spacer(Modifier.height(18.dp))
-        // 衬线大标题
+        // 衬线大标题（左对齐）
         Text(
             text = "今天想聊\n点什么？",
             style = EditorialType.Display,
             color = p.fg,
-            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(30.dp))
         // 索引列表（壹/贰/叁，条目上分隔线）
