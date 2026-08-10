@@ -26,8 +26,11 @@ object DesktopImageCompressor {
     fun compressToDataUrl(bytes: ByteArray): String {
         if (ImageSpec.isTooLarge(bytes.size.toLong())) throw ImageTooLargeException()
 
+        // 每次解码前重扫插件：TwelveMonkeys/webp-imageio 经 SPI 注册，installDist 的 -cp 启动
+        // 下首次 ImageIO 调用可能发生在插件 jar 可见之前，需显式 scanForPlugins 兜底
+        ImageIO.scanForPlugins()
         val original = ImageIO.read(ByteArrayInputStream(bytes))
-            ?: throw IllegalArgumentException("无法识别的图片格式")
+            ?: throw IllegalArgumentException("无法识别的图片格式（支持 JPEG/PNG/GIF/BMP/WebP）")
         val plan = ImageSpec.planResize(original.width, original.height)
 
         val scaled = if (plan.targetWidth == original.width && plan.targetHeight == original.height) {

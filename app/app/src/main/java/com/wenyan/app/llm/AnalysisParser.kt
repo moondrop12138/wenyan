@@ -86,7 +86,7 @@ object AnalysisParser {
      */
     @Throws(AnalysisParseException::class)
     fun parseAny(raw: String): CoachAnalysis {
-        val cleaned = stripFence(raw)
+        val cleaned = extractJson(raw)
         val json = try {
             JSONObject(cleaned)
         } catch (e: Exception) {
@@ -103,7 +103,7 @@ object AnalysisParser {
     @Throws(AnalysisParseException::class)
     fun parseV2(raw: String): CoachAnalysis {
         val json = try {
-            JSONObject(stripFence(raw))
+            JSONObject(extractJson(raw))
         } catch (e: Exception) {
             throw AnalysisParseException("invalid json")
         }
@@ -201,6 +201,52 @@ object AnalysisParser {
                 if (value.isNotEmpty()) add(value)
             }
         }
+    }
+
+    /**
+     * 从模型原始输出中提取合法 JSON。
+     * 处理场景：
+     * 1. 被 ```json ... ``` 围栏包裹
+     * 2. 前后混入说明文字 / <think> ... </think> / markdown 其他内容
+     * 3. 纯 JSON
+     * 策略：优先取第一个 ```json 代码块；否则按首个 '{' 与对应闭合 '}' 截取。
+     */
+    fun extractJson(raw: String): String {
+        val trimmed = raw.trim()
+        // 场景 1：显式 json 代码块
+        val fenceStart = trimmed.indexOf("```json")
+        if (fenceStart >= 0) {
+            val bodyStart = fenceStart + 7
+            val bodyEnd = trimmed.indexOf("```", bodyStart)
+            if (bodyEnd > bodyStart) {
+                return trimmed.substring(bodyStart, bodyEnd).trim()
+            }
+        }
+        // 场景 2：首个 '{' 与对应 '}' 之间的平衡子串
+        val open = trimmed.indexOf('{')
+        if (open < 0) return stripFence(trimmed)
+        var depth = 0
+        var inString = false
+        var escape = false
+        for (i in open until trimmed.length) {
+            val c = trimmed[i]
+            when {
+                escape -> escape = false
+                c == '\\' -> escape = true
+                c == '"' && !escape -> inString = !inString
+                !inString -> when (c) {
+                    '{' -> depth++
+                    '}' -> {
+                        depth--
+                        if (depth == 0) {
+                            return trimmed.substring(open, i + 1)
+                        }
+                    }
+                }
+            }
+        }
+        // 兜底：仍走旧 stripFence
+        return stripFence(trimmed)
     }
 
     /**

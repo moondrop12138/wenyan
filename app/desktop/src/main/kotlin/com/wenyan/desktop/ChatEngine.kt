@@ -87,6 +87,24 @@ class ChatEngine(
             return
         }
 
+        // 图片分流（对齐手机端 analyzeImagesFlow）：
+        // 通道 A：主模型 supportsVision → 直读（下方主链路原样处理）；
+        // 通道 B：主模型不支持视觉 → 视觉槽位模型先转述，发 transcription 帧后本轮结束
+        //        （确认后由前端调 confirmTranscription 走主模型纯文本分析）。
+        if (imageDataUrls.isNotEmpty()) {
+            val mainModel = service.getModel(modelId)
+            if (mainModel?.supportsVision != true) {
+                // 落库形态对齐手机端：每张图一条 image 消息 + 配文一条 text 消息
+                imageDataUrls.forEach { service.addMessage(sessionId, "USER", "image", it) }
+                val caption = text.trim()
+                if (caption.isNotEmpty() && caption != IMAGE_PLACEHOLDER) {
+                    service.addMessage(sessionId, "USER", "text", caption)
+                }
+                runVisionTranscribe(sessionId, imageDataUrls, onEvent)
+                return
+            }
+        }
+
         service.addMessage(sessionId, "USER", "text", text)
 
         // 状态机推进（同题判定 + 状态前缀）
@@ -117,10 +135,13 @@ class ChatEngine(
             ChatRequest(resolved.modelName, system, user, imageDataUrls = imageDataUrls, history = history),
         ).collect { event ->
             when (event) {
-                is LlmEvent.Delta ->
-                    onEvent(JSONObject().put("type", "chat").put("text", event.text))
-                is LlmEvent.Thinking ->
-                    onEvent(JSONObject().put("type", "thinking").put("text", event.text))
+                is LlmEvent.Delta -> {
+                    // v1.8.1 桌面版不再把原始 token 流式展示给用户；
+                    // 最终形态是四段卡片，Delta 仅拼入 accumulator 等待 Done 后解析。
+                }
+                is LlmEvent.Thinking -> {
+                    // reasoning_content 已彻底舍弃展示，不传给前端。
+                }
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -150,6 +171,127 @@ class ChatEngine(
                         }
                     } else {
                         // 解析失败不落库（与手机版一致：Room 无脏数据）
+                        emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
+                        return@collect
+                    }
+                    onEvent(JSONObject().put("type", "done"))
+                }
+                is LlmEvent.Failed -> {
+                    emitError(onEvent, event.error.name, event.error.userMessage + if (event.detail.isNotBlank()) "（${event.detail.take(120)}）" else "")
+                }
+            }
+        }
+    }
+
+    /**
+     * 通道 B 第一步（移植 RealChatRepository.analyzeImagesFlow 通道 B）：
+     * 用视觉槽位模型（可跨 provider，自带 baseUrl/apiKey）把截图转述成文字，
+     * 完成后发 transcription 帧，本轮 SSE 到此结束（不发 done）；确认走 confirmTranscription。
+     * 未配置槽位 → NO_VISION；转述为空 → EMPTY；失败 → error 帧。
+     */
+    private suspend fun runVisionTranscribe(
+        sessionId: Long,
+        imageDataUrls: List<String>,
+        onEvent: (JSONObject) -> Unit,
+    ) {
+        val vision = resolveVisionClient() ?: run {
+            emitError(onEvent, "NO_VISION", "当前模型不支持图片，且未配置视觉模型。请到 设置 → 视觉模型 选择一个支持图片的模型。")
+            return
+        }
+        val transcription = StringBuilder()
+        vision.client.stream(
+            ChatRequest(
+                model = vision.modelName,
+                system = "你是截图文字提取器。只输出截图中的文字，尽量保留说话人、顺序与间隔，不添加任何解释。",
+                userText = "请提取这几张聊天截图中的全部文字，按截图顺序输出。",
+                imageDataUrls = imageDataUrls,
+            )
+        ).collect { event ->
+            when (event) {
+                is LlmEvent.Delta -> transcription.append(event.text)
+                is LlmEvent.Thinking -> { /* reasoning 不外传（与主链路一致） */ }
+                is LlmEvent.Failed -> emitError(onEvent, event.error.name, event.error.userMessage + if (event.detail.isNotBlank()) "（${event.detail.take(120)}）" else "")
+                is LlmEvent.Done -> {
+                    if (transcription.isBlank()) {
+                        emitError(onEvent, "EMPTY", "模型未提取到文字，请重试或重新选图")
+                    } else {
+                        onEvent(JSONObject().put("type", "transcription").put("text", transcription.toString()))
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 通道 B 第二步（移植 RealChatRepository.confirmTranscription）：
+     * 用户确认（可编辑）转述文本后：落库 type="transcription" → 知识注入 +
+     * buildUserTranscription → 主模型纯文本分析 → card/done。
+     * 记忆提炼素材取 transcription（对齐手机版语义）。
+     */
+    suspend fun confirmTranscription(
+        sessionId: Long,
+        modelId: Long,
+        transcription: String,
+        onEvent: (JSONObject) -> Unit,
+    ) {
+        val session = service.getSession(sessionId) ?: run {
+            emitError(onEvent, "NO_SESSION", "会话不存在")
+            return
+        }
+        val resolved = resolveClient(modelId) ?: run {
+            emitError(onEvent, "NO_CONFIG", "请先在设置中配置 API Key 与模型")
+            return
+        }
+
+        service.addMessage(sessionId, "USER", "transcription", transcription)
+
+        // 状态机推进（转述即用户素材，同题判定与状态前缀与文本链路一致）
+        val previousState = ConversationState.fromJson(session.stateJson)
+        val wasNewTopic = previousState.hasActiveTopic && !stateTracker.isSameTopic(previousState, transcription)
+        val state = stateTracker.onUserInput(previousState, transcription).also {
+            service.updateSessionState(sessionId, it.toJson())
+        }
+        val statePrefix = stateTracker.buildStatePrefix(state)
+
+        val (knowledge, refDocs) = knowledgeEngine.buildInjection(transcription)
+        val profile = service.getLatestProfile()
+        val target = resolveTargetWithMemory(session.targetId)
+        val system = promptBuilder.buildSystem(profile, target, knowledge)
+        val history = buildHistory(sessionId, transcription)
+        val user = promptBuilder.buildUserTranscription(transcription)
+
+        resolved.client.stream(
+            ChatRequest(resolved.modelName, system, user, history = history),
+        ).collect { event ->
+            when (event) {
+                is LlmEvent.Delta -> { /* 拼入 accumulator，Done 后解析（不流式展示） */ }
+                is LlmEvent.Thinking -> { /* reasoning 不外传 */ }
+                is LlmEvent.Done -> {
+                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
+                    if (analysis != null) {
+                        service.addMessage(sessionId, "ASSISTANT", "analysis", event.fullText)
+                        val refs = refDocs.ifEmpty { analysis.citations }
+                        if (refs.isNotEmpty()) service.updateSessionRefDocs(sessionId, JSONArray(refs).toString())
+                        val newState = stateTracker.onModelReply(
+                            state = state,
+                            topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
+                                summarizeTopic(transcription, analysis)
+                            } else {
+                                state.topicSummary
+                            },
+                            conclusion = summarizeConclusion(analysis),
+                            reply = analysis.reply,
+                        )
+                        service.updateSessionState(sessionId, newState.toJson())
+                        onEvent(
+                            JSONObject().put("type", "card")
+                                .put("card", analysis.toJson().put("citations", JSONArray(refs)))
+                        )
+                        sideEffectScope.launch { generateTitleOnce(sessionId, transcription, event.fullText, resolved) }
+                        if (session.targetId != null && shouldExtractMemory(state, transcription)) {
+                            sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved) }
+                        }
+                    } else {
                         emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
                         return@collect
                     }
@@ -224,6 +366,12 @@ class ChatEngine(
         val provider = service.getProvider(model.providerId) ?: return null
         val apiKey = service.decryptApiKey(provider.id) ?: return null
         return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey))
+    }
+
+    /** 视觉槽位解析（移植 RealChatRepository.resolveVisionClient）：可跨 provider，用槽位模型自己的 baseUrl/apiKey */
+    private suspend fun resolveVisionClient(): ResolvedClient? {
+        val id = service.getVisionModelId() ?: return null
+        return resolveClient(id)
     }
 
     /** 记忆注入：惰性搬移 note→facts 后，以 facts 拼 note（PromptBuilder 零改动契约） */
@@ -337,6 +485,9 @@ class ChatEngine(
     companion object {
         /** 历史 token 预算（与手机版一致：24000） */
         private const val MAX_HISTORY_TOKENS = 24000
+
+        /** 纯图发送时前端占位文本（与手机版 IMAGE_PLACEHOLDER 一致；不落库为 text 消息） */
+        private const val IMAGE_PLACEHOLDER = "[图片]"
     }
 }
 

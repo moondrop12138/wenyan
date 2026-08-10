@@ -44,6 +44,7 @@ const S = {
   route: 'chat',
   pendingTargetId: Number(localStorage.getItem('wenyan.pendingTargetId')) || null, // 未建会话时的待绑定档案
   sessionTargetId: undefined,   // 当前会话已绑定的档案（undefined=尚未加载）
+  visionModelId: null,          // 视觉模型槽位（后端 Properties 持久化；主模型不支持视觉时走通道 B 转述）
 };
 
 // ===== 主题 =====
@@ -69,6 +70,10 @@ window.addEventListener('hashchange', () => {
 // ===== 数据加载 =====
 async function refreshProviders(){ S.providers = await api.get('/api/providers'); }
 async function refreshModels(){ S.models = await api.get('/api/models'); }
+async function refreshSettings(){
+  const s = await api.get('/api/settings');
+  S.visionModelId = s.visionModelId || null;
+}
 async function refreshTargets(){ S.targets = await api.get('/api/targets'); }
 async function refreshSessions(){ S.sessions = await api.get('/api/sessions'); }
 function modelById(id){ return S.models.find(m => m.id === id); }
@@ -189,26 +194,64 @@ async function chooseTarget(tid){
   setTimeout(closeSheet, 150);
 }
 
-function renderModelSheet(){
-  setSheetHead('选择模型', '点按切换，实时生效');
+/**
+ * 模型选择 sheet（双模式，对齐手机端 PickerTarget）：
+ * mode='main'   主模型：列全部模型，写 localStorage（wenyan.modelId）
+ * mode='vision' 视觉槽位：只列 supportsVision 模型 + 「不设置」项，写后端 /api/settings
+ */
+function renderModelSheet(mode){
+  mode = mode || 'main';
+  const isVision = mode === 'vision';
+  setSheetHead(
+    isVision ? '选择视觉模型' : '选择模型',
+    isVision ? '主模型不支持图片时，用它先把截图转述成文字' : '点按切换，实时生效',
+  );
   const body = $('modelSheetBody'); body.innerHTML = '';
-  if (!S.models.length){
-    body.appendChild(el('div','sb-empty','还没有可用模型<br>请到 设置 → 模型管理 配置'));
+  const list = isVision ? S.models.filter(m => m.supportsVision) : S.models;
+  if (!list.length){
+    body.appendChild(el('div','sb-empty',
+      isVision
+        ? '还没有支持图片的模型<br>请到 设置 → 模型管理 添加（勾选「支持图片」）'
+        : '还没有可用模型<br>请到 设置 → 模型管理 配置'));
     return;
   }
-  S.models.forEach(m => {
+  if (isVision){
+    // 清除槽位项
+    const none = el('div','mrow' + (!S.visionModelId ? ' on' : ''));
+    none.appendChild(el('span','sic','—'));
+    const ntx = el('span','tx');
+    ntx.appendChild(el('span','t','不设置'));
+    ntx.appendChild(el('span','d','主模型不支持图片时将无法发送截图'));
+    none.appendChild(ntx);
+    none.appendChild(el('span','check'));
+    none.onclick = async () => {
+      await api.put('/api/settings', { visionModelId: null });
+      S.visionModelId = null;
+      renderModelSheet('vision');
+      setTimeout(closeSheet, 150);
+    };
+    body.appendChild(none);
+  }
+  list.forEach(m => {
     const p = providerById(m.providerId);
-    const row = el('div','mrow' + (m.id === S.currentModelId ? ' on' : ''));
+    const onId = isVision ? S.visionModelId : S.currentModelId;
+    const row = el('div','mrow' + (m.id === onId ? ' on' : ''));
     row.appendChild(el('span','sic', esc(shortName(m.name))));
     const tx = el('span','tx');
     tx.appendChild(el('span','t', esc(m.name)));
     tx.appendChild(el('span','d', esc(p ? p.name : '') + (m.supportsVision ? ' · 支持图片' : '')));
     row.appendChild(tx);
     row.appendChild(el('span','check'));
-    row.onclick = () => {
-      S.currentModelId = m.id;
-      localStorage.setItem('wenyan.modelId', m.id);
-      renderModelPill(); renderModelSheet();
+    row.onclick = async () => {
+      if (isVision){
+        await api.put('/api/settings', { visionModelId: m.id });
+        S.visionModelId = m.id;
+        renderModelSheet('vision');
+      } else {
+        S.currentModelId = m.id;
+        localStorage.setItem('wenyan.modelId', m.id);
+        renderModelPill(); renderModelSheet('main');
+      }
       setTimeout(closeSheet, 150);
     };
     body.appendChild(row);
@@ -274,6 +317,10 @@ function appendUserBubble(content, type){
     }
     const text = content.replace(/\s*data:image\S+/g,'').replace('[图片]','').trim();
     if (text) b.appendChild(el('span','',esc(text)));
+  } else if (type === 'transcription'){
+    // 通道 B 转述消息：带前缀标识，区别于普通文本
+    b.appendChild(el('span','transcription-label','截图转述'));
+    b.appendChild(el('span','',esc(content)));
   } else {
     b.appendChild(el('span','',esc(content)));
   }
@@ -450,10 +497,16 @@ async function ensureSession(){
 async function sendMessage(){
   const text = inputBox.value.trim();
   if ((!text && !S.pendingImages.length) || S.streaming) return;
-  if (S.currentModelId == null){ toast('请先选择模型'); openSheet(); renderModelSheet(); return; }
+  if (S.currentModelId == null){ toast('请先选择模型'); openSheet(); renderModelSheet('main'); return; }
   const m = modelById(S.currentModelId);
   const p = m ? providerById(m.providerId) : null;
   if (!p || !p.hasApiKey){ toast('该模型未配置 API Key，请到设置配置'); go('settings'); return; }
+  // 通道 B 前置校验（对齐手机端 NO_VISION）：带图 + 主模型不支持视觉 + 未配视觉槽位 → 直接拦截
+  if (S.pendingImages.length && m && !m.supportsVision && !S.visionModelId){
+    toast('当前模型不支持图片，请先配置视觉模型');
+    openSheet(); renderModelSheet('vision');
+    return;
+  }
 
   const wasNew = S.sessionId == null;
   const sid = await ensureSession();
@@ -475,8 +528,10 @@ async function sendMessage(){
   if (text) ub.appendChild(el('span','',esc(text)));
   col.appendChild(ub);
 
-  // 思考占位
-  const think = el('div','think-bubble glass edge','正在翻知识库，梳理你的处境…<span class="dots"><i></i><i></i><i></i></span>');
+  // 思考占位（通道 B 时文案对齐「转述中」语义）
+  const willTranscribe = images.length && m && !m.supportsVision;
+  const think = el('div','think-bubble glass edge',
+    (willTranscribe ? '视觉模型正在提取截图文字…' : '正在翻知识库，梳理你的处境…') + '<span class="dots"><i></i><i></i><i></i></span>');
   col.appendChild(think);
   scrollBottom();
 
@@ -484,11 +539,7 @@ async function sendMessage(){
   S.streamSessionId = sid;
   const mySeq = ++S.streamSeq;                 // 本轮流的令牌；切会话/删除会使其过期
   const live = () => mySeq === S.streamSeq;    // 事件落地前校验
-  const aiCard = el('div','msg-ai glass edge');
-  const lead = el('div','lead streaming');
-  let thinkingBox = null;
-  let gotCard = false;
-  let settled = false;                // error/done 已收尾：流尾兜底不再触发（防误报「回复中断」+ 防 renderChat 抹掉已渲染内容）
+  let settled = false;                // error/done/transcription 已收尾：流尾兜底不再触发（防误报「回复中断」+ 防 renderChat 抹掉已渲染内容）
 
   try {
     const resp = await fetch('/api/chat/stream', {
@@ -515,10 +566,9 @@ async function sendMessage(){
       }
     }
     if (!live()){ setStreaming(false); return; }   // 流尾但已切走：解锁全局 streaming 防死锁，其余 UI 不动
-    if (!gotCard && !settled){                     // 真·异常中断（无 error/done 帧）：收尾解锁
+    if (!settled){                                 // 真·异常中断（无 error/done/transcription 帧）：收尾解锁
       think.remove();
-      if (!lead.parentNode) col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">回复中断，请重试</div>`));
-      else lead.classList.remove('streaming');
+      col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">回复中断，请重试</div>`));
       setStreaming(false);
       refreshSessions().then(renderSidebar);       // 只刷侧栏；不 renderChat（清场会抹掉刚 append 的回复中断气泡）
     }
@@ -532,36 +582,121 @@ async function sendMessage(){
 
   function handleEvent(ev){
     if (!live()) return;                        // 切会话/删除后的迟到事件一律丢弃
-    if (ev.type === 'chat'){
-      if (think.parentNode){ think.remove(); col.appendChild(aiCard); aiCard.appendChild(lead); }
-      lead.textContent += ev.text;
-      scrollBottom();
-    } else if (ev.type === 'thinking'){
-      if (!thinkingBox){
-        thinkingBox = el('div','thinking-box');
-        if (think.parentNode) think.replaceChildren(thinkingBox); else col.insertBefore(thinkingBox, aiCard);
-      }
-      thinkingBox.textContent += ev.text;
-      scrollBottom();
-    } else if (ev.type === 'card'){
-      gotCard = true;
-      think.remove(); aiCard.remove();
+    if (ev.type === 'card'){
+      think.remove();
       col.appendChild(buildCard(ev.card));
+      scrollBottom();
+    } else if (ev.type === 'transcription'){
+      // 通道 B 第一步完成：替换思考占位为可编辑转述卡片，本轮流结束（无 done 帧）
+      settled = true;
+      setStreaming(false);
+      think.remove();
+      col.appendChild(buildTranscriptionCard(ev.text || '', sid));
       scrollBottom();
     } else if (ev.type === 'done'){
       settled = true;
       setStreaming(false);
       think.remove();
-      if (!gotCard && lead.parentNode) lead.classList.remove('streaming');
       // 只刷侧栏标题；不 renderChat（卡片已在 DOM，重画会抹掉危机预检等未落库卡片）
       refreshSessions().then(renderSidebar);
     } else if (ev.type === 'error'){
       settled = true;
       setStreaming(false);
-      think.remove(); aiCard.remove();
+      think.remove();
       col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">${esc(ev.message||'出错了')}</div>`));
       scrollBottom();
     }
+  }
+}
+
+// ===== 通道 B：转述确认卡片（可编辑 → 确认后走主模型纯文本分析） =====
+function buildTranscriptionCard(text, sid){
+  const card = el('div','msg-ai glass edge sheen');
+  card.appendChild(el('div','sheen-layer'));
+  card.appendChild(el('span','sec','截图转述（可修改）'));
+  const ta = el('textarea','transcription-edit');
+  ta.value = text;
+  ta.rows = Math.min(12, Math.max(4, text.split('\n').length + 1));
+  card.appendChild(ta);
+  const row = el('div','transcription-actions');
+  const confirm = el('button','btn-primary','确认，让军师分析');
+  confirm.onclick = () => {
+    const edited = ta.value.trim();
+    if (!edited){ toast('转述内容不能为空'); return; }
+    confirm.disabled = true;
+    card.remove();
+    confirmTranscription(sid, edited);
+  };
+  row.appendChild(confirm);
+  card.appendChild(row);
+  return card;
+}
+
+/** 通道 B 第二步：确认转述 → 主模型分析（SSE 帧格式与 chat/stream 相同） */
+async function confirmTranscription(sid, transcription){
+  const col = $('chatCol');
+  appendUserBubble(transcription, 'transcription');
+  const think = el('div','think-bubble glass edge','军师分析中…<span class="dots"><i></i><i></i><i></i></span>');
+  col.appendChild(think);
+  scrollBottom();
+
+  setStreaming(true);
+  S.streamSessionId = sid;
+  const mySeq = ++S.streamSeq;
+  const live = () => mySeq === S.streamSeq;
+  let settled = false;
+
+  try {
+    const resp = await fetch('/api/chat/confirm-transcription', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, transcription }),
+    });
+    if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for(;;){
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream:true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0){
+        const frame = buf.slice(0, idx); buf = buf.slice(idx+2);
+        const data = frame.split('\n').filter(l => l.startsWith('data:'))
+          .map(l => l.slice(5).replace(/^ /, '')).join('\n');
+        if (!data) continue;
+        let ev; try { ev = JSON.parse(data); } catch(e){ continue; }
+        if (!live()) continue;
+        if (ev.type === 'card'){
+          think.remove();
+          col.appendChild(buildCard(ev.card));
+          scrollBottom();
+        } else if (ev.type === 'done'){
+          settled = true;
+          setStreaming(false);
+          think.remove();
+          refreshSessions().then(renderSidebar);
+        } else if (ev.type === 'error'){
+          settled = true;
+          setStreaming(false);
+          think.remove();
+          col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">${esc(ev.message||'出错了')}</div>`));
+          scrollBottom();
+        }
+      }
+    }
+    if (!live()){ setStreaming(false); return; }
+    if (!settled){
+      think.remove();
+      col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">回复中断，请重试</div>`));
+      setStreaming(false);
+      refreshSessions().then(renderSidebar);
+    }
+  } catch(err){
+    if (!live()){ setStreaming(false); return; }
+    think.remove();
+    col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
+    setStreaming(false);
   }
 }
 
@@ -615,8 +750,19 @@ async function renderSettings(col){
   ctx.appendChild(el('span','d', esc(cur ? cur.name : '未选择')));
   curRow.appendChild(ctx);
   curRow.appendChild(el('span','ch','切换'));
-  curRow.onclick = () => { closePage(); openSheet(); renderModelSheet(); };
+  curRow.onclick = () => { closePage(); openSheet(); renderModelSheet('main'); };
   g2.appendChild(curRow);
+  // 视觉模型槽位（对齐手机端设置页「视觉模型」行：主模型不支持图片时走通道 B 转述）
+  const vis = modelById(S.visionModelId);
+  const visRow = el('div','setrow glass edge');
+  visRow.appendChild(el('span','ic', esc(vis ? shortName(vis.name) : '◉')));
+  const vtx = el('span','tx');
+  vtx.appendChild(el('span','t','视觉模型'));
+  vtx.appendChild(el('span','d', esc(vis ? vis.name : '未设置 · 主模型不支持图片时需要')));
+  visRow.appendChild(vtx);
+  visRow.appendChild(el('span','ch','切换'));
+  visRow.onclick = () => { closePage(); openSheet(); renderModelSheet('vision'); };
+  g2.appendChild(visRow);
   const mgRow = el('div','setrow glass edge');
   mgRow.appendChild(el('span','ic','⚙'));
   const mtx = el('span','tx');
@@ -1055,7 +1201,7 @@ async function render(){
 // ===== 启动 =====
 (async function init(){
   applyTheme();
-  await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions()]);
+  await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions(), refreshSettings()]);
   renderSidebar();
   renderModelPill();
 

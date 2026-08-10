@@ -3,6 +3,8 @@
    玻璃：backdrop-filter blur(20~40px) saturate(170%) + 内高光 + 边缘折射线。
 */
 :root{
+  /* 字体体系：衬线仅用于 AI 回答气泡内容，界面其余一律系统 sans */
+  --serif:'Georgia','Songti SC','SimSun','Noto Serif SC',serif;
   /* 浅色 token（默认） */
   --bg:#F6F0E6;--surface:#EFE6D8;--surface-e:#FDFAF3;
   --fg:#2B2118;--fg-sec:#4B4032;--muted:#6E6050;--meta:#A49785;
@@ -193,15 +195,16 @@ a{color:var(--accent);text-decoration:none}
 
 .msg-ai{
   position:relative;align-self:flex-start;max-width:88%;border-radius:20px 20px 20px 6px;padding:14px 16px;
-  display:flex;flex-direction:column;gap:11px;font-size:13.5px;line-height:1.7;
+  display:flex;flex-direction:column;gap:11px;font-size:13.5px;line-height:1.55;
+  font-family:var(--serif);font-weight:600;
   animation:pop .26s cubic-bezier(.34,1.56,.64,1);
   transition:transform .25s cubic-bezier(.32,.72,0,1),box-shadow .25s;
 }
 .msg-ai:hover{transform:translateY(-1.5px)}
 .msg-ai .sheen-layer{border-radius:20px 20px 20px 6px}
-.msg-ai .lead{color:var(--fg);line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.msg-ai .lead{color:var(--fg);line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .msg-ai .lead.streaming::after{content:"";display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:caret 1s step-end infinite;border-radius:1px}
-.sec{font-size:11px;color:var(--accent);font-weight:500;letter-spacing:.02em}
+.sec{font-size:12.5px;color:var(--accent);font-weight:600;letter-spacing:.02em}
 .fchip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--chip);color:var(--accent)}
 .facts-row{display:flex;gap:6px;flex-wrap:wrap}
 .advice-card{position:relative;border-radius:14px;background:var(--l2);border:1px solid var(--l2b);box-shadow:inset 0 1px 0 rgba(255,255,255,.6);padding:11px 12px;display:flex;flex-direction:column;gap:8px}
@@ -209,7 +212,7 @@ a{color:var(--accent);text-decoration:none}
 .style-tabs{display:flex;gap:6px}
 .sty{font-size:11px;padding:3px 12px;border-radius:99px;color:var(--muted);border:1px solid var(--glass-border);transition:all .15s}
 .sty.on{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
-.core-txt{font-size:12.5px;color:var(--fg);line-height:1.6}
+.core-txt{font-size:12.5px;color:var(--fg);line-height:1.5}
 .reason-list{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--fg-sec)}
 .reason-list li{margin-left:16px}
 .actions-list{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--fg)}
@@ -336,6 +339,20 @@ a{color:var(--accent);text-decoration:none}
 .btn-ghost{font-size:12px;color:var(--muted);padding:8px;border-radius:10px}
 .btn-ghost:hover{background:var(--chip);color:var(--accent)}
 .note{font-size:11px;color:var(--muted);text-align:center;line-height:1.6}
+
+/* 通道 B：转述确认卡片 */
+.transcription-edit{
+  width:100%;margin-top:8px;resize:vertical;font-family:inherit;font-size:13px;line-height:1.7;
+  background:var(--inp);box-shadow:inset 0 2px 8px var(--inset);
+  border-radius:14px;padding:10px 13px;border:none;outline:none;color:var(--fg);
+}
+.transcription-edit:focus{box-shadow:inset 0 2px 8px var(--inset),0 0 0 2px var(--l2b)}
+.transcription-actions{margin-top:10px;display:flex;justify-content:flex-end}
+.transcription-actions .btn-primary{width:auto;padding:8px 18px}
+.transcription-label{
+  display:inline-block;font-size:10px;color:var(--accent);border:1px solid var(--l2b);
+  border-radius:99px;padding:1px 8px;margin-bottom:4px;
+}
 
 /* 红绿灯点 */
 .rdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}

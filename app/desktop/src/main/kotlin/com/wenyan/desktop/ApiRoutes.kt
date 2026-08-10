@@ -100,6 +100,22 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
         call.respondText("""{"ok":true,"version":"0.1.0-desktop"}""", ContentType.Application.Json)
     }
 
+    /** 诊断：报告正在运行的服务进程实际加载的 ImageIO 解码器（排查格式支持用） */
+    get("/api/debug/imageio") {
+        javax.imageio.ImageIO.scanForPlugins()
+        val readers = mutableListOf<String>()
+        for (fmt in arrayOf("png", "jpeg", "webp", "gif", "bmp")) {
+            val it = javax.imageio.ImageIO.getImageReadersByFormatName(fmt)
+            val names = mutableListOf<String>()
+            while (it.hasNext()) names.add(it.next().javaClass.name)
+            readers.add(fmt + "=" + (if (names.isEmpty()) "(none)" else names.joinToString(",")))
+        }
+        call.respondJson(JSONObject()
+            .put("javaVersion", System.getProperty("java.version"))
+            .put("javaHome", System.getProperty("java.home"))
+            .put("readers", readers.joinToString(" | ")))
+    }
+
     // ===== 提供商 / 模型 =====
 
     get("/api/providers") {
@@ -306,27 +322,85 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
         call.respondJson(chatEngine.testConnection(call.parameters["id"]!!.toLong()))
     }
 
+    // ===== 设置槽位（视觉模型；Properties KV，不动 Room schema） =====
+
+    get("/api/settings") {
+        call.respondJson(JSONObject()
+            .put("visionModelId", service.getVisionModelId()?.let { JSONObject.wrap(it) } ?: JSONObject.NULL))
+    }
+
+    /** 部分更新设置；visionModelId 为 null 即清除槽位（对齐手机端 setVisionModelId 语义） */
+    put("/api/settings") {
+        val body = JSONObject(call.receiveText())
+        if (body.has("visionModelId")) {
+            service.setVisionModelId(
+                if (body.isNull("visionModelId")) null else body.getLong("visionModelId")
+            )
+        }
+        call.respondJson(JSONObject().put("ok", true))
+    }
+
+    /**
+     * 通道 B 第二步：确认转述后走主模型纯文本分析（SSE 流式，帧格式同 /api/chat/stream）。
+     * 请求体：{sessionId, modelId, transcription}
+     */
+    post("/api/chat/confirm-transcription") {
+        val body = JSONObject(call.receiveText())
+        val sessionId = body.getLong("sessionId")
+        val modelId = body.getLong("modelId")
+        val transcription = body.getString("transcription")
+
+        call.response.headers.append("Cache-Control", "no-cache")
+        call.response.headers.append("Connection", "keep-alive")
+        call.response.headers.append("X-Accel-Buffering", "no")
+
+        val channel = ByteChannel(autoFlush = true)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                chatEngine.confirmTranscription(sessionId, modelId, transcription) { event ->
+                    runBlocking { channel.writeStringUtf8("data: $event\n\n") }
+                }
+            } catch (e: Exception) {
+                val err = JSONObject().put("type", "error")
+                    .put("code", "STREAM_BROKEN").put("message", (e.message ?: "流中断").take(200))
+                runCatching { runBlocking { channel.writeStringUtf8("data: $err\n\n") } }
+            } finally {
+                channel.close(null)
+            }
+        }
+
+        call.respond(object : io.ktor.http.content.OutgoingContent.ReadChannelContent() {
+            override val contentType: ContentType = ContentType.Text.EventStream
+            override fun readFrom(): ByteReadChannel = channel
+        })
+    }
+
     /**
      * 图片上传（multipart/form-data，字段名 images，≤10 张）。
      * 压缩遵守 ImageSpec 契约（>20MB 拒、最长边 1568、JPEG 85%），返回 data url 列表供 chat/stream 使用。
      */
     post("/api/images/upload") {
         val multipart = call.receiveMultipart()
-        // forEachPart 是普通 lambda，provider() 是 suspend——先收集 Input，再在本 suspend 块逐张读
-        val inputs = mutableListOf<io.ktor.utils.io.core.Input>()
+        // 关键：PartData.FileItem 的字节必须在 forEachPart 回调内（part 存活期间）读出——
+        // part.dispose() 后 provider() 返回的 Input 立即失效，延迟读取只会得到 0 字节。
+        // forEachPart 是普通 lambda 不能 suspend，但 provider() 返回的 Input.readBytes() 是同步阻塞读，可直接用。
+        val imagesBytes = mutableListOf<ByteArray>()
         multipart.forEachPart { part ->
-            if (part is PartData.FileItem) inputs.add(part.provider())
+            if (part is PartData.FileItem) {
+                imagesBytes.add(part.provider().readBytes())
+            }
             part.dispose()
         }
 
         val dataUrls = mutableListOf<String>()
         var error: String? = null
-        if (inputs.size > MAX_IMAGES_PER_REQUEST) {
+        if (imagesBytes.isEmpty()) {
+            error = "未收到图片"
+        } else if (imagesBytes.size > MAX_IMAGES_PER_REQUEST) {
             error = "一次最多上传 $MAX_IMAGES_PER_REQUEST 张图片"
         } else {
-            for (input in inputs) {
+            for (bytes in imagesBytes) {
                 if (error != null) break
-                val bytes = input.readBytes()
                 try {
                     dataUrls.add(DesktopImageCompressor.compressToDataUrl(bytes))
                 } catch (e: DesktopImageCompressor.ImageTooLargeException) {

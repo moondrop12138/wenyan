@@ -97,6 +97,14 @@ dependencies {
     // JSON（与 ChatRequestBuilder/AnalysisParser 一致，手写 org.json）
     implementation("org.json:json:20240303")
 
+    // 图片解码增强（TwelveMonkeys ImageIO 插件，SPI 自动注册，DesktopImageCompressor 零改动）：
+    // - imageio-jpeg：更健壮的 JPEG 读写（覆盖 CMYK/渐进式等原生 reader 啃不动的变体）
+    // - imageio-webp + webp-imageio(gotson, 自带 native libwebp)：补 WebP（截图/微信存图常见格式）
+    // 注：AVIF/HEIC 无可靠纯 Java 解码方案，维持不支持（上传报「无法识别的图片格式」）
+    implementation("com.twelvemonkeys.imageio:imageio-jpeg:3.12.0")
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
+    implementation("com.github.gotson:webp-imageio:0.2.2")
+
     // 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 

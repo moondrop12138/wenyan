@@ -170,6 +170,17 @@ class WenyanService(
             ProfileEntity(mbti = mbti, score = score, strengths = strengths, weaknesses = weaknesses)
         )
 
+    // ===== 设置槽位（轻量 KV，Properties 文件；不动共享 Room schema）=====
+
+    /**
+     * 视觉模型槽位（对齐手机端 DataStore vision_model_id）：主模型不支持视觉时，
+     * 聊天图片走通道 B——由该槽位模型先转述。null = 未配置。
+     */
+    fun getVisionModelId(): Long? = DesktopSettingsStore.get("visionModelId")?.toLongOrNull()
+
+    /** null = 清除槽位（对齐手机端 setVisionModelId(null) 语义） */
+    fun setVisionModelId(id: Long?) = DesktopSettingsStore.put("visionModelId", id?.toString())
+
     // ===== 数据管理（导出 / 清空）=====
 
     /** 全量导出为 JSON（Provider 的 Key 密文脱敏为 hasApiKey 布尔，绝不出密文） */
@@ -255,6 +266,38 @@ class WenyanService(
         db.modelDao().clear()
         db.providerDao().clear()
         db.profileDao().clear()   // 画像（MBTI 测评）也是用户数据，"清空全部"必须覆盖
+        DesktopSettingsStore.clear()   // 设置槽位（视觉模型）一并清除，对齐手机端 clearAll
+    }
+}
+
+/**
+ * 桌面版轻量设置存储：Properties 文件（%APPDATA%\Wenyan\wenyan-settings.properties，与 DB 同目录）。
+ * 对齐手机端 SettingsRepository（DataStore）的槽位语义；当前仅 visionModelId。
+ * 线程安全：synchronized 读写，写后落盘（单文件极小，性能无虞）。
+ */
+private object DesktopSettingsStore {
+    private val file = java.io.File(com.wenyan.app.data.db.AppDatabase.dbDir(), "wenyan-settings.properties")
+    private val props = java.util.Properties()
+
+    init {
+        if (file.exists()) {
+            runCatching { file.inputStream().use { props.load(it) } }
+        }
+    }
+
+    @Synchronized
+    fun get(key: String): String? = props.getProperty(key)?.takeIf { it.isNotBlank() }
+
+    @Synchronized
+    fun put(key: String, value: String?) {
+        if (value == null) props.remove(key) else props.setProperty(key, value)
+        runCatching { file.outputStream().use { props.store(it, "wenyan desktop settings") } }
+    }
+
+    @Synchronized
+    fun clear() {
+        props.clear()
+        runCatching { file.outputStream().use { props.store(it, "wenyan desktop settings") } }
     }
 }
 
