@@ -69,8 +69,6 @@ a{color:var(--accent);text-decoration:none}
 @keyframes breathe{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
 @keyframes caret{0%,49%{opacity:1}50%,100%{opacity:0}}
 @keyframes pop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
-/* 光泽流动：玻璃表面高光斜向扫过（仅 transform，合成层，60fps） */
-@keyframes sheen{0%{transform:translateX(-140%) skewX(-18deg)}55%{transform:translateX(240%) skewX(-18deg)}100%{transform:translateX(240%) skewX(-18deg)}}
 /* 按压弹性：iOS 触感（按下压缩回弹） */
 @keyframes pressPop{0%{transform:scale(1)}38%{transform:scale(.94)}72%{transform:scale(1.02)}100%{transform:scale(1)}}
 
@@ -99,17 +97,6 @@ a{color:var(--accent);text-decoration:none}
   opacity:.5;
 }
 [data-theme=dark] .refract::after{border-color:rgba(255,255,255,.22);opacity:.4}
-/* 光泽流动高光层：hover 时斜向扫过一次 */
-.glass.sheenable::after,
-.msg-ai.glass::after{content:none}
-.sheen::before{content:none}
-.sheen .sheen-layer{
-  position:absolute;top:0;bottom:0;width:34%;pointer-events:none;z-index:1;
-  background:linear-gradient(105deg,transparent,rgba(255,255,255,.34) 45%,rgba(255,255,255,.1) 60%,transparent);
-  transform:translateX(-140%) skewX(-18deg);
-}
-.sheen:hover .sheen-layer{animation:sheen 1.1s cubic-bezier(.4,0,.2,1)}
-[data-theme=dark] .sheen .sheen-layer{background:linear-gradient(105deg,transparent,rgba(255,255,255,.14) 45%,rgba(255,255,255,.05) 60%,transparent)}
 /* 按压弹性（可点玻璃元素通用） */
 .pressable{transition:transform .12s cubic-bezier(.34,1.56,.64,1)}
 .pressable:active{transform:scale(.955)}
@@ -151,7 +138,6 @@ a{color:var(--accent);text-decoration:none}
   border-radius:20px;z-index:5;
 }
 .topbar{overflow:hidden}
-.topbar .sheen-layer{border-radius:20px}
 .tb-title{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
 .tb-dot{width:7px;height:7px;border-radius:50%;background:var(--dot-ok);flex-shrink:0;transition:background .3s}
 .tb-dot.think{background:var(--dot-think);animation:breathe 1.2s ease-in-out infinite}
@@ -201,7 +187,6 @@ a{color:var(--accent);text-decoration:none}
   transition:transform .25s cubic-bezier(.32,.72,0,1),box-shadow .25s;
 }
 .msg-ai:hover{transform:translateY(-1.5px)}
-.msg-ai .sheen-layer{border-radius:20px 20px 20px 6px}
 .msg-ai .lead{color:var(--fg);line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .msg-ai .lead.streaming::after{content:"";display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:caret 1s step-end infinite;border-radius:1px}
 .sec{font-size:12.5px;color:var(--accent);font-weight:600;letter-spacing:.02em}
@@ -339,6 +324,8 @@ a{color:var(--accent);text-decoration:none}
 .btn-ghost{font-size:12px;color:var(--muted);padding:8px;border-radius:10px}
 .btn-ghost:hover{background:var(--chip);color:var(--accent)}
 .note{font-size:11px;color:var(--muted);text-align:center;line-height:1.6}
+/* 表单内连接状态行：保存配置后自动测连接的红绿灯 */
+.conn-status{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);line-height:1.5;min-height:22px}
 
 /* 通道 B：转述确认卡片 */
 .transcription-edit{
@@ -388,7 +375,7 @@ a{color:var(--accent);text-decoration:none}
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media (prefers-reduced-motion:reduce){
-  .glow,.sheen:hover .sheen-layer,.msg-user,.msg-ai{animation:none!important}
+  .glow,.msg-user,.msg-ai{animation:none!important}
   .msg-ai:hover{transform:none}
 }
 

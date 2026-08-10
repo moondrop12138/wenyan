@@ -339,8 +339,7 @@ function appendAnalysisCard(raw, animate){
   col.appendChild(buildCard(a));
 }
 function buildCard(a){
-  const card = el('div','msg-ai glass edge sheen');
-  card.appendChild(el('div','sheen-layer'));
+  const card = el('div','msg-ai glass edge');
   if (a.empathy) card.appendChild(el('div','lead', esc(a.empathy)));
   // facts
   const facts = a.facts || {};
@@ -611,8 +610,7 @@ async function sendMessage(){
 
 // ===== 通道 B：转述确认卡片（可编辑 → 确认后走主模型纯文本分析） =====
 function buildTranscriptionCard(text, sid){
-  const card = el('div','msg-ai glass edge sheen');
-  card.appendChild(el('div','sheen-layer'));
+  const card = el('div','msg-ai glass edge');
   card.appendChild(el('span','sec','截图转述（可修改）'));
   const ta = el('textarea','transcription-edit');
   ta.value = text;
@@ -913,7 +911,7 @@ async function renderProvidersPage(col, title){
   col.appendChild(addBtn);
 }
 
-async function renderProviderDetail(col, pid){
+async function renderProviderDetail(col, pid, autoTest){
   const isNew = pid == null;
   const p = isNew ? { name:'', baseUrl:'', hasApiKey:false } : providerById(pid);
   $('pageTitle').textContent = isNew ? '添加厂商' : p.name;
@@ -990,14 +988,14 @@ async function renderProviderDetail(col, pid){
       const r = await api.post('/api/providers', { name, baseUrl, apiKey: kf.input.value.trim() || null });
       toast('已添加厂商');
       await refreshProviders();
-      renderProviderDetail(col, r.id);
+      renderProviderDetail(col, r.id, true);   // 重绘为编辑态并自动测连接
     } else {
       const body = { name, baseUrl };
       if (kf.input.value.trim()) body.apiKey = kf.input.value.trim();
       await api.put('/api/providers/' + pid, body);
       toast('已保存 · Key 加密存储于本地');
       await refreshProviders();
-      renderProviderDetail(col, pid);
+      renderProviderDetail(col, pid, true);    // 重绘并自动测连接
     }
   };
   form.appendChild(save);
@@ -1015,6 +1013,26 @@ async function renderProviderDetail(col, pid){
     };
     col.appendChild(delBtn);
   }
+
+  // 保存配置成功 → 自动测连接（表单内红/绿灯；列表页红绿灯由 refreshProviders 联动）
+  if (autoTest) runAutoTest(col, pid);
+}
+// 自动测连接：保存后调用 /test，表单内显示 连接中 → 成功(绿)/失败(红) + 文案
+async function runAutoTest(col, id){
+  const form = col.querySelector('.form-card');
+  const save = form ? form.querySelector('button.btn-primary') : null;
+  if (!form || !save) return;
+  const row = el('div','conn-status');
+  row.appendChild(el('span','rdot c'));
+  row.appendChild(el('span','','正在检测连接…'));
+  save.after(row);
+  let r;
+  try { r = await api.post(`/api/providers/${id}/test`); }
+  catch(e){ r = { ok:false, error:(e && e.message) || '连接请求失败' }; }
+  await refreshProviders();
+  row.innerHTML = '';
+  row.appendChild(el('span','rdot ' + (r.ok ? 'g' : 'r')));
+  row.appendChild(el('span','', r.ok ? '连接成功' + (r.model ? `（${esc(r.model)}）` : '') : esc(r.error || '连接失败')));
 }
 function field(label){
   const wrap = el('div','form-field');
