@@ -2,11 +2,25 @@
 
 > 先接住情绪，再分清事实，最后给出能执行的下一步。
 
-「温言」是一款纯本地运行的恋爱决策支持 Android 应用：以开源项目 [goutoujunshi（狗头军师）](https://github.com/powerycy/goutoujunshi) 的知识库为内核，用**四段式回答结构**（接住你 → 先分清事实 → 军师建议 → 现在可以做什么）帮你梳理关系、拆解事实与推测、给出可执行的话术与行动。
+「温言」是一款纯本地运行的恋爱决策支持应用，支持 **Android** 与 **Windows 桌面**：以开源项目 [goutoujunshi（狗头军师）](https://github.com/powerycy/goutoujunshi) 的知识库为内核，用**四段式回答结构**（接住你 → 先分清事实 → 军师建议 → 现在可以做什么）帮你梳理关系、拆解事实与推测、给出可执行的话术与行动。
 
 它不是虚拟恋人，也不替你读心——它帮你把"凭感觉"变成"看证据"。
 
+> 📥 **下载**：见 [Releases](https://github.com/moondrop12138/wenyan/releases)——Android 装 `.apk`，Windows 装 `*-windows.exe`（内嵌运行环境，双击即装，无需单独装 Java）。两端数据各自本地存储，互不同步。
+
 > ⚠️ **非商业使用声明**：本仓库知识库部分衍生自 [powerycy/goutoujunshi](https://github.com/powerycy/goutoujunshi)（PolyForm Noncommercial 1.0.0），因此**本仓库整体采用非商业许可**，详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+
+## 平台
+
+| | Android | Windows 桌面 |
+|---|---|---|
+| 形态 | 原生 App（Jetpack Compose） | 本地服务 + 网页前端（exe 安装包，内嵌裁剪 JRE） |
+| 界面 | Compose 液态玻璃 | 纯静态 HTML/CSS/JS 液态玻璃 |
+| 数据 | Room SQLite，本机 | Room KMP SQLite，本机 `%APPDATA%\Wenyan` |
+| Key 加密 | Android Keystore + AES-GCM | 机器指纹派生 AES-256-GCM |
+| 业务逻辑 | 两端**物理共享同一套 Kotlin 源码**（llm / domain / prompt / knowledge / data） | 同左 |
+
+两端功能完全对齐：四段式回答、跨会话记忆档案、多模型 BYOK、测连接、截图分析、深浅色主题、数据导出/清空、检查更新。
 
 ## 功能
 
@@ -21,7 +35,7 @@
 - **多图发送**：一次最多选 10 张，单次 LLM 请求全量分析
 - **知识库路由**：40 份关系科学与实用沟通文档（心理/法律/沟通/婚姻/安全）打包进 App，按场景自动加载 1–3 份，结果回显引用来源
 - **危机转介**：检测到家暴/跟踪/自伤等风险时，先给安全计划与紧急服务，不给恋爱话术
-- **自带 Key 直连**：无后端、数据不出手机，支持任意 OpenAI 兼容服务商；API Key 经 Android Keystore + AES-GCM 加密存储
+- **自带 Key 直连**：无后端、数据不出本机，支持任意 OpenAI 兼容服务商；API Key 本机加密存储（Android 走 Keystore，桌面走机器指纹派生 AES-256-GCM）
 - **流式输出**：SSE 增量回复，思考过程可折叠，流式期间只预览成品话术而非原始 JSON
 - **隐私设计**：本地档案可一键清除；备份（云备份/换机迁移）全部排除
 - **液态玻璃 UI**：全 App 统一玻璃材质（半透明填充 + 高光 + 描边 + 柔和投影）+ 暖色光斑背景，浅色/深色双主题，支持"移除动画"无障碍设置
@@ -30,24 +44,38 @@
 
 ```
 app/
-├── app/src/main/java/com/wenyan/app/
+├── app/src/main/java/com/wenyan/app/      # 手机版 + 两端共享业务源码
 │   ├── MainActivity.kt        # 入口：edge-to-edge + 主题装配
 │   ├── WenyanApp.kt           # Application：依赖容器装配
 │   ├── ui/                    # Compose UI（chat / settings / onboarding / navigation）
 │   ├── llm/                   # LLM 客户端（OkHttp + SSE）、解析器、错误归一、重试策略
 │   ├── domain/                # 会话状态机、输入路由
 │   ├── knowledge/             # 知识检索与危机检测
-│   ├── data/                  # Room / DataStore / 图片压缩 / Keystore 加密
+│   ├── data/                  # Room / DataStore / 图片压缩 / 加密
 │   ├── prompt/                # Prompt 构建
 │   └── container/             # 仓库实现与 UI 映射
 ├── app/src/main/assets/knowledge/   # 40 份知识文档 + 路由表（构建门禁生成）
+│
+├── desktop/                   # Windows 桌面版（纯 JVM 模块）
+│   ├── src/main/kotlin/com/wenyan/desktop/
+│   │   ├── Main.kt            # 入口：Ktor CIO 127.0.0.1 + 端口探测 + 自动开浏览器
+│   │   ├── ApiRoutes.kt       # REST 路由 + 手动 SSE 流式聊天端点
+│   │   ├── ChatEngine.kt      # 聊天引擎（复用共享链路，去 Android UI 接缝）
+│   │   └── WenyanService.kt   # 数据服务层（Room KMP + 机器指纹加密）
+│   ├── src/main/resources/static/   # 网页前端（原生 HTML/CSS/JS 液态玻璃）
+│   └── packaging/             # jpackage 打包脚本（jdeps→jlink→app-image→exe）
+│
 ├── scripts/gen_routes.py      # 构建门禁：知识库完整性校验 + 路由表生成
 └── docs/                      # 架构 / 数据库 / LLM 契约 / 设计令牌 / ADR
 ```
 
+桌面版通过 Gradle sourceSet 物理共享手机版的纯 JVM 业务源码（`llm / domain / prompt / knowledge / data`），仅替换平台相关实现（加密、数据库驱动、图片压缩、知识资产读取），保证两端行为一致、单点维护。
+
 设计细节见 [docs/architecture.md](docs/architecture.md)、[docs/llm-contract.md](docs/llm-contract.md)、[docs/db-schema.md](docs/db-schema.md)。
 
 ## 构建
+
+### Android
 
 环境要求：JDK 17、Android SDK（compileSdk 36 / minSdk 26）。
 
@@ -66,12 +94,27 @@ cd app
 
 > 工程根在 `app/` 子目录（git 仓库根为上级目录），CI 已在 `.github/workflows/ci.yml` 中配置好构建路径。
 
+### Windows 桌面
+
+环境要求：JDK 21（打包用 jpackage，WiX 3.x 由脚本自动获取）。
+
+```bash
+cd app
+
+# 本地跑（Ktor 起 127.0.0.1，自动开浏览器）
+./gradlew :desktop:run
+
+# 打包 exe 安装包 + 绿色版（产物在 desktop/dist-package/）
+powershell -File desktop/packaging/package.ps1
+```
+
 ## 技术栈
 
-- Jetpack Compose（Material 3）/ Kotlin 2.1 / Room / DataStore
-- OkHttp + SSE 流式、指数退避重试
-- Android Keystore + AES-GCM（API Key 加密）
-- minSdk 26 / targetSdk 36，R8 混淆
+**共享业务层**：Kotlin / Room（KMP）/ OkHttp + SSE 流式、指数退避重试 / AES-GCM（API Key 加密）
+
+**Android**：Jetpack Compose（Material 3）/ Kotlin 2.1 / DataStore / Android Keystore；minSdk 26 / targetSdk 36，R8 混淆
+
+**Windows 桌面**：Ktor CIO（本地服务）/ 纯静态 HTML/CSS/JS 前端（原生 JS 无框架）/ jpackage（jdeps + jlink 裁剪 JRE + exe 安装包）
 
 ## 测试
 
