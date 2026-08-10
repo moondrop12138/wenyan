@@ -30,6 +30,11 @@ $MODULES = ($jdepsOut | Select-String -Pattern '^[a-z][a-z0-9_.]*(,[a-z][a-z0-9_
 if (-not $MODULES) { throw "jdeps failed:`n$jdepsOut" }
 # java.desktop：浏览打开 + ImageIO 图片压缩（jdeps 对 service loader 类可能漏检）
 if ($MODULES -notmatch 'java.desktop') { $MODULES = "$MODULES,java.desktop" }
+# TLS 加密提供者：OkHttp/HttpURLConnection 走 ServiceLoader 动态加载，jdeps 静态探测不到
+# ——缺失 jdk.crypto.ec 会导致所有 HTTPS 握手 handshake_failure（桌面版外联全废的坑）
+foreach ($m in @('jdk.crypto.ec', 'jdk.crypto.cryptoki', 'jdk.crypto.mscapi')) {
+  if ($MODULES -notmatch [regex]::Escape($m)) { $MODULES = "$MODULES,$m" }
+}
 Write-Host "    modules: $MODULES"
 
 Write-Host "==> [3/5] jlink 裁剪 JRE"
