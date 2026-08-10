@@ -16,6 +16,10 @@ import java.net.URI
  *
  * 桌面版没有 APK 资产语义：assets 取第一个 browser_download_url（exe/zip 均可），
  * 无资产时仍返回版本信息（downloadUrl 为空串，前端只展示"去 Release 页"）。
+ *
+ * tag 前缀隔离：桌面版 Release 使用 desktop-vX.Y.Z（与手机版 vX.Y.Z 隔离），
+ * 遍历 releases 列表取第一个 desktop- 前缀的 Release——两端共用 releases/latest
+ * 会互相误报新版本（手机版发 v1.9.0 桌面版误报、桌面版发 desktop-v1.8.2 手机版误报）。
  */
 object DesktopUpdateChecker {
 
@@ -35,9 +39,10 @@ object DesktopUpdateChecker {
             ?: return@withContext Result("failed", currentVersion, error = "网络异常，无法检查更新")
         val tag = json.optString("tag_name", "").trim()
         if (tag.isEmpty()) return@withContext Result("failed", currentVersion, error = "Release 解析失败")
-        val latest = tag.removePrefix("v").removePrefix("V")
-        // 桌面版不直链资产（手机 Release 挂的是 APK）：统一跳该版本 Release 页
-        val url = "https://github.com/$REPO/releases/tag/$tag"
+        val latest = tag.removePrefix("desktop-").removePrefix("v").removePrefix("V")
+        // 优先直链该版本 exe 资产；无资产时跳 Release 页
+        val url = firstAssetUrl(json)
+            ?: "https://github.com/$REPO/releases/tag/$tag"
         val notes = json.optString("body", "").trim()
         return@withContext if (compareVersionNames(latest, currentVersion) > 0) {
             Result("new", currentVersion, latest, notes, url)
@@ -46,19 +51,38 @@ object DesktopUpdateChecker {
         }
     }
 
+    /** 遍历 releases 列表，返回第一个 desktop- 前缀的 Release（发布时间降序） */
     private fun fetchLatestJson(): JSONObject? = runCatching {
-        val conn = URI("https://api.github.com/repos/$REPO/releases/latest")
+        val conn = URI("https://api.github.com/repos/$REPO/releases?per_page=100")
             .toURL().openConnection() as HttpURLConnection
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.setRequestProperty("Accept", "application/vnd.github+json")
         try {
             if (conn.responseCode !in 200..299) return null
-            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val releases = org.json.JSONArray(text)
+            for (i in 0 until releases.length()) {
+                val obj = releases.optJSONObject(i) ?: continue
+                val tag = obj.optString("tag_name", "").trim()
+                if (tag.startsWith("desktop-")) return obj
+            }
+            null
         } finally {
             conn.disconnect()
         }
     }.getOrNull()
+
+    /** assets 中第一个非空 browser_download_url（桌面版 exe） */
+    private fun firstAssetUrl(json: JSONObject): String? {
+        val assets = json.optJSONArray("assets") ?: return null
+        for (i in 0 until assets.length()) {
+            val obj = assets.optJSONObject(i) ?: continue
+            val url = obj.optString("browser_download_url", "").trim()
+            if (url.isNotEmpty()) return url
+        }
+        return null
+    }
 
     /** "1.7.3" vs "1.7.2" → 1；"v" 前缀等价；非法段按 0（与手机版 UpdateChecker 逐字一致） */
     internal fun compareVersionNames(a: String, b: String): Int {
