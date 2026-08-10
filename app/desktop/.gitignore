@@ -1,0 +1,5 @@
+build/
+build.[0-9]*
+schemas/
+*.log
+desktop-runtime-libs/

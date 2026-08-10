@@ -39,4 +39,12 @@ interface SessionDao {
     /** v1.7.4 删档案时解绑其全部会话（session.targetId 无 FK，防悬空引用：记忆注入静默失效 + 抽屉分组错乱） */
     @Query("UPDATE session SET targetId = NULL WHERE targetId = :id")
     suspend fun unbindTarget(id: Long)
+
+    /** 桌面版：更新引用知识文档列表（refDocs JSON 数组） */
+    @Query("UPDATE session SET refDocs = :refDocs WHERE id = :id")
+    suspend fun updateRefDocs(id: Long, refDocs: String)
+
+    /** 桌面版：会话绑定/换绑档案（设置页"关联档案"下拉） */
+    @Query("UPDATE session SET targetId = :targetId WHERE id = :id")
+    suspend fun bindTarget(id: Long, targetId: Long?)
 }

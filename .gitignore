@@ -80,3 +80,6 @@ app/scripts/run_gradle.sh
 app/tools/
 app/gdh-fresh/
 app/*.txt
+
+# 桌面版打包产物（安装包/绿色版/裁剪 JRE，体积大且可重生成）
+app/desktop/dist-package/
