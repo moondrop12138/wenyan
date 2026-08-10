@@ -103,13 +103,18 @@ a{color:var(--accent);text-decoration:none}
 
 /* ===== 布局骨架 ===== */
 #app{position:relative;z-index:1;display:flex;height:100vh}
-/* 侧边栏 */
+/* 侧边栏：与其他玻璃组件（topbar/pill/input-bar）统一的液态玻璃质感
+   g-shadow 投影 + inset 顶部高光 + edge 顶部高光线 + 统一 blur 参数 */
 .sidebar{
+  position:relative;overflow:hidden;
   width:288px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;
   padding:18px 12px 16px;border-right:1px solid var(--glass-border);
-  background:var(--glass);backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
+  background:var(--glass);backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);
+  box-shadow:var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.45);
   transition:margin-left .35s cubic-bezier(.32,.72,0,1);
 }
+.sidebar::before{content:"";position:absolute;top:0;left:10%;right:10%;height:1.5px;border-radius:99px;background:linear-gradient(90deg,transparent,var(--edge),transparent);pointer-events:none;z-index:1}
+[data-theme=dark] .sidebar{box-shadow:var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.08)}
 .sidebar.closed{margin-left:-288px}
 .sb-head{display:flex;align-items:center;gap:10px;padding:4px 8px 12px}
 .sb-logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(150deg,var(--send1),var(--send2));display:flex;align-items:center;justify-content:center;color:var(--sendic);font-size:14px;font-weight:500;box-shadow:inset 0 1px 0 rgba(255,255,255,.35);flex-shrink:0}
