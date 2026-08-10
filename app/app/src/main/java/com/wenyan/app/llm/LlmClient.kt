@@ -19,6 +19,7 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import java.io.IOException
+import java.net.ProxySelector
 import java.util.concurrent.TimeUnit
 
 /**
@@ -233,6 +234,12 @@ class LlmClient(
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
+            .apply {
+                // 桌面版（jpackage 已开启 useSystemProxies）：OkHttp 默认不读系统代理，
+                // 显式用 ProxySelector.getDefault() 走系统代理；Android 上 getDefault() 为 null 时保持默认（直连）
+                val ps = ProxySelector.getDefault()
+                if (ps != null) proxySelector(ps)
+            }
             .build()
     }
 }

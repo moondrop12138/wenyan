@@ -9,12 +9,14 @@ import java.util.concurrent.TimeUnit
 
 /**
  * GitHub Releases 最新版本信息（v1.7.3 T4 更新检查）。
- * GET https://api.github.com/repos/moondrop12138/wenyan/releases/latest
+ * GET https://api.github.com/repos/moondrop12138/wenyan/releases?per_page=100
  * 解析：tag_name → versionName（去 "v" 前缀）；body → notes；
  * assets[].browser_download_url（.apk 结尾）→ apkUrl。
  * 失败返回 null（runCatching + 超时），由 UpdateChecker 归一为错误。
  * v1.7.3-fix：删除 versionCode 字段——版本比较统一走 versionName 段比较，
  * 避免 tag 刻度（10703）与 BuildConfig.VERSION_CODE 本地刻度（28）两套刻度混用误报。
+ * v1.8.2：tag 前缀隔离——桌面版 Release 使用 desktop- 前缀，手机版只认 "v" 前缀
+ * （最新发布且 tag 以 v 开头），两端共用 releases/latest 会互相误报新版本。
  */
 data class UpdateInfo(
     val versionName: String,   // 如 "1.7.3"
@@ -37,7 +39,7 @@ class UpdateClient(
     private val okHttp: OkHttpClient,
     private val repo: String = "moondrop12138/wenyan",
 ) {
-    /** 拉取最新 Release；网络/解析失败返回 null */
+    /** 拉取最新手机版 Release（tag 以 "v" 开头且非 desktop- 前缀）；网络/解析失败返回 null */
     suspend fun fetchLatest(): UpdateInfo? = withContext(Dispatchers.IO) {
         runCatching {
             val client = okHttp.newBuilder()
@@ -45,13 +47,23 @@ class UpdateClient(
                 .readTimeout(10, TimeUnit.SECONDS)
                 .build()
             val request = Request.Builder()
-                .url("https://api.github.com/repos/$repo/releases/latest")
+                .url("https://api.github.com/repos/$repo/releases?per_page=100")
                 .header("Accept", "application/vnd.github+json")
                 .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@runCatching null
                 val body = response.body?.string() ?: return@runCatching null
-                parseRelease(JSONObject(body))
+                // releases 列表按发布时间降序；取第一个手机版 Release（tag 以 v 开头）
+                val releases = JSONArray(body)
+                for (i in 0 until releases.length()) {
+                    val obj = releases.optJSONObject(i) ?: continue
+                    val tag = obj.optString("tag_name", "").trim()
+                    if (tag.startsWith("v") && !tag.startsWith("desktop-")) {
+                        val info = parseRelease(obj)
+                        if (info != null) return@runCatching info
+                    }
+                }
+                null
             }
         }.getOrNull()
     }
