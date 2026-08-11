@@ -4,7 +4,7 @@
 */
 'use strict';
 
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.8.2';
 
 // ===== 工具 =====
 const $ = id => document.getElementById(id);
@@ -39,6 +39,7 @@ const S = {
   streaming: false,
   streamSeq: 0,               // 流式令牌：切会话/删除会话后自增，使在途 SSE 的迟到事件失效
   streamSessionId: null,      // 在途流所属的会话
+  controller: null,           // 在途 fetch 的 AbortController（删除会话时 abort，取消后端 LLM 流）
   pendingImages: [],          // 已上传的 dataUrl 列表
   theme: localStorage.getItem('wenyan.theme') || 'light',
   route: 'chat',
@@ -107,7 +108,9 @@ function renderSidebar(){
       e.stopPropagation();
       if (!confirm('删除这个会话及其全部消息？')) return;
       await api.del('/api/sessions/' + s.id);
-      if (S.sessionId === s.id){ S.sessionId = null; S.streamSeq++; }  // 使该会话的在途流事件失效
+      // v1.8.2-fix（审查 P3-11）：删除会话同时 abort 在途 fetch → 后端 SSE 写入失败 →
+      // 取消传播到 LLM 请求（不再浪费 token 写孤儿消息）
+      if (S.sessionId === s.id){ S.sessionId = null; abortStream(); }
       await refreshSessions(); renderSidebar(); renderChat();
     };
     item.appendChild(del);
@@ -279,7 +282,9 @@ async function renderChat(){
   renderTargetPill();
   $('emptyState').classList.add('hidden');
   $('chatScroll').classList.remove('hidden');
-  const sid = S.sessionId;                      // await 期间用户可能已切走
+  // v1.8.2-fix（审查 P1-3）：此前 streamingHere 时过滤「最后一条 USER」，前提假设是
+  // sendMessage 已把该气泡 append 进 DOM——但 renderChat 开头已清空 col，过滤反而
+  // 把「流式中切走再切回」的用户消息从界面上抹掉。DOM 已清空，直接渲染全部落库消息。
   const msgs = await api.get(`/api/sessions/${sid}/messages`);
   if (sid !== S.sessionId) return;              // 迟到响应：丢弃，避免写回旧会话消息
   if (!msgs.length){
@@ -288,14 +293,9 @@ async function renderChat(){
     renderEmpty();
     return;
   }
-  // 该会话正在流式：容器已含在途气泡/卡片，只补卡片之前的落库消息，避免双份
-  const streamingHere = S.streaming && S.streamSessionId === sid;
-  const renderMsgs = streamingHere
-    ? msgs.filter(m => !(m.role === 'USER' && msgs.indexOf(m) === msgs.length - 1))
-    : msgs;
-  renderMsgs.forEach(m => {
+  msgs.forEach(m => {
     if (m.role === 'USER') appendUserBubble(m.content, m.type);
-    else if (m.type === 'analysis') appendAnalysisCard(m.content, false);
+    else if (m.type === 'analysis') appendAnalysisCard(m.content, false, m.createdAt);
   });
   scrollBottom();
 }
@@ -327,8 +327,9 @@ function appendUserBubble(content, type){
   col.appendChild(b);
 }
 
-// analysis content 是四段 JSON 原文
-function appendAnalysisCard(raw, animate){
+// analysis content 是四段 JSON 原文；ts = 消息创建时间（毫秒），历史渲染时传入，
+// 否则用当前时间（流式刚完成的卡片）。
+function appendAnalysisCard(raw, animate, ts){
   let a;
   try { a = JSON.parse(raw); } catch(e){ a = null; }
   const col = $('chatCol');
@@ -336,7 +337,7 @@ function appendAnalysisCard(raw, animate){
     col.appendChild(el('div','msg-ai glass edge','<div class="lead">（回复解析失败）</div>'));
     return;
   }
-  col.appendChild(buildCard(a));
+  col.appendChild(buildCard(a, ts));
 }
 // v1.8.2：回答渲染改为 editorial 回信文章（刊头 + 衬线大标题 + 四段结构）
 function secKicker(cn, en){
@@ -360,15 +361,21 @@ function nowHM(){
   const d = new Date();
   return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 }
-function buildCard(a){
+// 消息时间戳 → HH:mm；ts 缺失时回退当前时间（流式刚完成的卡片无落库时间）
+function fmtHM(ts){
+  if (ts == null) return nowHM();
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function buildCard(a, ts){
   const card = el('div','msg-ai editorial');
-  // 刊头：短规则线 + 温言·回信 + 时间
+  // 刊头：短规则线 + 温言·回信 + 时间（v1.8.2-fix：历史消息显示消息时间而非渲染时刻）
   const top = el('div','coach-top');
   const l = el('div','l');
   l.appendChild(el('hr','rule-short'));
   l.appendChild(el('span','kicker','温言 · 回信'));
   top.appendChild(l);
-  top.appendChild(el('span','caption', nowHM()));
+  top.appendChild(el('span','caption', fmtHM(ts)));
   card.appendChild(top);
   // 衬线大标题 = 军师建议核心句
   const adv = a.advice || {};
@@ -413,12 +420,17 @@ function buildCard(a){
     if (styles.length){
       const tabs = el('div','style-tabs');
       const box = el('div','script-box');
-      box.appendChild(el('div','caption','可以直接发'));
+      // v1.8.2-fix（审查 P2-7）：澄清场景（UNCERTAIN）显示「先确认一下」且不提供复制话术，
+      // 与手机端 ScriptBox 语义对齐
+      const isClar = !!(a.isClarification || a.inputKind === 'uncertain');
+      box.appendChild(el('div','caption', isClar ? '先确认一下' : '可以直接发'));
       const txt = el('p','txt', esc(styles[0].text || ''));
       box.appendChild(txt);
-      const copy = el('button','copy-link','复制话术');
-      copy.onclick = () => navigator.clipboard.writeText(txt.textContent).then(()=>toast('已复制'));
-      box.appendChild(copy);
+      if (!isClar){
+        const copy = el('button','copy-link','复制话术');
+        copy.onclick = () => navigator.clipboard.writeText(txt.textContent).then(()=>toast('已复制'));
+        box.appendChild(copy);
+      }
       styles.forEach((st, i) => {
         const b = el('button','style-tab' + (i === 0 ? ' active' : ''), esc(st.label || ('风格' + (i + 1))));
         b.onclick = () => {
@@ -555,6 +567,7 @@ async function ensureSession(){
 async function sendMessage(){
   const text = inputBox.value.trim();
   if ((!text && !S.pendingImages.length) || S.streaming) return;
+  if (S.pendingSend) return;                    // v1.8.2-fix（审查 P3-12）：ensureSession 异步窗口内防并发建双会话
   if (S.currentModelId == null){ toast('请先选择模型'); openSheet(); renderModelSheet('main'); return; }
   const m = modelById(S.currentModelId);
   const p = m ? providerById(m.providerId) : null;
@@ -566,8 +579,12 @@ async function sendMessage(){
     return;
   }
 
+  S.pendingSend = true;
   const wasNew = S.sessionId == null;
-  const sid = await ensureSession();
+  let sid;
+  try { sid = await ensureSession(); }
+  catch(err){ S.pendingSend = false; toast('创建会话失败，请重试'); return; }
+  S.pendingSend = false;
   if (wasNew){ S.sessionTargetId = S.pendingTargetId || null; renderTargetPill(); }
   const images = S.pendingImages.slice();
   S.pendingImages = []; renderPending();
@@ -599,10 +616,15 @@ async function sendMessage(){
   const live = () => mySeq === S.streamSeq;    // 事件落地前校验
   let settled = false;                // error/done/transcription 已收尾：流尾兜底不再触发（防误报「回复中断」+ 防 renderChat 抹掉已渲染内容）
 
+  // v1.8.2-fix（审查 P3-11）：删除会话时 abort 在途流 → 后端 SSE 写入失败 → 取消传播到 LLM 请求
+  const ctl = new AbortController();
+  S.controller = ctl;
+
   try {
     const resp = await fetch('/api/chat/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, text: text || '[图片]', imageDataUrls: images }),
+      signal: ctl.signal,
     });
     if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
     const reader = resp.body.getReader();
@@ -611,6 +633,7 @@ async function sendMessage(){
     for(;;){
       const { done, value } = await reader.read();
       if (done) break;
+      if (ctl.signal.aborted) break;           // 已删除会话：中断读取
       buf += dec.decode(value, { stream:true });
       let idx;
       while ((idx = buf.indexOf('\n\n')) >= 0){
@@ -636,6 +659,8 @@ async function sendMessage(){
     col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
     setStreaming(false);
     return;
+  } finally {
+    if (S.controller === ctl) S.controller = null;
   }
 
   function handleEvent(ev){
@@ -703,10 +728,14 @@ async function confirmTranscription(sid, transcription){
   const live = () => mySeq === S.streamSeq;
   let settled = false;
 
+  const ctl = new AbortController();
+  S.controller = ctl;
+
   try {
     const resp = await fetch('/api/chat/confirm-transcription', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, transcription }),
+      signal: ctl.signal,
     });
     if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
     const reader = resp.body.getReader();
@@ -715,6 +744,7 @@ async function confirmTranscription(sid, transcription){
     for(;;){
       const { done, value } = await reader.read();
       if (done) break;
+      if (ctl.signal.aborted) break;
       buf += dec.decode(value, { stream:true });
       let idx;
       while ((idx = buf.indexOf('\n\n')) >= 0){
@@ -754,6 +784,8 @@ async function confirmTranscription(sid, transcription){
     think.remove();
     col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
     setStreaming(false);
+  } finally {
+    if (S.controller === ctl) S.controller = null;
   }
 }
 
@@ -762,6 +794,12 @@ function setStreaming(v){
   $('btnSend').disabled = v;
   inputBox.disabled = v;
   $('tbDot').className = 'tb-dot' + (v ? ' think' : '');
+}
+
+/** 中断在途 SSE 流（删除会话时调用）：abort fetch + 使在途事件令牌过期 */
+function abortStream(){
+  if (S.controller){ try { S.controller.abort(); } catch(e){ /* 忽略 */ } S.controller = null; }
+  S.streamSeq++;
 }
 
 // ===== 侧栏 =====

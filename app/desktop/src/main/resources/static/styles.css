@@ -198,21 +198,8 @@ a{color:var(--accent);text-decoration:none}
 .msg-ai .lead{color:var(--fg);line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .msg-ai .lead.streaming::after{content:"";display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:caret 1s step-end infinite;border-radius:1px}
 .sec{font-size:12.5px;color:var(--accent);font-weight:600;letter-spacing:.02em}
-.fchip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--chip);color:var(--accent)}
-.facts-row{display:flex;gap:6px;flex-wrap:wrap}
-.advice-card{position:relative;border-radius:14px;background:var(--l2);border:1px solid var(--l2b);box-shadow:inset 0 1px 0 rgba(255,255,255,.6);padding:11px 12px;display:flex;flex-direction:column;gap:8px}
-[data-theme=dark] .advice-card{box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
-.style-tabs{display:flex;gap:6px}
-.sty{font-size:11px;padding:3px 12px;border-radius:99px;color:var(--muted);border:1px solid var(--glass-border);transition:all .15s}
-.sty.on{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
 .core-txt{font-size:12.5px;color:var(--fg);line-height:1.5}
-.reason-list{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--fg-sec)}
-.reason-list li{margin-left:16px}
-.actions-list{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--fg)}
-.action-item .lbl{font-size:11px;color:var(--accent);font-weight:500;margin-right:6px}
 .cite{font-size:11px;color:var(--meta)}
-.copy-btn{align-self:flex-start;font-size:11px;color:var(--accent);padding:4px 10px;border-radius:99px;border:1px solid var(--l2b);transition:background .15s}
-.copy-btn:hover{background:var(--chip)}
 
 .think-bubble{
   position:relative;align-self:flex-start;border-radius:16px;padding:9px 13px;font-size:11.5px;color:var(--muted);

@@ -72,7 +72,8 @@
     <!-- 空状态（v1.8.2 editorial：日期 + 短规则线 + 衬线标题 + 壹贰叁索引） -->
     <div class="empty-state hidden" id="emptyState">
       <div class="empty-editorial">
-        <div class="empty-date label" id="mottoDate"></div>
+        <!-- v1.8.2-fix：去掉 .label 类（后定义的 .label 会覆盖 .empty-date 的字号/字距/颜色） -->
+        <div class="empty-date" id="mottoDate"></div>
         <hr class="rule-short">
         <h1 class="displayLg empty-title">今天想聊<br>点什么？</h1>
         <div class="empty-index" id="exampleGrid"></div>

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -43,10 +44,13 @@ fun ChatEmptyState(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
-    // v1.8.2-fix：版心左对齐（editorial 排版：垂直居中 + 内容左对齐，日期/规则线/标题/索引统一左缘）
+    // v1.8.2-fix（审查 P2-5）：fillMaxSize + verticalArrangement.Center = 垂直居中；
+    // 内容保持左对齐（editorial 版心：垂直居中 + 左缘对齐）。此前仅 fillMaxWidth，
+    // wrap 高度下 Center 不生效，内容贴顶（v1.8.2 重构时误删了 fillMaxSize）。
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
@@ -125,7 +129,7 @@ private fun toCnNumber(n: Int): String {
     return sb.toString()
 }
 
-/** 时辰划分（editorial「· 夜」的语感）：0-5 夜 / 5-11 晨 / 11-17 午 / 17-19 夕 / 19-24 夜 */
+/** 时辰划分（editorial「· 夜」的语感，与桌面 editorialDate 一致）：0-4 夜 / 5-10 晨 / 11-16 午 / 17-18 夕 / 19-23 夜 */
 private fun timeOfDayLabel(hour: Int): String = when (hour) {
     in 0..4 -> "夜"
     in 5..10 -> "晨"

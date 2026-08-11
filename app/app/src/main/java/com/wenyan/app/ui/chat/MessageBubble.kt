@@ -277,6 +277,9 @@ fun StreamingBubble(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
+    // v1.8.2-fix（审查 P3-9）：流式每 token 重组会重算"当前时间"，跨分钟时刊头时间跳动；
+    // remember 固定为首次组合时刻（流式预览本就是"现在"，无需跟随重组刷新）
+    val headerTime = remember { formatNowTime() }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -288,7 +291,7 @@ fun StreamingBubble(
             Spacer(Modifier.width(10.dp))
             Text("温言 · 回信", style = GtjType.Label.copy(fontSize = 12.sp), color = p.accent)
             Spacer(Modifier.weight(1f))
-            Text(formatNowTime(), style = GtjType.Caption, color = p.meta)
+            Text(headerTime, style = GtjType.Caption, color = p.meta)
         }
         Spacer(Modifier.height(12.dp))
         Text(

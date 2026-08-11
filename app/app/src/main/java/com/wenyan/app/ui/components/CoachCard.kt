@@ -69,6 +69,7 @@ fun CoachCard(
     onCopy: (String) -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: ((Offset) -> Unit)? = null,
+    createdAt: Long? = null,
 ) {
     val p = LocalGtjColors.current
     var windowPos by remember { mutableStateOf(Offset.Zero) }
@@ -101,18 +102,18 @@ fun CoachCard(
                 Text("温言 · 回信", style = GtjType.Label.copy(fontSize = 12.sp), color = p.accent)
             }
             Spacer(Modifier.weight(1f))
-            Text(formatNowTime(), style = GtjType.Caption, color = p.meta)
+            // v1.8.2-fix（审查 P2-4）：刊头时间用消息创建时间——历史消息不再显示"渲染时刻"
+            Text(formatMessageTime(createdAt), style = GtjType.Caption, color = p.meta)
         }
 
         // ── 衬线大标题（adviceCore）──
         if (card.adviceCore.isNotBlank()) {
             Spacer(Modifier.height(18.dp))
+            // v1.8.2-fix（审查 P3-9）：去掉 4 行截断——桌面端不截断，双端行为对齐
             Text(
                 text = card.adviceCore,
                 style = EditorialType.Display,
                 color = p.fg,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
             )
         }
 
@@ -457,9 +458,11 @@ internal fun ScriptBubble(
     }
 }
 
-/** 刊头时间戳（HH:mm） */
-private fun formatNowTime(): String =
-    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+/** 刊头时间戳（HH:mm）：优先消息创建时间，缺失（预览/兜底）时取当前时间 */
+private fun formatMessageTime(createdAt: Long?): String {
+    val ts = createdAt ?: System.currentTimeMillis()
+    return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(ts))
+}
 
 /** v1.8.2 T3 @Preview：editorial 回答文章（四段结构） */
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)

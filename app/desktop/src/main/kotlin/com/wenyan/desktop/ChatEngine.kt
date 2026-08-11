@@ -10,6 +10,7 @@ import com.wenyan.app.llm.AnalysisParser
 import com.wenyan.app.llm.ChatHistoryMessage
 import com.wenyan.app.llm.ChatRequest
 import com.wenyan.app.llm.CoachAnalysis
+import com.wenyan.app.llm.InputKind
 import com.wenyan.app.llm.LlmClient
 import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.llm.LlmEvent
@@ -87,25 +88,30 @@ class ChatEngine(
             return
         }
 
-        // 图片分流（对齐手机端 analyzeImagesFlow）：
-        // 通道 A：主模型 supportsVision → 直读（下方主链路原样处理）；
+        // v1.8.2-fix（审查 P1-1）：统一落库对齐手机端 analyzeImagesFlow——
+        // 无论通道 A/B 都先落库：每张图一条 image 消息 + 配文一条 text 消息；
+        // 纯图发送（text 为 [图片] 占位）不落占位文本气泡（此前通道 A 只落 text 且图片丢失）。
+        val caption = text.trim()
+        if (imageDataUrls.isNotEmpty()) {
+            imageDataUrls.forEach { service.addMessage(sessionId, "USER", "image", it) }
+            if (caption.isNotEmpty() && caption != IMAGE_PLACEHOLDER) {
+                service.addMessage(sessionId, "USER", "text", caption)
+            }
+        } else {
+            service.addMessage(sessionId, "USER", "text", text)
+        }
+
+        // 通道判定（对齐手机端 analyzeImagesFlow）：
+        // 通道 A：主模型 supportsVision → 直读（下方主链路原样处理，imageDataUrls 已落库）；
         // 通道 B：主模型不支持视觉 → 视觉槽位模型先转述，发 transcription 帧后本轮结束
         //        （确认后由前端调 confirmTranscription 走主模型纯文本分析）。
         if (imageDataUrls.isNotEmpty()) {
             val mainModel = service.getModel(modelId)
             if (mainModel?.supportsVision != true) {
-                // 落库形态对齐手机端：每张图一条 image 消息 + 配文一条 text 消息
-                imageDataUrls.forEach { service.addMessage(sessionId, "USER", "image", it) }
-                val caption = text.trim()
-                if (caption.isNotEmpty() && caption != IMAGE_PLACEHOLDER) {
-                    service.addMessage(sessionId, "USER", "text", caption)
-                }
                 runVisionTranscribe(sessionId, imageDataUrls, onEvent)
                 return
             }
         }
-
-        service.addMessage(sessionId, "USER", "text", text)
 
         // 状态机推进（同题判定 + 状态前缀）
         val previousState = ConversationState.fromJson(session.stateJson)
@@ -121,9 +127,14 @@ class ChatEngine(
         val target = resolveTargetWithMemory(session.targetId)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val history = buildHistory(sessionId, text)
-        val user = when (routeByInputShape(text)) {
-            InputShape.CHAT_LOG -> promptBuilder.buildUserText(text)
-            InputShape.SHORT -> {
+        // v1.8.2-fix（审查 P1-1）：纯图（无配文，前端以 [图片] 占位发送）走固定分析指令，
+        // 对齐手机版 runVisionDirect——否则 "[图片]" 会当普通短句进 buildUserReply 模板。
+        val isPureImage = imageDataUrls.isNotEmpty() &&
+            (caption.isEmpty() || caption == IMAGE_PLACEHOLDER)
+        val user = when {
+            isPureImage -> "以下是用户聊天截图，请按四段结构分析。"
+            routeByInputShape(text) == InputShape.CHAT_LOG -> promptBuilder.buildUserText(text)
+            else -> {
                 val recentContext = history.takeLast(6)
                     .joinToString("\n") { h -> (if (h.role == "user") "用户" else "军师") + "：" + h.content.take(200) }
                     .takeIf { it.isNotBlank() }
@@ -494,6 +505,8 @@ class ChatEngine(
 /** CoachAnalysis → 前端卡片 JSON（与 AnalysisParser 的 v2 schema 对齐） */
 fun CoachAnalysis.toJson(): JSONObject = JSONObject()
     .put("inputKind", inputKind.name.lowercase())
+    // v1.8.2-fix（审查 P2-7）：输出澄清标记，前端据此显示「先确认一下」并隐藏复制话术
+    .put("isClarification", inputKind == InputKind.UNCERTAIN)
     .put("empathy", empathy)
     .put("reply", reply)
     .put("replyTiming", replyTiming)

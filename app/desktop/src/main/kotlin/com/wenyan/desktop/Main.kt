@@ -34,7 +34,7 @@ import java.net.URI
  * - 数据层：共享 Room entity/DAO（desktop BundledSQLiteDriver），首启注入预设提供商
  * - API Key：机器指纹派生 AES-256（不落盘），与 Android 端密文不互通（独立建档）
  */
-const val DESKTOP_VERSION = "1.8.1"
+const val DESKTOP_VERSION = "1.8.2"
 
 fun main() {
     // 更新检查走系统代理（本机 Git 代理场景直连 api.github.com 会失败；用户走系统代理时 HttpURLConnection 自动生效）

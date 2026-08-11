@@ -97,6 +97,8 @@ fun ChatInputBar(
     onPendingImagesPicked: (List<Uri>) -> Unit,
     onRemovePendingImage: (Uri) -> Unit,
     modifier: Modifier = Modifier,
+    // v1.8.2-fix（审查 P3-10）：空状态索引点击填入后聚焦输入框（对齐桌面端行为）
+    inputFocusRequester: FocusRequester? = null,
 ) {
     val p = LocalGtjColors.current
     val clipboard = LocalClipboardManager.current
@@ -240,7 +242,8 @@ fun ChatInputBar(
             TextField(
                 value = input,
                 onValueChange = onInputChange,
-                modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 40.dp)
+                    .then(if (inputFocusRequester != null) Modifier.focusRequester(inputFocusRequester) else Modifier),
                 placeholder = { Text("说点什么，或粘贴聊天记录…", style = GtjType.BodySm, color = p.meta) },
                 textStyle = GtjType.BodySm,
                 // v1.3.1 固定圆角（20dp）：多行变高时圆角不再随高度膨胀成胶囊

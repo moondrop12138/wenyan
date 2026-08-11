@@ -97,7 +97,7 @@ private fun <T> JSONArray.of(items: List<T>, mapper: (T) -> JSONObject): JSONArr
 fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
 
     get("/api/health") {
-        call.respondText("""{"ok":true,"version":"0.1.0-desktop"}""", ContentType.Application.Json)
+        call.respondText("""{"ok":true,"version":"$DESKTOP_VERSION-desktop"}""", ContentType.Application.Json)
     }
 
     /** 诊断：报告正在运行的服务进程实际加载的 ImageIO 解码器（排查格式支持用） */

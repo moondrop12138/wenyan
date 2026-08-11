@@ -61,6 +61,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
@@ -127,6 +128,8 @@ fun ChatScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
+    // v1.8.2-fix（审查 P3-10）：输入框焦点，空状态索引点击填入后聚焦（对齐桌面端）
+    val inputFocusRequester = remember { FocusRequester() }
     var showModelSheet by remember { mutableStateOf(false) }
     // 长按消息菜单 / 删除确认（局部 UI 态，与 showModelSheet 同模式）
     var menuFor by remember { mutableStateOf<ChatMessageUi?>(null) }
@@ -255,6 +258,7 @@ fun ChatScreen(
                 onPasteText = { vm.onInputChange(it) },
                 onPendingImagesPicked = vm::addPendingImages,
                 onRemovePendingImage = vm::removePendingImage,
+                inputFocusRequester = inputFocusRequester,
             )
         },
     ) { padding ->
@@ -271,8 +275,12 @@ fun ChatScreen(
         ) {
             if (messages.isEmpty() && !streaming && transcription == null && lastError == null) {
                 // v1.8.2 editorial 空状态：粘贴/截图入口由输入栏回形针承接
+                // v1.8.2-fix（审查 P3-10）：点击索引填入输入栏并聚焦（对齐桌面端）
                 ChatEmptyState(
-                    onExampleClick = vm::onInputChange,
+                    onExampleClick = { text ->
+                        vm.onInputChange(text)
+                        inputFocusRequester.requestFocus()
+                    },
                 )
             } else {
                 LazyColumn(
@@ -304,6 +312,7 @@ fun ChatScreen(
                                         messageId = msg.id,
                                         onCopy = ::copy,
                                         onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                        createdAt = msg.createdAt,
                                     )
                                     else -> MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
                                 }
