@@ -256,6 +256,19 @@ private fun MemoryFactRow(
     val p = LocalGtjColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text(fact.text, style = GtjType.BodySm, color = p.fg, modifier = Modifier.weight(1f))
+        // v1.9.0 推断类事实标注（模型推测，区别于用户明确陈述的事实）
+        if (fact.kind == "hypothesis") {
+            Text(
+                "推测",
+                style = GtjType.Caption,
+                color = p.muted,
+                modifier = Modifier
+                    .padding(end = 6.dp)
+                    .clip(GtjShape.sm)
+                    .background(p.borderSoft)
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
+            )
+        }
         GtjIconButton(icon = Icons.Outlined.Edit, contentDescription = "编辑事实", onClick = onEdit, iconSize = 18.dp)
         GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除事实", onClick = onDelete, tint = p.danger, iconSize = 18.dp)
     }

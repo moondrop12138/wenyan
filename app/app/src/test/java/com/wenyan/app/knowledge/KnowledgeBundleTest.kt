@@ -9,7 +9,7 @@ import java.io.File
 /**
  * 知识库打包完整性测试（AC-17）
  * 直接从文件系统读取 assets 目录（JVM 单测可访问工程文件），
- * 校验 40 份文档齐全 + routes.json 覆盖 SKILL.md 全部主题。
+ * 校验 41 份文档齐全 + routes.json 覆盖 SKILL.md 全部主题（v1.9.0 practical 21 份含伦理转译）。
  */
 class KnowledgeBundleTest {
 
@@ -31,8 +31,8 @@ class KnowledgeBundleTest {
     }
 
     @Test
-    fun `exactly 20 practical docs`() {
-        assertEquals(20, listMd("practical").size)
+    fun `exactly 21 practical docs`() {
+        assertEquals(21, listMd("practical").size)
     }
 
     @Test
@@ -65,7 +65,7 @@ class KnowledgeBundleTest {
         val knowledge = listMd("knowledge")
         val practical = listMd("practical")
         val all = (knowledge.map { "knowledge/$it" } + practical.map { "practical/$it" })
-        assertEquals(40, all.size)
+        assertEquals(41, all.size)
         for (path in all) {
             assertTrue("files index missing: $path", filesIndex.has(path))
         }

@@ -61,11 +61,12 @@ object UiMappers {
         factCount = factCount,
     )
 
-    /** v1.7.3 MemoryFactEntity → MemoryFactUi */
+    /** v1.7.3 MemoryFactEntity → MemoryFactUi（v1.9.0 透传 kind） */
     fun toMemoryFactUi(e: com.wenyan.app.data.db.MemoryFactEntity): MemoryFactUi = MemoryFactUi(
         id = e.id,
         text = e.text,
         createdAt = e.createdAt,
+        kind = e.kind,
     )
 
     fun toChatMessage(e: MessageEntity): ChatMessageUi = ChatMessageUi(

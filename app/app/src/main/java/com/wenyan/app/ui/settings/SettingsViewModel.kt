@@ -174,6 +174,19 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.setMemoryAutoEnabled(enabled) }
     }
 
+    /** v1.9.0 撤销最近一次自动写入（无日志 → Toast 提示；有 → 删除对应事实） */
+    fun undoLastMemoryWrite() {
+        viewModelScope.launch {
+            val removedIds = repo.undoLastMemoryWrite()
+            if (removedIds.isEmpty()) {
+                _toastMessage.value = "没有可撤销的自动记忆"
+            } else {
+                removedIds.forEach { repo.deleteFact(it) }
+                _toastMessage.value = "已撤销最近一次自动记忆（${removedIds.size} 条）"
+            }
+        }
+    }
+
     fun requestCreateTarget() {
         _showNameDialog.value = true
     }

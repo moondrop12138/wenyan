@@ -8,6 +8,7 @@ import org.junit.Test
 /**
  * v1.7.2 MemoryExtractor 纯逻辑测试：
  * buildPrompt 契约 / parseFacts 防御（围栏/垃圾/上限）/ mergeNote 去重、幂等与 2000 字上限。
+ * v1.9.0：parseFacts 返回 {text,kind}（ExtractedFact），兼容旧纯字符串格式。
  */
 class MemoryExtractorTest {
 
@@ -33,22 +34,40 @@ class MemoryExtractorTest {
     @Test
     fun `parseFacts returns list from valid json`() {
         val facts = MemoryExtractor.parseFacts("""{"facts":["她喜欢猫","她怕黑"]}""")
-        assertEquals(listOf("她喜欢猫", "她怕黑"), facts)
+        assertEquals(listOf("她喜欢猫", "她怕黑"), facts.map { it.text })
+        assertTrue(facts.all { it.kind == MemoryExtractor.KIND_FACT })
+    }
+
+    @Test
+    fun `parseFacts parses kind hypothesis from object format`() {
+        val facts = MemoryExtractor.parseFacts(
+            """{"facts":[{"text":"她喜欢猫","kind":"fact"},{"text":"她可能是回避型依恋","kind":"hypothesis"}]}"""
+        )
+        assertEquals(2, facts.size)
+        assertEquals(MemoryExtractor.KIND_FACT, facts[0].kind)
+        assertEquals(MemoryExtractor.KIND_HYPOTHESIS, facts[1].kind)
+        assertEquals("她可能是回避型依恋", facts[1].text)
+    }
+
+    @Test
+    fun `parseFacts default kind fact when kind missing`() {
+        val facts = MemoryExtractor.parseFacts("""{"facts":[{"text":"她喜欢猫"},{"text":"她怕黑","kind":"其他"}]}""")
+        assertTrue(facts.all { it.kind == MemoryExtractor.KIND_FACT })
     }
 
     @Test
     fun `parseFacts strips code fence`() {
         val facts = MemoryExtractor.parseFacts("```json\n{\"facts\":[\"她喜欢猫\"]}\n```")
-        assertEquals(listOf("她喜欢猫"), facts)
+        assertEquals(listOf("她喜欢猫"), facts.map { it.text })
     }
 
     @Test
     fun `parseFacts defensive returns empty on garbage`() {
-        assertEquals(emptyList<String>(), MemoryExtractor.parseFacts("not json"))
-        assertEquals(emptyList<String>(), MemoryExtractor.parseFacts(""))
-        assertEquals(emptyList<String>(), MemoryExtractor.parseFacts("{}"))
-        assertEquals(emptyList<String>(), MemoryExtractor.parseFacts("""{"other":1}"""))
-        assertEquals(emptyList<String>(), MemoryExtractor.parseFacts("""{"facts":"not array"}"""))
+        assertEquals(emptyList<MemoryExtractor.ExtractedFact>(), MemoryExtractor.parseFacts("not json"))
+        assertEquals(emptyList<MemoryExtractor.ExtractedFact>(), MemoryExtractor.parseFacts(""))
+        assertEquals(emptyList<MemoryExtractor.ExtractedFact>(), MemoryExtractor.parseFacts("{}"))
+        assertEquals(emptyList<MemoryExtractor.ExtractedFact>(), MemoryExtractor.parseFacts("""{"other":1}"""))
+        assertEquals(emptyList<MemoryExtractor.ExtractedFact>(), MemoryExtractor.parseFacts("""{"facts":"not array"}"""))
     }
 
     @Test
@@ -57,13 +76,13 @@ class MemoryExtractorTest {
         val json = """{"facts":[${(0 until 10).joinToString(",") { "\"$longFact\"" }}]}"""
         val facts = MemoryExtractor.parseFacts(json)
         assertEquals(5, facts.size)
-        assertTrue(facts.all { it.length <= 40 })
+        assertTrue(facts.all { it.text.length <= 40 })
     }
 
     @Test
     fun `parseFacts drops blank entries`() {
         val facts = MemoryExtractor.parseFacts("""{"facts":["", "   ", "她喜欢猫"]}""")
-        assertEquals(listOf("她喜欢猫"), facts)
+        assertEquals(listOf("她喜欢猫"), facts.map { it.text })
     }
 
     // ===== mergeNote =====
@@ -171,10 +190,10 @@ class MemoryExtractorTest {
 
     @Test
     fun `parseFacts handles non-string array elements defensively`() {
-        // org.json optString 对数字/布尔转字符串、null → 空串被过滤，绝不抛异常
+        // org.json opt 对数字/布尔 → JSONObject 分支不匹配、null → null 分支，均被忽略，绝不抛异常
         val facts = MemoryExtractor.parseFacts("""{"facts":[1, true, null, "她喜欢猫"]}""")
-        assertTrue(facts.contains("她喜欢猫"))
-        assertTrue(facts.all { it.isNotEmpty() })
+        assertTrue(facts.map { it.text }.contains("她喜欢猫"))
+        assertTrue(facts.all { it.text.isNotEmpty() })
     }
 
     @Test
@@ -182,7 +201,7 @@ class MemoryExtractorTest {
         val json = """{"facts":["一","二","三","四","五","六"]}"""
         val facts = MemoryExtractor.parseFacts(json)
         assertEquals(5, facts.size)
-        assertEquals("一", facts.first())
+        assertEquals("一", facts.first().text)
     }
 
     @Test

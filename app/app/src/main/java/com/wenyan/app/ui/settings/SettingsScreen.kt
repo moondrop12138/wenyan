@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -252,6 +254,33 @@ fun SettingsScreen(
                                 checkedTrackColor = p.accent,
                                 uncheckedTrackColor = p.borderSoft,
                             ),
+                        )
+                    }
+                }
+            }
+            item {
+                // v1.9.0 撤销最近一次自动记忆（写日志在提炼链路内自动记录，仅删除对应事实）
+                GlassSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { vm.undoLastMemoryWrite() }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("撤销最近一次自动记忆", style = GtjType.Body, color = p.fg)
+                            Text("删除最近一轮自动提炼写入的事实", style = GtjType.Caption, color = p.muted)
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.Undo,
+                            contentDescription = "撤销最近一次自动记忆",
+                            tint = p.muted,
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }

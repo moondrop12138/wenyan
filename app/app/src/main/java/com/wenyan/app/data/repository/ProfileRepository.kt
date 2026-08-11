@@ -70,9 +70,19 @@ class ProfileRepository(
      * 竞态下 INSERT 会抛 SQLiteConstraintException（手工入口无 runCatching 会崩溃）；
      * 返回 0L 表示未插入。
      */
-    suspend fun addFact(targetId: Long, text: String): Long {
+    suspend fun addFact(targetId: Long, text: String): Long =
+        addFact(targetId, text, MemoryFactEntity.KIND_FACT)
+
+    /** v1.9.0：带分层写入（fact/hypothesis），自动提炼的推断类事实走 hypothesis */
+    suspend fun addFact(targetId: Long, text: String, kind: String): Long {
         if (getTarget(targetId) == null) return 0L
-        return memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = text.trim()))
+        return memoryFactDao.insert(
+            MemoryFactEntity(
+                targetId = targetId,
+                text = text.trim(),
+                kind = if (kind == MemoryFactEntity.KIND_HYPOTHESIS) kind else MemoryFactEntity.KIND_FACT,
+            ),
+        )
     }
 
     suspend fun updateFact(factId: Long, text: String) {
@@ -111,8 +121,11 @@ class ProfileRepository(
      */
     suspend fun memoryText(targetId: Long): String {
         migrateNoteToFactsOnce(targetId)
+        // v1.9.0：hypothesis（模型推断）条目带「（推测，待验证）」标注注入，与事实区分
         return memoryFactDao.listByTarget(targetId)
-            .joinToString("；") { it.text }
+            .joinToString("；") { fact ->
+                if (fact.kind == MemoryFactEntity.KIND_HYPOTHESIS) "${fact.text}（推测，待验证）" else fact.text
+            }
             .take(2000)
     }
 

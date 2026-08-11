@@ -9,12 +9,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room 数据库（v6，7 表 + 索引 + 外键）
+ * Room 数据库（v7，7 表 + 索引 + 外键）
  * v1→v2：session 表加 stateJson（v1.3 对话状态跟踪）
  * v2→v3：session 表加 title（v1.2.1 主模型拟定会话标题）
  * v3→v4：model 表加 showInSheet（v1.6.3 主页弹层可见性）+ provider 表加 connectionStatus（连接状态灯）
  * v4→v5：target 表加 note（v1.7.2 记忆正文）+ session 表加 targetId（会话档案归属）
  * v5→v6：新建 memory_fact 表（v1.7.3 单条事实管理；只建表，note→facts 数据搬移在业务层惰性迁移）
+ * v6→v7：memory_fact 表加 kind 列（v1.9.0 事实/推断分层，默认 fact 老数据不丢）
  * exportSchema=true，schema JSON 提交入库（app/schemas/）
  */
 @Database(
@@ -27,7 +28,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ModelEntity::class,
         MemoryFactEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -95,13 +96,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v6→v7：memory_fact 加 kind 列（v1.9.0 事实/推断分层）。
+         * 默认 'fact'，老数据全部视为事实，不猜测推断。
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE memory_fact ADD COLUMN kind TEXT NOT NULL DEFAULT 'fact'")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
         /** v1.7.3 T1 迁移测试用：全链路 Migration 数组（供 MigrationTestHelper.runMigrationsAndValidate） */
         @JvmField
         val MIGRATIONS: Array<Migration> = arrayOf(
-            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         )
 
         fun get(context: Context): AppDatabase =
@@ -111,7 +122,9 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+                    )
                     .build()
                     .also { instance = it }
             }

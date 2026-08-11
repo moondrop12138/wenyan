@@ -96,6 +96,7 @@ private class FakeSettingsRepoForMemoryEdit : SettingsRepository {
     override suspend fun addFact(targetId: Long, text: String) = Unit
     override suspend fun updateFact(factId: Long, text: String) = Unit
     override suspend fun deleteFact(factId: Long) = Unit
+    override suspend fun undoLastMemoryWrite(): List<Long> = emptyList()
     override suspend fun updateTargetDetails(
         id: Long, name: String, mbti: String?, score: Int?, relationStatus: String?, timelineJson: String,
     ) = Unit

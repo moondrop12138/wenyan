@@ -4,7 +4,7 @@
 知识库路由表生成器 + 完整性校验（构建门禁）
 
 职责：
-1. 校验 assets/knowledge 恰好 40 份 md（20 knowledge + 20 practical）
+1. 校验 assets/knowledge 恰好 41 份 md（20 knowledge + 21 practical，v1.9.0 含伦理转译）
 2. 按下方 ROUTE_TABLE（文档标题关键词 → 文档路径）生成 routes.json
 3. 校验路由表覆盖与文档完整性；缺失/不匹配 → 非零退出（构建失败）
 
@@ -23,8 +23,8 @@ ASSETS_KNOWLEDGE = os.path.join(ROOT, "app", "src", "main", "assets", "knowledge
 # 用独立文件名：部分环境对反复覆盖的已知文件有写锁（safe-delete 机制），新文件名可写
 OUT_ROUTES = os.path.join(ASSETS_KNOWLEDGE, "routes-v2.json")
 
-EXPECTED_COUNTS = {"knowledge": 20, "practical": 20}
-EXPECTED_TOTAL = 40
+EXPECTED_COUNTS = {"knowledge": 20, "practical": 21}
+EXPECTED_TOTAL = 41
 
 # 路由表（文档标题关键词 → 相对 assets/knowledge 的路径，顺序即优先级）
 # 主题对应原始开源项目 goutoujunshi（powerycy/goutoujunshi）的按需加载设计
@@ -46,6 +46,8 @@ ROUTE_TABLE = [
     (["家暴", "跟踪", "胁迫", "法律", "危机", "安全", "自伤", "自杀"], "knowledge/17-中国法律安全与危机转介.md"),
     (["证据", "来源", "书单", "论文", "延伸阅读", "证据分级"], "knowledge/01-证据分级与内容边界.md"),
     (["实用", "指南", "导读"], "practical/00-导读与使用分级.md"),
+    # v1.9.0：伦理转译（表达风格/情话润色），源自上游新增文档
+    (["表达", "情话", "润色", "开场白", "怎么表达", "诗意"], "practical/公开表达案例的伦理转译.md"),
 ]
 
 
@@ -63,7 +65,7 @@ def collect_md_files() -> dict:
 
 
 def verify_completeness(files: dict) -> None:
-    """校验 40 份文档齐全（AC-17）"""
+    """校验 41 份文档齐全（AC-17，v1.9.0 含伦理转译）"""
     counts = {"knowledge": 0, "practical": 0}
     for rel in files:
         sub = rel.split("/", 1)[0]

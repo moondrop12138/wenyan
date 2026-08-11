@@ -395,7 +395,14 @@ class ChatEngine(
 
     private suspend fun memoryText(targetId: Long): String {
         migrateNoteToFactsOnce(targetId)
-        return service.listFacts(targetId).joinToString("；") { it.text }.take(2000)
+        // v1.9.0：hypothesis（模型推断）条目带「（推测，待验证）」标注注入，与事实区分
+        return service.listFacts(targetId).joinToString("；") { fact ->
+            if (fact.kind == com.wenyan.app.data.db.MemoryFactEntity.KIND_HYPOTHESIS) {
+                "${fact.text}（推测，待验证）"
+            } else {
+                fact.text
+            }
+        }.take(2000)
     }
 
     private suspend fun migrateNoteToFactsOnce(targetId: Long) {
@@ -442,7 +449,7 @@ class ChatEngine(
     }
 
     private fun shouldExtractMemory(state: ConversationState, text: String): Boolean =
-        !state.hasActiveTopic && text.length >= 10
+        service.isMemoryAutoEnabled() && !state.hasActiveTopic && text.length >= 10
 
     private fun summarizeTopic(text: String, analysis: CoachAnalysis): String =
         analysis.facts.known.firstOrNull()?.take(30) ?: text.take(30)
@@ -470,7 +477,7 @@ class ChatEngine(
         }
     }
 
-    /** 新话题自动提炼记忆（失败静默）：主模型提炼 facts → mergeFacts 去重 → 逐条入库 */
+    /** 新话题自动提炼记忆（失败静默）：主模型提炼 facts → mergeFacts 去重 → 逐条入库（v1.9.0 带 kind 分层 + 撤销日志） */
     private suspend fun extractMemoryOnce(targetId: Long, userText: String, fullText: String, resolved: ResolvedClient) {
         runCatching {
             val reply = runCatching { AnalysisParser.parseAny(fullText).reply }.getOrDefault(fullText.take(500))
@@ -484,8 +491,18 @@ class ChatEngine(
             }
             val facts = MemoryExtractor.parseFacts(json)
             if (facts.isEmpty()) return
-            val merged = MemoryExtractor.mergeFacts(existingFacts, facts)
-            merged.drop(existingFacts.size).forEach { service.addFact(targetId, it) }
+            val merged = MemoryExtractor.mergeFacts(existingFacts, facts.map { it.text })
+            val toAdd = merged.drop(existingFacts.size)
+            if (toAdd.isEmpty()) return
+            val addedIds = mutableListOf<Long>()
+            toAdd.forEach { text ->
+                val kind = facts.firstOrNull { it.text == text }?.kind ?: MemoryExtractor.KIND_FACT
+                val id = service.addFact(targetId, text, kind)
+                if (id > 0L) addedIds.add(id)
+            }
+            if (addedIds.isNotEmpty()) {
+                service.recordMemoryWrite(targetId, addedIds, userText.take(20))
+            }
         }
     }
 

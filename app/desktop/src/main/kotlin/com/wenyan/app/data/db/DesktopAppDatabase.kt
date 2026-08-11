@@ -18,7 +18,7 @@ import java.io.File
  *  1. Builder：Room.databaseBuilder<AppDatabase>(name=path).setDriver(BundledSQLiteDriver)
  *     （Android 版用 Room.databaseBuilder(context, ...)）
  *  2. Migration 签名：Room 2.7 KMP 用 SQLiteConnection.execSQL（Android 版用 SupportSQLiteDatabase）
- *     —— 5 段迁移 SQL 与 Android 版逐字一致（唯一事实源在 Android 版 AppDatabase.kt，改动需同步）
+ *     —— 6 段迁移 SQL 与 Android 版逐字一致（唯一事实源在 Android 版 AppDatabase.kt，改动需同步）
  *
  * entity/DAO/Converters 全部通过 sourceSet 共享，零改动。
  */
@@ -32,7 +32,7 @@ import java.io.File
         ModelEntity::class,
         MemoryFactEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -48,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val DB_NAME = "wenyan.db"
 
-        // ---- 5 段迁移 SQL 与 Android 版 AppDatabase.kt 逐字一致（Room 2.7 KMP 签名）----
+        // ---- 6 段迁移 SQL 与 Android 版 AppDatabase.kt 逐字一致（Room 2.7 KMP 签名）----
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(connection: SQLiteConnection) {
@@ -93,9 +93,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v6→v7：memory_fact 加 kind 列（v1.9.0 事实/推断分层，默认 fact 老数据不丢；与 Android 版逐字一致） */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE memory_fact ADD COLUMN kind TEXT NOT NULL DEFAULT 'fact'")
+            }
+        }
+
         @JvmField
         val MIGRATIONS: Array<Migration> = arrayOf(
-            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         )
 
         @Volatile

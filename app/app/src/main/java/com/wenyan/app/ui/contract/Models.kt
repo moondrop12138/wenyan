@@ -59,11 +59,12 @@ data class TargetUi(
     val factCount: Int = 0,
 )
 
-/** v1.7.3 单条已记住事实（MemoryEditScreen 列表管理） */
+/** v1.7.3 单条已记住事实（MemoryEditScreen 列表管理）；v1.9.0 加 kind（fact/hypothesis） */
 data class MemoryFactUi(
     val id: Long,
     val text: String,
     val createdAt: Long,
+    val kind: String = "fact",
 )
 
 data class ChatMessageUi(

@@ -322,14 +322,15 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
         call.respondJson(chatEngine.testConnection(call.parameters["id"]!!.toLong()))
     }
 
-    // ===== 设置槽位（视觉模型；Properties KV，不动 Room schema） =====
+    // ===== 设置槽位（视觉模型 + v1.9.0 记忆控制；Properties KV，不动 Room schema） =====
 
     get("/api/settings") {
         call.respondJson(JSONObject()
-            .put("visionModelId", service.getVisionModelId()?.let { JSONObject.wrap(it) } ?: JSONObject.NULL))
+            .put("visionModelId", service.getVisionModelId()?.let { JSONObject.wrap(it) } ?: JSONObject.NULL)
+            .put("memoryAutoEnabled", service.isMemoryAutoEnabled()))
     }
 
-    /** 部分更新设置；visionModelId 为 null 即清除槽位（对齐手机端 setVisionModelId 语义） */
+    /** 部分更新设置；visionModelId 为 null 即清除槽位（对齐手机端 setVisionModelId 语义）；memoryAutoEnabled 布尔直接写 */
     put("/api/settings") {
         val body = JSONObject(call.receiveText())
         if (body.has("visionModelId")) {
@@ -337,7 +338,17 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
                 if (body.isNull("visionModelId")) null else body.getLong("visionModelId")
             )
         }
+        if (body.has("memoryAutoEnabled")) {
+            service.setMemoryAutoEnabled(body.getBoolean("memoryAutoEnabled"))
+        }
         call.respondJson(JSONObject().put("ok", true))
+    }
+
+    /** v1.9.0 撤销最近一次自动记忆：删除日志对应事实，返回删除条数 */
+    post("/api/memory/undo-last-write") {
+        val removedIds = service.undoLastMemoryWrite()
+        removedIds.forEach { service.deleteFact(it) }
+        call.respondJson(JSONObject().put("ok", true).put("removed", removedIds.size))
     }
 
     /**

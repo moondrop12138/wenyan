@@ -109,7 +109,17 @@ class WenyanService(
         db.memoryFactDao().listByTarget(targetId)
 
     suspend fun addFact(targetId: Long, text: String): Long =
-        db.memoryFactDao().insert(MemoryFactEntity(targetId = targetId, text = text))
+        addFact(targetId, text, MemoryFactEntity.KIND_FACT)
+
+    /** v1.9.0：带分层写入（fact/hypothesis） */
+    suspend fun addFact(targetId: Long, text: String, kind: String): Long =
+        db.memoryFactDao().insert(
+            MemoryFactEntity(
+                targetId = targetId,
+                text = text,
+                kind = if (kind == MemoryFactEntity.KIND_HYPOTHESIS) kind else MemoryFactEntity.KIND_FACT,
+            ),
+        )
 
     suspend fun updateFact(factId: Long, text: String) {
         val current = db.memoryFactDao().getById(factId) ?: return
@@ -180,6 +190,33 @@ class WenyanService(
 
     /** null = 清除槽位（对齐手机端 setVisionModelId(null) 语义） */
     fun setVisionModelId(id: Long?) = DesktopSettingsStore.put("visionModelId", id?.toString())
+
+    // ===== v1.9.0 记忆控制（对齐手机端 DataStore 槽位）=====
+
+    /** 自动记忆开关（默认开；关闭后回复完成不再提炼） */
+    fun isMemoryAutoEnabled(): Boolean = DesktopSettingsStore.get("memoryAutoEnabled") != "false"
+
+    fun setMemoryAutoEnabled(enabled: Boolean) =
+        DesktopSettingsStore.put("memoryAutoEnabled", enabled.toString())
+
+    /** 最近一次自动写入日志（无则 null） */
+    fun lastMemoryWrite(): DesktopWriteLogEntry? = DesktopWriteLogCodec.decodeLast(DesktopSettingsStore.get("memoryWriteLog"))
+
+    /** 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志可撤销） */
+    fun undoLastMemoryWrite(): List<Long> {
+        val log = DesktopWriteLogCodec.decodeAll(DesktopSettingsStore.get("memoryWriteLog"))
+        val last = log.firstOrNull() ?: return emptyList()
+        DesktopSettingsStore.put("memoryWriteLog", DesktopWriteLogCodec.encodeAll(log.drop(1)))
+        return last.factIds
+    }
+
+    /** 记录一次自动写入（最近在前，截断保留 5 条） */
+    fun recordMemoryWrite(targetId: Long, factIds: List<Long>, summary: String) {
+        if (factIds.isEmpty()) return
+        val entry = DesktopWriteLogEntry(targetId, factIds, summary, System.currentTimeMillis())
+        val updated = (listOf(entry) + DesktopWriteLogCodec.decodeAll(DesktopSettingsStore.get("memoryWriteLog"))).take(5)
+        DesktopSettingsStore.put("memoryWriteLog", DesktopWriteLogCodec.encodeAll(updated))
+    }
 
     // ===== 数据管理（导出 / 清空）=====
 
@@ -302,3 +339,43 @@ private object DesktopSettingsStore {
 }
 
 private typealias JSONArray = org.json.JSONArray
+
+/** v1.9.0 桌面版自动记忆写入日志条目（与手机端 SettingsRepository.MemoryWriteLogEntry 同构） */
+data class DesktopWriteLogEntry(
+    val targetId: Long,
+    val factIds: List<Long>,
+    val summary: String,
+    val createdAt: Long,
+)
+
+/** 桌面版写入日志编解码（格式：targetId,factId:factId,summary,createdAt 换行分隔，summary 内逗号替换） */
+private object DesktopWriteLogCodec {
+    private const val FIELD_SEP = ","
+    private const val LINE_SEP = "\n"
+    private const val ID_SEP = ":"
+
+    fun encodeAll(entries: List<DesktopWriteLogEntry>): String = entries.joinToString(LINE_SEP) { e ->
+        e.targetId.toString() + FIELD_SEP +
+            e.factIds.joinToString(ID_SEP) + FIELD_SEP +
+            e.summary.replace('\n', ' ').replace(',', '，') + FIELD_SEP +
+            e.createdAt.toString()
+    }
+
+    fun decodeAll(raw: String?): List<DesktopWriteLogEntry> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split(LINE_SEP).mapNotNull { line ->
+            val parts = line.split(FIELD_SEP)
+            if (parts.size < 4) return@mapNotNull null
+            val ids = parts[1].split(ID_SEP).mapNotNull { it.toLongOrNull() }
+            if (ids.isEmpty()) return@mapNotNull null
+            DesktopWriteLogEntry(
+                targetId = parts[0].toLongOrNull() ?: 0L,
+                factIds = ids,
+                summary = parts[2],
+                createdAt = parts[3].toLongOrNull() ?: 0L,
+            )
+        }
+    }
+
+    fun decodeLast(raw: String?): DesktopWriteLogEntry? = decodeAll(raw).firstOrNull()
+}

@@ -95,8 +95,10 @@ android {
         // v1.8.2 editorial 排版包：E1 空状态改编辑排版（中文数字日期+短规则线+衬线标题+壹贰叁索引）/
         //  E2 回答卡改回信文章（刊头+衬线大标题+四段：接住你/事实核查/军师建议/行动清单）/
         //  E3 流式预览同步编辑化；粘贴/截图入口由输入栏回形针承接
-        versionCode = 34
-        versionName = "1.8.2"
+        // v1.9.0 知识库同步+记忆增强：40+1 知识文档全量更新/拒绝细化与说话人映射/
+        //  自动记忆开关（B2）/事实推断分层 DB v7（B3）/写入回执（B4）/撤销最近一次（B5）/趋势边界（B6）
+        versionCode = 35
+        versionName = "1.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -227,7 +229,7 @@ dependencies {
 tasks.register<Exec>("knowledgeCheck") {
     workingDir = rootProject.projectDir
     commandLine("python", "scripts/gen_routes.py")
-    // gen_routes.py 校验 40 份文档齐全、生成 routes.json；缺失/不匹配即非零退出
+    // gen_routes.py 校验 41 份文档齐全、生成 routes-v2.json；缺失/不匹配即非零退出
 }
 tasks.named("preBuild") {
     dependsOn("knowledgeCheck")

@@ -79,6 +79,7 @@ interface ChatRepository {
 /**
  * v1.3.1 流式状态（repo 层状态中枢，ViewModel 订阅映射）：
  * 与 ChatViewModel 原有的 streaming/streamingText/streamingThinking/transcription/transcribing/lastError 一一对应。
+ * v1.9.0：memoryReceipt —— 自动记忆写入回执（非空表示本轮回复完成后记住了新事实，UI 提示一次后由 repo 清空）。
  */
 data class StreamingState(
     val streaming: Boolean = false,
@@ -87,6 +88,7 @@ data class StreamingState(
     val transcription: String? = null,
     val transcribing: Boolean = false,
     val error: LlmError? = null,
+    val memoryReceipt: String? = null,
 )
 
 /**

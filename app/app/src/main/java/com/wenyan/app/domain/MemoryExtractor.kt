@@ -7,24 +7,32 @@ import org.json.JSONObject
  * - buildPrompt：从本轮（用户输入 + 军师回复）提炼「关于咨询对象的新事实」，输出 JSON {"facts":[...]}
  * - parseFacts：防御性解析（对齐 AnalysisParser：stripFence + opt 系列 + runCatching），失败返回空列表
  * - mergeNote：追加式去重合并（上限 2000 字），幂等兜底——重复触发不会重复追加
+ * - v1.9.0 契约升级：facts 条目可为 {"text":"…","kind":"fact|hypothesis"}；兼容旧纯字符串格式；
+ *   推断类信息（性格、依恋、意图等暂定解释）标 kind=hypothesis，与客观事实分开持久化。
  */
 object MemoryExtractor {
 
     const val DEFAULT_NOTE_LIMIT = 2000
     /** v1.7.3 每档案事实条数上限（超出静默丢弃新事实） */
     const val DEFAULT_FACT_LIMIT = 50
+    const val KIND_FACT = "fact"
+    const val KIND_HYPOTHESIS = "hypothesis"
+
+    /** 提炼结果单条：text 事实文本 + kind 分层 */
+    data class ExtractedFact(val text: String, val kind: String = KIND_FACT)
 
     /**
      * 提炼 prompt：从本轮（用户输入 + 军师回复）提炼「关于咨询对象的新事实」。
      * 已存在于 existingNote 的重复事实不输出；无新事实输出 {"facts":[]}。
-     * 输出 JSON 契约：{"facts":["…","…"]}（每条 ≤40 字，≤5 条）。
+     * 输出 JSON 契约：{"facts":[{"text":"…","kind":"fact|hypothesis"}]}（每条 ≤40 字，≤5 条，kind 缺省 fact）。
      */
     fun buildPrompt(userInput: String, replyText: String, existingNote: String): String = buildString {
         append("你是记忆提炼器。从下面这段用户与军师的对话中，提炼出「关于咨询对象的新事实」。\n")
         append("要求：\n")
-        append("- 只输出一个 JSON 对象：{\"facts\":[\"事实1\",\"事实2\",...]}，不加 markdown 代码块围栏，不加任何解释；\n")
-        append("- 每条事实 ≤40 字，最多 5 条；\n")
-        append("- 只提炼客观、可长期记住的信息（性格、偏好、关系进展、关键事件），不提炼一次性情绪或建议；\n")
+        append("- 只输出一个 JSON 对象：{\"facts\":[{\"text\":\"事实\",\"kind\":\"fact\"},...]}，不加 markdown 代码块围栏，不加任何解释；\n")
+        append("- 每条 ≤40 字，最多 5 条；\n")
+        append("- kind=fact：用户明确陈述或可核验的客观信息（性格、偏好、关系进展、关键事件）；kind=hypothesis：模型推断的暂定解释（如对方性格倾向、依恋类型、意图猜测），推断必须带依据可被纠正；\n")
+        append("- 只提炼客观、可长期记住的信息，不提炼一次性情绪或建议；\n")
         if (existingNote.isNotBlank()) {
             append("- 以下事实已记住，重复内容不要再输出：\n").append(existingNote.take(2000)).append("\n")
         } else {
@@ -38,17 +46,30 @@ object MemoryExtractor {
 
     /**
      * 防御性解析：非 JSON / 缺 facts / 字段非法 → 返回空列表，绝不抛异常。
+     * v1.9.0 支持两种格式：新 {"text","kind"} 对象 与 旧纯字符串（视为 fact），混用亦可。
      * 对齐 AnalysisParser：stripFence + opt 系列 + runCatching。
      */
-    fun parseFacts(json: String): List<String> {
+    fun parseFacts(json: String): List<ExtractedFact> {
         if (json.isBlank()) return emptyList()
         return runCatching {
             val root = JSONObject(stripFence(json))
             val array = root.optJSONArray("facts") ?: return emptyList()
             buildList {
                 for (i in 0 until array.length()) {
-                    val value = array.optString(i, "").trim()
-                    if (value.isNotEmpty()) add(value.take(40))
+                    val item = array.opt(i)
+                    when (item) {
+                        is JSONObject -> {
+                            val text = item.optString("text", "").trim()
+                            if (text.isNotEmpty()) {
+                                val kind = item.optString("kind", KIND_FACT).trim()
+                                add(ExtractedFact(text.take(40), if (kind == KIND_HYPOTHESIS) KIND_HYPOTHESIS else KIND_FACT))
+                            }
+                        }
+                        is String -> {
+                            val text = item.trim()
+                            if (text.isNotEmpty()) add(ExtractedFact(text.take(40), KIND_FACT))
+                        }
+                    }
                 }
             }.take(5)
         }.getOrDefault(emptyList())

@@ -713,6 +713,7 @@ class RealChatRepository(
      * 调主模型（temperature=0.3）→ parseFacts 防御解析 → mergeFacts 去重（≤50 条）→ 仅新增逐条 INSERT。
      * v1.7.4：per-target Mutex 串行化（锁等待计入 20s 超时；同档案并发触发时后者基于最新 facts 提炼，
      * 不会重复插入）。失败静默 Log.w；重复触发因 mergeFacts 去重不会重复插入。
+     * v1.9.0：parseFacts 返回 {text,kind}，hypothesis 走分层写入；成功写入后记录操作日志（供撤销）+ 回执。
      */
     private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String) {
         runCatching {
@@ -731,14 +732,28 @@ class RealChatRepository(
                         ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
                     ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
                     val facts = MemoryExtractor.parseFacts(json ?: "")
-                    val merged = MemoryExtractor.mergeFacts(existing, facts)
+                    val merged = MemoryExtractor.mergeFacts(existing, facts.map { it.text })
                     val toAdd = merged.drop(existing.size)
                     if (toAdd.isNotEmpty()) {
                         if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
                             Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
                         } else {
+                            val addedIds = mutableListOf<Long>()
                             toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
-                                .forEach { profileRepository.addFact(targetId, it) }
+                                .forEach { text ->
+                                    val kind = facts.firstOrNull { it.text == text }?.kind
+                                        ?: MemoryExtractor.KIND_FACT
+                                    val id = profileRepository.addFact(targetId, text, kind)
+                                    if (id > 0L) addedIds.add(id)
+                                }
+                            // v1.9.0 撤销日志：记录本次自动写入的 fact id（供设置页撤销最近一次）
+                            if (addedIds.isNotEmpty()) {
+                                dataStore.recordMemoryWrite(targetId, addedIds, userInput.take(20))
+                                // v1.9.0 写入回执：UI 层 toast 提示一次（可到设置中查看/撤销）
+                                _streamingState.update {
+                                    it.copy(memoryReceipt = "已记住 ${addedIds.size} 条事实，可在设置中查看或撤销")
+                                }
+                            }
                             Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
                         }
                     }

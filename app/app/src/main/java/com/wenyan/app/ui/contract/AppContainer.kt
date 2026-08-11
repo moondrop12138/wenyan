@@ -89,6 +89,9 @@ interface SettingsRepository {
     suspend fun updateFact(factId: Long, text: String)
     suspend fun deleteFact(factId: Long)
 
+    /** v1.9.0 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志可撤销） */
+    suspend fun undoLastMemoryWrite(): List<Long>
+
     /**
      * 全字段保存（名称/MBTI/吸引力分/关系状态/关键事件 timeline JSON 数组）。
      * 注意：v1.7.3 起 note 代码层废弃，本方法不写 note（保留旧数据）。

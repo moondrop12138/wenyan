@@ -134,6 +134,9 @@ class RealSettingsRepository(
         profileRepository.deleteFact(factId)
     }
 
+    /** v1.9.0 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志） */
+    override suspend fun undoLastMemoryWrite(): List<Long> = dataStore.undoLastMemoryWrite()
+
     /** 全字段保存（名称/MBTI/吸引力分/关系状态/关键事件 timeline JSON 数组；note 代码层废弃不写） */
     override suspend fun updateTargetDetails(
         id: Long,

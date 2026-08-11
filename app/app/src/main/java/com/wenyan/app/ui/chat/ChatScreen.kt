@@ -128,6 +128,15 @@ fun ChatScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
+
+    // v1.9.0 自动记忆写入回执 → 一次性 toast（消费后清空，避免重复弹）
+    val memoryReceipt by vm.memoryReceipt.collectAsState()
+    LaunchedEffect(memoryReceipt) {
+        memoryReceipt?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            vm.consumeMemoryReceipt()
+        }
+    }
     // v1.8.2-fix（审查 P3-10）：输入框焦点，空状态索引点击填入后聚焦（对齐桌面端）
     val inputFocusRequester = remember { FocusRequester() }
     var showModelSheet by remember { mutableStateOf(false) }

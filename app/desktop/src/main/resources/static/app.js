@@ -4,7 +4,7 @@
 */
 'use strict';
 
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.9.0';
 
 // ===== 工具 =====
 const $ = id => document.getElementById(id);
@@ -46,6 +46,7 @@ const S = {
   pendingTargetId: Number(localStorage.getItem('wenyan.pendingTargetId')) || null, // 未建会话时的待绑定档案
   sessionTargetId: undefined,   // 当前会话已绑定的档案（undefined=尚未加载）
   visionModelId: null,          // 视觉模型槽位（后端 Properties 持久化；主模型不支持视觉时走通道 B 转述）
+  memoryAutoEnabled: true,      // v1.9.0 自动记忆开关（默认开；/api/settings 加载后覆盖）
 };
 
 // ===== 主题 =====
@@ -74,6 +75,7 @@ async function refreshModels(){ S.models = await api.get('/api/models'); }
 async function refreshSettings(){
   const s = await api.get('/api/settings');
   S.visionModelId = s.visionModelId || null;
+  S.memoryAutoEnabled = s.memoryAutoEnabled !== false;   // v1.9.0 自动记忆开关（默认开）
 }
 async function refreshTargets(){ S.targets = await api.get('/api/targets'); }
 async function refreshSessions(){ S.sessions = await api.get('/api/sessions'); }
@@ -881,6 +883,38 @@ async function renderSettings(col){
   tRow.appendChild(el('span','ch','管理'));
   tRow.onclick = () => renderTargetsPage($('pageCol'));
   g3.appendChild(tRow);
+  // v1.9.0 自动记忆开关（默认开；关闭后回复完成不再提炼）
+  const autoRow = el('div','setrow glass edge');
+  autoRow.appendChild(el('span','ic','✦'));
+  const autoTx = el('span','tx');
+  autoTx.appendChild(el('span','t','自动记忆'));
+  autoTx.appendChild(el('span','d','回复后自动提炼新事实写入当前档案'));
+  autoRow.appendChild(autoTx);
+  const asw = el('span','sw' + (S.memoryAutoEnabled !== false ? ' on' : ''));
+  asw.onclick = async e => {
+    e.stopPropagation();
+    S.memoryAutoEnabled = !(S.memoryAutoEnabled !== false);
+    try { await api.put('/api/settings', { memoryAutoEnabled: S.memoryAutoEnabled }); }
+    catch(err){ toast('保存失败：' + (err.message||err)); }
+    renderSettings(col);
+  };
+  autoRow.onclick = () => { asw.onclick({ stopPropagation(){}, }); };
+  g3.appendChild(autoRow);
+  // v1.9.0 撤销最近一次自动记忆
+  const undoRow = el('div','setrow glass edge');
+  undoRow.appendChild(el('span','ic','↩'));
+  const undoRowTx = el('span','tx');
+  undoRowTx.appendChild(el('span','t','撤销最近一次自动记忆'));
+  undoRowTx.appendChild(el('span','d','删除最近一轮自动提炼写入的事实'));
+  undoRow.appendChild(undoRowTx);
+  undoRow.appendChild(el('span','ch','撤销'));
+  undoRow.onclick = async () => {
+    try {
+      const r = await api.post('/api/memory/undo-last-write', {});
+      toast(r.removed > 0 ? `已撤销最近一次自动记忆（${r.removed} 条）` : '没有可撤销的自动记忆');
+    } catch(err){ toast('撤销失败：' + (err.message||err)); }
+  };
+  g3.appendChild(undoRow);
   col.appendChild(g3);
 
   // 数据管理

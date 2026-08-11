@@ -37,6 +37,14 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _lastError = MutableStateFlow<LlmError?>(null)
     val lastError: StateFlow<LlmError?> = _lastError.asStateFlow()
 
+    /** v1.9.0 自动记忆写入回执（一次性 toast，UI 消费后调 consumeMemoryReceipt 清空） */
+    private val _memoryReceipt = MutableStateFlow<String?>(null)
+    val memoryReceipt: StateFlow<String?> = _memoryReceipt.asStateFlow()
+
+    fun consumeMemoryReceipt() {
+        _memoryReceipt.value = null
+    }
+
     private val _transcription = MutableStateFlow<String?>(null)
     val transcription: StateFlow<String?> = _transcription.asStateFlow()
 
@@ -82,6 +90,10 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
                 _transcription.value = st.transcription
                 _transcribing.value = st.transcribing
                 _lastError.value = st.error
+                // v1.9.0 自动记忆写入回执 → UI toast 提示一次
+                if (st.memoryReceipt != null) {
+                    _memoryReceipt.value = st.memoryReceipt
+                }
                 // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
                 if (!st.streaming && st.error != null) {
                     val last = lastSend
