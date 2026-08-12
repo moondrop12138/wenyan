@@ -48,29 +48,25 @@ fun ChatEmptyState(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalGtjColors.current
-    // v1.9.0（2026-08-12）：排版协调（对齐 HTML 稿 empty-state-balance 右版）。
-    // 水平：内容收进 296dp 版心并整体居中，内部保持左对齐（editorial 版心惯例），不再贴屏幕左缘；
-    // 垂直：由正中改为偏上（顶部留白 = 可用高度 12%，刊头感），不再悬在上下正中间。
-    // 父容器（ChatScreen 内容区）为确定高度（fillMaxSize），maxHeight.isFinite 成立；
-    // 极端约束下退化为固定 84dp 顶部留白。
+    // v1.9.0-2（2026-08-12）：排版协调 v2（对齐 HTML 稿 empty-state-balance 右版）。
+    // 首版用 Column(horizontalAlignment=CenterHorizontally) + fillMaxWidth().widthIn() 实机未居中（仍贴左），
+    // 改 Box(contentAlignment = TopCenter) 显式置中 + 版心列不强制填满（内容固有宽）——水平居中无歧义；
+    // 垂直：顶部留白 = 可用高度 12%（刊头感），maxHeight 无限时兜底 96dp。
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxSize(),
     ) {
-        val topPad = if (maxHeight.isFinite) maxHeight * 0.12f else 84.dp
-        Column(
+        val topPad = if (maxHeight.isFinite) maxHeight * 0.12f else 96.dp
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = topPad),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally,
+            contentAlignment = Alignment.TopCenter,
         ) {
-            // 版心：限宽 296dp 并整体居中；内部保持左对齐
+            // 版心：限宽 296dp，宽度取内容固有宽（不 fillMaxWidth），由 Box TopCenter 水平居中；内部保持左对齐
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 296.dp),
+                modifier = Modifier.widthIn(max = 296.dp),
             ) {
                 // 日期行：中文数字 + 时辰（editorial empty-date，版心内左对齐）
                 Text(

@@ -98,7 +98,8 @@ android {
         // v1.9.0 知识库同步+记忆增强：40+1 知识文档全量更新/拒绝细化与说话人映射/
         //  自动记忆开关（B2）/事实推断分层 DB v7（B3）/写入回执（B4）/撤销最近一次（B5）/趋势边界（B6）
         // v1.9.0 迭代（2026-08-12，覆盖发布）：空状态排版协调——版心 296dp 居中 + 内部左对齐 + 垂直偏上 12%
-        versionCode = 36
+        // v1.9.0-2（2026-08-12，覆盖发布 v2）：空状态居中改 Box(contentAlignment=TopCenter) 显式置中（首版实机未居中仍贴左）
+        versionCode = 37
         versionName = "1.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
