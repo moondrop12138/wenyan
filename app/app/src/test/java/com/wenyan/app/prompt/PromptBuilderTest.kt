@@ -121,4 +121,16 @@ class PromptBuilderTest {
         val hasEmoji = CorePrompt.text.codePoints().anyMatch { it in 0x1F300..0x1FAFF }
         assertTrue("core prompt contains emoji", !hasEmoji)
     }
+
+    @Test
+    fun `styles are judged by model not mandatory`() {
+        // v1.9.2 场景判断制：styles 由模型自主决定给或留空，且 reply 与 styles 一致性收紧
+        val output = CorePrompt.structuredOutput
+        assertTrue(output.contains("styles 留空数组"))
+        assertTrue(output.contains("reply 必须同时留空字符串"))
+        assertTrue(output.contains("用户明确要\"这句怎么回/怎么发给对方\""))
+        // 旧"必填 reply / styles 至少 1 条"的强制措辞已移除
+        assertTrue(!output.contains("styles 至少 1 条"))
+        assertTrue(!output.contains("styles 给满 3 条"))
+    }
 }

@@ -130,9 +130,12 @@ class PromptBuilder {
    - user_question 且用户在要话术：给一句可直接复制发送的成品话术——贴合用户处境，不要甩"你好呀～你最近怎么样？"这种通用模板。
    - relayed_quote 且适合回一句：给一句用户能发出去的回应话术，方向与你解读出的对方意图一致（对方划清边界就尊重边界，别再给"继续追"的话术）。
    - 用户在追问判断/要不要做（而非要话术）：reply 留空，把分析和建议写进 advice.core。
+   - 用户在向 AI 倾诉/要安慰/要陪伴（"安慰我一下"这类对话型输入）：reply 留空，安慰写进 empathy 与 advice.core。
    - greeting：给一个温和的开场即可。
    - uncertain：给一句简短的确认问句（如"我先确认下——这是她对你说的，对吧？"），不是成品话术。
-3. advice：core 必填（一句核心建议）；styles 至少 1 条（uncertain 或用户明确不要话术时留空数组）；tag/reasons 可空。
+3. advice：core 必填（一句核心建议）；styles 按场景判断——用户在要"这句怎么回"且适合回复时给 1-3 条；
+   向 AI 倾诉/要安慰、追问判断/原因解释、对方已拒绝或该放下、被伤害或被操控、用户想操纵欺骗、
+   没有可发送对象、uncertain/greeting/明确不要话术/话术已给过/安全危机 时一律留空数组（reply 同时留空）；tag/reasons 可空。
 4. facts/actions：可空数组；reply_timing：一句话发送时机或注意（reply 为空或 uncertain 时留空字符串）。
 5. citations 留空数组。safety_override=false。
         """.trimIndent(),

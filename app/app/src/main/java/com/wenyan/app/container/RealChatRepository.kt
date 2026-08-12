@@ -310,6 +310,8 @@ class RealChatRepository(
             runVisionDirect(sid, dataUrls, caption, mode).collect { emit(it) }
         } else {
             // 通道 B：先调视觉模型转述（配文已作为独立消息在历史里，确认转述后模型可见）
+            // v1.9.2 等待文案三档：转述期间 UI 显示「视觉模型正在提取截图文字…」
+            _streamingState.update { it.copy(transcribing = true) }
             val vision = resolveVisionClient()
             if (vision == null) {
                 emit(StreamEvent.Error(LlmError("NO_VISION", "未配置视觉模型，请在设置中选择", false)))
@@ -449,7 +451,9 @@ class RealChatRepository(
             is StreamEvent.Transcription -> _streamingState.update {
                 it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false)
             }
-            is StreamEvent.Error -> _streamingState.update { it.copy(streaming = false, error = event.error) }
+            is StreamEvent.Error -> _streamingState.update {
+                it.copy(streaming = false, error = event.error, transcribing = false)
+            }
             StreamEvent.Done -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
         }
     }

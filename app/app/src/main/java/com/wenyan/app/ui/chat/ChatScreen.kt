@@ -83,9 +83,9 @@ import com.wenyan.app.ui.components.CrisisCard
 import com.wenyan.app.ui.components.ErrorCard
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.ModelSheet
-import com.wenyan.app.ui.components.ThinkingPanel
 import com.wenyan.app.ui.components.TranscriptionCard
 import com.wenyan.app.ui.components.TypingIndicator
+import com.wenyan.app.ui.components.resolveWaitingLabel
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.GlowBackground
 import com.wenyan.app.ui.components.glass.liquidGlass
@@ -115,12 +115,12 @@ fun ChatScreen(
     }
     val messages by vm.messages.collectAsState()
     val streaming by vm.streaming.collectAsState()
-    val streamingText by vm.streamingText.collectAsState()
-    val streamingThinking by vm.streamingThinking.collectAsState()
     val input by vm.input.collectAsState()
     val pendingImages by vm.pendingImages.collectAsState()
     val lastError by vm.lastError.collectAsState()
     val transcription by vm.transcription.collectAsState()
+    val transcribing by vm.transcribing.collectAsState()
+    val confirming by vm.confirming.collectAsState()
     val modelName by vm.currentModelName.collectAsState()
     val sessions by vm.sessions.collectAsState()
     val currentSessionId by vm.currentSessionId.collectAsState()
@@ -390,33 +390,10 @@ fun ChatScreen(
                         }
                     }
                     if (streaming) {
-                        // 深度思考模型的 reasoning_content：折叠面板，用户可选展开
-                        if (streamingThinking.isNotBlank()) {
-                            item(key = "thinking") {
-                                ThinkingPanel(thinking = streamingThinking, streaming = true)
-                            }
-                        }
+                        // v1.9.2 对齐桌面端：流式期间仅显示等待气泡（玻璃容器+三点呼吸+三档文案），
+                        // 不再边流边出预览；完整回复到达后走 messages 列表一次性整块渲染
                         item(key = "streaming") {
-                            // v1.6 统一 structured：模型输出四段 JSON，流式期间只抽取有意义的字段预览，
-                            // 避免把 {"empathy":"...","facts":{... 这种原始 JSON 糊在气泡里。
-                            // 判据：累积文本一旦呈现 JSON 起始形态就按 structured 处理。
-                            val trimmed = streamingText.trimStart()
-                            val looksStructured = trimmed.startsWith("{") || trimmed.startsWith("```")
-                            when {
-                                looksStructured -> {
-                                    // 优先成品话术 reply；未出现时退回共情段 empathy（字段顺序靠前，预览尽早出现）
-                                    val replyPreview = StreamingPreview.extractReplyPreview(streamingText)
-                                        ?: StreamingPreview.extractEmpathyPreview(streamingText)
-                                    when {
-                                        replyPreview != null -> StreamingBubble(text = replyPreview)
-                                        streamingThinking.isNotBlank() -> StreamingPlaceholderBubble()
-                                        else -> TypingIndicator()
-                                    }
-                                }
-                                streamingText.isNotBlank() -> StreamingBubble(text = streamingText)
-                                streamingThinking.isNotBlank() -> StreamingPlaceholderBubble()
-                                else -> TypingIndicator()
-                            }
+                            TypingIndicator(label = resolveWaitingLabel(transcribing, confirming))
                         }
                     }
                 }
@@ -430,7 +407,7 @@ fun ChatScreen(
                         layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 1
                     }
                 }
-                LaunchedEffect(messages.size, streamingText, streamingThinking, transcription, isAtBottom) {
+                LaunchedEffect(messages.size, streaming, transcription, isAtBottom) {
                     val count = listState.layoutInfo.totalItemsCount
                     if (count > 0 && isAtBottom && !listState.isScrollInProgress) {
                         listState.scrollToItem(count - 1)

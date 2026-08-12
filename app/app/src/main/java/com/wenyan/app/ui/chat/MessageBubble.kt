@@ -33,11 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -270,82 +268,9 @@ fun SelectableMessageContent(
     }
 }
 
-/** v1.8.2 流式 AI 文章（editorial 回信风格：刊头 + 打字机段落，替代玻璃气泡） */
-@Composable
-fun StreamingBubble(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    val p = LocalGtjColors.current
-    // v1.8.2-fix（审查 P3-9）：流式每 token 重组会重算"当前时间"，跨分钟时刊头时间跳动；
-    // remember 固定为首次组合时刻（流式预览本就是"现在"，无需跟随重组刷新）
-    val headerTime = remember { formatNowTime() }
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .width(24.dp)
-                    .height(3.dp)
-                    .background(p.accent),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text("温言 · 回信", style = GtjType.Label.copy(fontSize = 12.sp), color = p.accent)
-            Spacer(Modifier.weight(1f))
-            Text(headerTime, style = GtjType.Caption, color = p.meta)
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = text,
-            style = GtjType.Body.copy(lineHeight = 26.sp),
-            color = p.fgSecondary,
-            modifier = Modifier
-                .fillMaxWidth()
-                .drawBehind {
-                    drawRect(
-                        color = p.accent,
-                        topLeft = Offset(0f, 0f),
-                        size = Size(2.dp.toPx(), size.height),
-                    )
-                }
-                .padding(start = 16.dp),
-        )
-    }
-}
-
-/**
- * v1.8.2 流式期间占位（reply 还没产出，模型还在写 JSON 的 steps 部分）：
- * editorial 化：规则线 + 温言·回信 + 组织语言省略号
- */
-@Composable
-fun StreamingPlaceholderBubble(
-    modifier: Modifier = Modifier,
-) {
-    val p = LocalGtjColors.current
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .width(24.dp)
-                .height(3.dp)
-                .background(p.accent),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text("温言 · 回信", style = GtjType.Label.copy(fontSize = 12.sp), color = p.accent)
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = "正在组织语言…",
-            style = GtjType.BodySm,
-            color = p.muted,
-        )
-    }
-}
-
 /** v1.7.0 用户气泡正文：14sp / 行距 1.7（原型 buser 13px/1.7，略放大保可读性） */
 internal val UserBubbleTextStyle: androidx.compose.ui.text.TextStyle =
     GtjType.Body.copy(fontSize = 14.sp, lineHeight = 24.sp)
-
-/** 流式刊头时间戳（HH:mm） */
-private fun formatNowTime(): String =
-    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
 
 /** data URL 解码缓存（按 byteCount 计量，32MB 上限），避免 LazyColumn 滚动重组时重复解码 */
 private object DataUrlBitmapCache {

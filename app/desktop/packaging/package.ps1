@@ -4,7 +4,7 @@
 param([switch]$SkipInstaller)
 
 $ErrorActionPreference = 'Stop'
-$VERSION = '1.9.1'
+$VERSION = '1.9.2'
 $APP_NAME = '温言'
 $JDK = 'C:\Users\Khalil\Android\jdk-21.0.12+8'
 $ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # app/

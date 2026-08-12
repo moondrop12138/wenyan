@@ -28,12 +28,6 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _streaming = MutableStateFlow(false)
     val streaming: StateFlow<Boolean> = _streaming.asStateFlow()
 
-    private val _streamingText = MutableStateFlow("")
-    val streamingText: StateFlow<String> = _streamingText.asStateFlow()
-
-    private val _streamingThinking = MutableStateFlow("")
-    val streamingThinking: StateFlow<String> = _streamingThinking.asStateFlow()
-
     private val _lastError = MutableStateFlow<LlmError?>(null)
     val lastError: StateFlow<LlmError?> = _lastError.asStateFlow()
 
@@ -50,6 +44,10 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
 
     private val _transcribing = MutableStateFlow(false)
     val transcribing: StateFlow<Boolean> = _transcribing.asStateFlow()
+
+    /** v1.9.2 确认转述后的分析阶段（等待文案三档：军师分析中…） */
+    private val _confirming = MutableStateFlow(false)
+    val confirming: StateFlow<Boolean> = _confirming.asStateFlow()
 
     private val _currentModelName = MutableStateFlow("未配置")
     val currentModelName: StateFlow<String> = _currentModelName.asStateFlow()
@@ -85,11 +83,13 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         viewModelScope.launch {
             repo.streamingState.collect { st ->
                 _streaming.value = st.streaming
-                _streamingText.value = st.text
-                _streamingThinking.value = st.thinking
                 _transcription.value = st.transcription
                 _transcribing.value = st.transcribing
                 _lastError.value = st.error
+                // v1.9.2 确认转述后的分析结束（done/error/transcription 后 streaming=false）→ 复位 confirming
+                if (!st.streaming) {
+                    _confirming.value = false
+                }
                 // v1.9.0 自动记忆写入回执 → UI toast 提示一次
                 if (st.memoryReceipt != null) {
                     _memoryReceipt.value = st.memoryReceipt
@@ -224,6 +224,8 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     fun confirmTranscription(text: String) {
         val t = text.trim()
         if (t.isEmpty() || _streaming.value) return
+        // v1.9.2 等待文案三档：确认转述后进入主模型分析 → 「军师分析中…」
+        _confirming.value = true
         repo.confirmTranscriptionAsync(t)
     }
 

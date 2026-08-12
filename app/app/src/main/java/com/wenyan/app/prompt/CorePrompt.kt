@@ -79,7 +79,7 @@ object CorePrompt {
   "schema_version": 2,
   "input_kind": "user_question | relayed_quote | pasted_chat | greeting | uncertain",
   "empathy": "共情段落，2-4 句，≤80 字；relayed_quote 时先解读对方意图",
-  "reply": "首选风格成品话术（= advice.styles[0].text），≤60 字",
+  "reply": "首选风格成品话术（= advice.styles[0].text），≤60 字；styles 留空时 reply 必须同时留空字符串",
   "reply_timing": "发送时机/注意，10-30 字，可空",
   "facts": {
     "known": ["已知事实，每条 ≤30 字，≤3 条"],
@@ -103,7 +103,12 @@ object CorePrompt {
   "safety_message": "",
   "token_estimate": 0
 }
-- 必填：input_kind / empathy / reply / advice.core / safety_override。完整聊天记录分析时 styles 给满 3 条；简短对话可只给 1 条（greeting 可 0 条）。
+- 必填：input_kind / empathy / advice.core / safety_override。reply 与 styles 按场景判断，不给话术（styles 留空数组，reply 同时留空）的情形：
+  ① 用户在向 AI 倾诉/要安慰/要陪伴（对话对象是 AI 自己），或情绪宣泄无诉求；
+  ② 用户要的是分析、判断、原因解释、复盘（含粘贴完整聊天记录）；
+  ③ 关系语境：对方已拒绝或划清边界、已分手断联该放下、被伤害或被操控的关系、用户想操纵欺骗对方、没有具体可发送对象；
+  ④ 状态类：uncertain 澄清、greeting、用户明确不要话术、本话题话术已给过、安全危机场景。
+  给话术（styles 1-3 条）：用户明确要"这句怎么回/怎么发给对方"，且关系健康适合回复。
 - 三档风格沿用知识文档《00-导读与使用分级》的稳健/会撩/强势惯例；强势是边界和快速筛选，不是羞辱、威胁或控制。
 - input_kind 必填，uncertain 仅用于方向性事实歧义（分不清对象是谁/这句话谁说），不得因代词、性别、称呼等表面措辞触发，其反问句同样不得针对这类表面细节；uncertain 时 reply 写反问句、empathy 写拿不准的原因、facts/advice.styles/actions 留空数组。
 - 若参考了知识文档，citations 必须列出实际使用的文件名；未实际使用不得列入。

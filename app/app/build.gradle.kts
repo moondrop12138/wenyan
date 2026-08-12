@@ -101,8 +101,10 @@ android {
         // v1.9.0-2（2026-08-12，覆盖发布 v2）：空状态居中改 Box(contentAlignment=TopCenter) 显式置中（首版实机未居中仍贴左）
         // v1.9.1（2026-08-12，正式发布）：记忆增强三件套——上下文预算选择式压缩（②A，共享 HistoryCompactor）/
         //  时效记忆自动过期 DB v8 expiresAt+来源 source（③）/来源渠道标注（④，含 UI 徽标+转永久）
-        versionCode = 38
-        versionName = "1.9.1"
+        // v1.9.2（2026-08-13，正式发布）：等待/流式回复对齐桌面端（玻璃等待气泡+整块渲染+移 thinking 面板）/
+        //  styles 话术由模型自主判断（场景判断制，覆盖倾诉/分析/关系语境/状态类四类场景）
+        versionCode = 39
+        versionName = "1.9.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
