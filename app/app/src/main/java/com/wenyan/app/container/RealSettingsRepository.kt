@@ -134,6 +134,11 @@ class RealSettingsRepository(
         profileRepository.deleteFact(factId)
     }
 
+    /** v1.9.1 临时事实转永久（清空到期时间） */
+    override suspend fun makePermanent(factId: Long) {
+        profileRepository.makePermanent(factId)
+    }
+
     /** v1.9.0 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志） */
     override suspend fun undoLastMemoryWrite(): List<Long> = dataStore.undoLastMemoryWrite()
 

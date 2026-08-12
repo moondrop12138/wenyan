@@ -4,7 +4,7 @@
 */
 'use strict';
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 
 // ===== 工具 =====
 const $ = id => document.getElementById(id);
@@ -1245,7 +1245,27 @@ async function renderTargetDetail(col, tid){
   if (!facts.length) fl.appendChild(el('div','sb-empty','还没有记住的事实<br>聊过新话题后军师会自动提炼'));
   facts.forEach(fct => {
     const row = el('div','fact-row');
-    row.appendChild(el('span','txt', esc(fct.text)));
+    const txtWrap = el('div','','');
+    txtWrap.style.display = 'flex'; txtWrap.style.flexDirection = 'column'; txtWrap.style.gap = '3px';
+    txtWrap.appendChild(el('span','txt', esc(fct.text)));
+    // v1.9.1 徽标行：临时（有过期时间）/ 推测（模型推断）/ 来源（素材类型）
+    const badges = [];
+    if (fct.expiresAt) badges.push(['临时','var(--accent)']);
+    if (fct.kind === 'hypothesis') badges.push(['推测','var(--muted)']);
+    if (fct.source === 'paste') badges.push(['粘贴记录','var(--accent)']);
+    if (fct.source === 'transcription') badges.push(['截图转述','var(--warn, var(--muted))']);
+    if (fct.source === 'chat') badges.push(['口述','var(--muted)']);
+    if (badges.length) {
+      const bd = el('div','','');
+      bd.style.display = 'flex'; bd.style.gap = '4px';
+      badges.forEach(([label, color]) => {
+        const b = el('span','', label);
+        b.style.cssText = `font-size:10.5px;line-height:1;color:${color};background:var(--chip);border-radius:3px;padding:2.5px 5px;`;
+        bd.appendChild(b);
+      });
+      txtWrap.appendChild(bd);
+    }
+    row.appendChild(txtWrap);
     const acts = el('span','acts');
     const edit = el('span','mini-btn','✎');
     edit.title = '编辑';
@@ -1263,6 +1283,17 @@ async function renderTargetDetail(col, tid){
       renderTargetDetail(col, tid);
     };
     acts.appendChild(edit); acts.appendChild(del);
+    // v1.9.1 临时事实可一键转永久（文字按钮，禁 emoji）
+    if (fct.expiresAt) {
+      const perm = el('span','mini-btn','永久');
+      perm.title = '转为永久记忆';
+      perm.onclick = async () => {
+        await api.post('/api/facts/' + fct.id + '/permanent', {});
+        toast('已转为永久记忆');
+        renderTargetDetail(col, tid);
+      };
+      acts.insertBefore(perm, acts.firstChild);
+    }
     row.appendChild(acts);
     fl.appendChild(row);
   });

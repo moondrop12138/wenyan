@@ -106,4 +106,45 @@ class MigrationTest {
         assertRetainedData(db)
         db.close()
     }
+
+    @Test
+    fun migrate1To8_stepwise_retainsData() {
+        // v1.9.1：全链路 v1→v8（含 v7→v8 expiresAt/source），数据保留 + 新列默认值正确
+        seedV1()
+        val db = helper.runMigrationsAndValidate(testDb, 8, true, *AppDatabase.MIGRATIONS)
+        assertRetainedData(db)
+        db.query("SELECT expiresAt, source FROM memory_fact").use { c ->
+            assertTrue(c.moveToFirst())
+            assertTrue(c.isNull(0)) // 老数据无到期时间 = 永久
+            assertEquals("manual", c.getString(1)) // 老数据来源统一 manual
+        }
+        db.close()
+    }
+
+    @Test
+    fun migrate7To8_keepsKindAndAddsExpiryColumns() {
+        // v7（kind 分层）→ v8（expiresAt/source）：kind 数据保留，新列默认值正确
+        helper.createDatabase(testDb, 7).apply {
+            execSQL(
+                "CREATE TABLE IF NOT EXISTS `memory_fact` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`targetId` INTEGER NOT NULL, " +
+                    "`text` TEXT NOT NULL, " +
+                    "`kind` TEXT NOT NULL DEFAULT 'fact', " +
+                    "`createdAt` INTEGER NOT NULL, " +
+                    "FOREIGN KEY(`targetId`) REFERENCES `target`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+            )
+            execSQL("INSERT INTO memory_fact (id, targetId, text, kind, createdAt) VALUES (1, 1, '她喜欢猫', 'hypothesis', 1000)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(testDb, 8, true, *AppDatabase.MIGRATIONS)
+        db.query("SELECT text, kind, expiresAt, source FROM memory_fact WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("她喜欢猫", c.getString(0))
+            assertEquals("hypothesis", c.getString(1)) // kind 保留
+            assertTrue(c.isNull(2)) // expiresAt 默认 null
+            assertEquals("manual", c.getString(3)) // source 默认 manual
+        }
+        db.close()
+    }
 }

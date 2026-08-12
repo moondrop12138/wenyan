@@ -99,8 +99,10 @@ android {
         //  自动记忆开关（B2）/事实推断分层 DB v7（B3）/写入回执（B4）/撤销最近一次（B5）/趋势边界（B6）
         // v1.9.0 迭代（2026-08-12，覆盖发布）：空状态排版协调——版心 296dp 居中 + 内部左对齐 + 垂直偏上 12%
         // v1.9.0-2（2026-08-12，覆盖发布 v2）：空状态居中改 Box(contentAlignment=TopCenter) 显式置中（首版实机未居中仍贴左）
-        versionCode = 37
-        versionName = "1.9.0"
+        // v1.9.1（2026-08-12，正式发布）：记忆增强三件套——上下文预算选择式压缩（②A，共享 HistoryCompactor）/
+        //  时效记忆自动过期 DB v8 expiresAt+来源 source（③）/来源渠道标注（④，含 UI 徽标+转永久）
+        versionCode = 38
+        versionName = "1.9.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

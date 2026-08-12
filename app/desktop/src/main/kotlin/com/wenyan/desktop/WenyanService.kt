@@ -113,17 +113,31 @@ class WenyanService(
 
     /** v1.9.0：带分层写入（fact/hypothesis） */
     suspend fun addFact(targetId: Long, text: String, kind: String): Long =
+        addFact(targetId, text, kind, expiresAt = null, source = MemoryFactEntity.SOURCE_MANUAL)
+
+    /** v1.9.1：完整写入（kind + expiresAt 到期时间 + source 素材来源） */
+    suspend fun addFact(targetId: Long, text: String, kind: String, expiresAt: Long?, source: String): Long =
         db.memoryFactDao().insert(
             MemoryFactEntity(
                 targetId = targetId,
                 text = text,
                 kind = if (kind == MemoryFactEntity.KIND_HYPOTHESIS) kind else MemoryFactEntity.KIND_FACT,
+                expiresAt = expiresAt,
+                source = source,
             ),
         )
 
     suspend fun updateFact(factId: Long, text: String) {
         val current = db.memoryFactDao().getById(factId) ?: return
         db.memoryFactDao().update(current.copy(text = text))
+    }
+
+    /** v1.9.1 临时事实转永久（清空到期时间） */
+    suspend fun makePermanent(factId: Long) {
+        val current = db.memoryFactDao().getById(factId) ?: return
+        if (current.expiresAt != null) {
+            db.memoryFactDao().update(current.copy(expiresAt = null))
+        }
     }
 
     suspend fun deleteFact(factId: Long) = db.memoryFactDao().deleteById(factId)

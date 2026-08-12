@@ -73,6 +73,10 @@ fun MemoryFactEntity.toJson() = JSONObject()
     .put("targetId", targetId)
     .put("text", text)
     .put("createdAt", createdAt)
+    // v1.9.0 透传 kind；v1.9.1 透传 expiresAt/source（前端记忆页徽标/转永久用）
+    .put("kind", kind)
+    .put("expiresAt", expiresAt ?: JSONObject.NULL)
+    .put("source", source)
 
 fun SessionEntity.toJson() = JSONObject()
     .put("id", id)
@@ -231,6 +235,12 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
 
     delete("/api/facts/{id}") {
         service.deleteFact(call.parameters["id"]!!.toLong())
+        call.respondJson(JSONObject().put("ok", true))
+    }
+
+    /** v1.9.1 临时事实转永久（清空到期时间） */
+    post("/api/facts/{id}/permanent") {
+        service.makePermanent(call.parameters["id"]!!.toLong())
         call.respondJson(JSONObject().put("ok", true))
     }
 

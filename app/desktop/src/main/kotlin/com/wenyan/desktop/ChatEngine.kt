@@ -1,8 +1,10 @@
 package com.wenyan.desktop
 
+import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.domain.ConversationState
 import com.wenyan.app.domain.ConversationStateTracker
+import com.wenyan.app.domain.HistoryCompactor
 import com.wenyan.app.domain.MemoryExtractor
 import com.wenyan.app.knowledge.DesktopKnowledgeAssetReader
 import com.wenyan.app.knowledge.KnowledgeEngine
@@ -178,7 +180,13 @@ class ChatEngine(
                         // 异步副作用（失败静默，不阻塞流）
                         sideEffectScope.launch { generateTitleOnce(sessionId, text, event.fullText, resolved) }
                         if (session.targetId != null && shouldExtractMemory(state, text)) {
-                            sideEffectScope.launch { extractMemoryOnce(session.targetId, text, event.fullText, resolved) }
+                            // v1.9.1：CHAT_LOG（粘贴聊天记录）=paste，其余=口述输入
+                            val source = if (routeByInputShape(text) == InputShape.CHAT_LOG) {
+                                MemoryFactEntity.SOURCE_PASTE
+                            } else {
+                                MemoryFactEntity.SOURCE_CHAT
+                            }
+                            sideEffectScope.launch { extractMemoryOnce(session.targetId, text, event.fullText, resolved, source) }
                         }
                     } else {
                         // 解析失败不落库（与手机版一致：Room 无脏数据）
@@ -300,7 +308,8 @@ class ChatEngine(
                         )
                         sideEffectScope.launch { generateTitleOnce(sessionId, transcription, event.fullText, resolved) }
                         if (session.targetId != null && shouldExtractMemory(state, transcription)) {
-                            sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved) }
+                            // v1.9.1：转述/截图通道来源=transcription
+                            sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                     } else {
                         emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
@@ -396,13 +405,19 @@ class ChatEngine(
     private suspend fun memoryText(targetId: Long): String {
         migrateNoteToFactsOnce(targetId)
         // v1.9.0：hypothesis（模型推断）条目带「（推测，待验证）」标注注入，与事实区分
-        return service.listFacts(targetId).joinToString("；") { fact ->
-            if (fact.kind == com.wenyan.app.data.db.MemoryFactEntity.KIND_HYPOTHESIS) {
-                "${fact.text}（推测，待验证）"
-            } else {
-                fact.text
+        // v1.9.1：expiresAt 已到期条目过滤不注入；transcription 来源带「（来自截图转述）」标注
+        val now = System.currentTimeMillis()
+        return service.listFacts(targetId)
+            .filter { fact -> fact.expiresAt == null || fact.expiresAt > now }
+            .joinToString("；") { fact ->
+                val annotation = when {
+                    fact.kind == com.wenyan.app.data.db.MemoryFactEntity.KIND_HYPOTHESIS -> "（推测，待验证）"
+                    fact.source == MemoryFactEntity.SOURCE_TRANSCRIPTION -> "（来自截图转述）"
+                    else -> ""
+                }
+                if (annotation.isEmpty()) fact.text else "${fact.text}$annotation"
             }
-        }.take(2000)
+            .take(2000)
     }
 
     private suspend fun migrateNoteToFactsOnce(targetId: Long) {
@@ -419,7 +434,8 @@ class ChatEngine(
 
     /**
      * 历史构造（移植 buildHistory）：取会话全部消息映射 role，剔除末尾重复 USER，
-     * 超长（字符/4 > 24000 token）从最早成对丢弃。
+     * 超长（字符/4 > 24000 token）预算选择式压缩（v1.9.1，与手机版一致）：
+     * 先对早期消息裁剪保头（每条 ≤200 字 + 截断标记，末尾 6 轮工作集完整），仍超再从最早成对丢弃。
      */
     private suspend fun buildHistory(sessionId: Long, currentText: String): List<ChatHistoryMessage> {
         val messages = service.listMessages(sessionId)
@@ -439,13 +455,10 @@ class ChatEngine(
         if (mapped.isNotEmpty() && mapped.last().role == "user" && mapped.last().content == currentText) {
             mapped.removeAt(mapped.size - 1)
         }
-        // token 预算：超限从最早成对丢弃
-        fun tokens(list: List<ChatHistoryMessage>) = list.sumOf { it.content.length } / 4
-        while (mapped.size >= 2 && tokens(mapped) > MAX_HISTORY_TOKENS) {
-            mapped.removeAt(0)
-            if (mapped.isNotEmpty()) mapped.removeAt(0)
-        }
-        return mapped
+        fun tokens(list: List<ChatHistoryMessage>) = HistoryCompactor.estimatedTokens(list)
+        // v1.9.1 预算选择式压缩（共享 HistoryCompactor：先裁剪早期消息保头，仍超再从最早成对丢弃）
+        val (compacted, _) = HistoryCompactor.compact(mapped)
+        return compacted
     }
 
     private fun shouldExtractMemory(state: ConversationState, text: String): Boolean =
@@ -477,8 +490,8 @@ class ChatEngine(
         }
     }
 
-    /** 新话题自动提炼记忆（失败静默）：主模型提炼 facts → mergeFacts 去重 → 逐条入库（v1.9.0 带 kind 分层 + 撤销日志） */
-    private suspend fun extractMemoryOnce(targetId: Long, userText: String, fullText: String, resolved: ResolvedClient) {
+    /** 新话题自动提炼记忆（失败静默）：主模型提炼 facts → mergeFacts 去重 → 逐条入库（v1.9.0 带 kind 分层 + 撤销日志；v1.9.1 带 expiresAt/source） */
+    private suspend fun extractMemoryOnce(targetId: Long, userText: String, fullText: String, resolved: ResolvedClient, source: String) {
         runCatching {
             val reply = runCatching { AnalysisParser.parseAny(fullText).reply }.getOrDefault(fullText.take(500))
             val existingFacts = service.listFacts(targetId).map { it.text }
@@ -496,8 +509,14 @@ class ChatEngine(
             if (toAdd.isEmpty()) return
             val addedIds = mutableListOf<Long>()
             toAdd.forEach { text ->
-                val kind = facts.firstOrNull { it.text == text }?.kind ?: MemoryExtractor.KIND_FACT
-                val id = service.addFact(targetId, text, kind)
+                val fact = facts.firstOrNull { it.text == text }
+                val id = service.addFact(
+                    targetId = targetId,
+                    text = text,
+                    kind = fact?.kind ?: MemoryExtractor.KIND_FACT,
+                    expiresAt = MemoryExtractor.computeExpiryMillis(fact?.expiresIn),
+                    source = source,
+                )
                 if (id > 0L) addedIds.add(id)
             }
             if (addedIds.isNotEmpty()) {
@@ -511,9 +530,6 @@ class ChatEngine(
     }
 
     companion object {
-        /** 历史 token 预算（与手机版一致：24000） */
-        private const val MAX_HISTORY_TOKENS = 24000
-
         /** 纯图发送时前端占位文本（与手机版 IMAGE_PLACEHOLDER 一致；不落库为 text 消息） */
         private const val IMAGE_PLACEHOLDER = "[图片]"
     }

@@ -74,13 +74,28 @@ class ProfileRepository(
         addFact(targetId, text, MemoryFactEntity.KIND_FACT)
 
     /** v1.9.0：带分层写入（fact/hypothesis），自动提炼的推断类事实走 hypothesis */
-    suspend fun addFact(targetId: Long, text: String, kind: String): Long {
+    suspend fun addFact(targetId: Long, text: String, kind: String): Long =
+        addFact(targetId, text, kind, expiresAt = null, source = MemoryFactEntity.SOURCE_MANUAL)
+
+    /**
+     * v1.9.1：完整写入（kind + expiresAt 到期时间 + source 素材来源）。
+     * 手工添加走 SOURCE_MANUAL/永久；自动提炼由 extractMemoryOnce 传入解析结果。
+     */
+    suspend fun addFact(
+        targetId: Long,
+        text: String,
+        kind: String,
+        expiresAt: Long?,
+        source: String,
+    ): Long {
         if (getTarget(targetId) == null) return 0L
         return memoryFactDao.insert(
             MemoryFactEntity(
                 targetId = targetId,
                 text = text.trim(),
                 kind = if (kind == MemoryFactEntity.KIND_HYPOTHESIS) kind else MemoryFactEntity.KIND_FACT,
+                expiresAt = expiresAt,
+                source = source,
             ),
         )
     }
@@ -88,6 +103,14 @@ class ProfileRepository(
     suspend fun updateFact(factId: Long, text: String) {
         val entity = memoryFactDao.getById(factId) ?: return
         memoryFactDao.update(entity.copy(text = text.trim()))
+    }
+
+    /** v1.9.1 临时事实转永久（清空到期时间）；不存在则忽略 */
+    suspend fun makePermanent(factId: Long) {
+        val entity = memoryFactDao.getById(factId) ?: return
+        if (entity.expiresAt != null) {
+            memoryFactDao.update(entity.copy(expiresAt = null))
+        }
     }
 
     suspend fun deleteFact(factId: Long) = memoryFactDao.deleteById(factId)
@@ -117,14 +140,23 @@ class ProfileRepository(
 
     /**
      * v1.7.3 注入用记忆文本：确保惰性搬移完成后，facts.joinToString("；").take(2000)。
+     * v1.9.0：hypothesis（模型推断）条目带「（推测，待验证）」标注注入，与事实区分。
+     * v1.9.1：expiresAt 已到期的条目过滤不注入（惰性，不物理删）；transcription（截图转述）来源
+     * 条目带「（来自截图转述）」标注（转述可能有误差，提示模型不可全信）。
      * 与 PromptBuilder 契约一致（PromptBuilder 零改动：调用方以 target.copy(note = memoryText) 注入）。
      */
     suspend fun memoryText(targetId: Long): String {
         migrateNoteToFactsOnce(targetId)
-        // v1.9.0：hypothesis（模型推断）条目带「（推测，待验证）」标注注入，与事实区分
+        val now = System.currentTimeMillis()
         return memoryFactDao.listByTarget(targetId)
+            .filter { fact -> fact.expiresAt == null || fact.expiresAt > now }
             .joinToString("；") { fact ->
-                if (fact.kind == MemoryFactEntity.KIND_HYPOTHESIS) "${fact.text}（推测，待验证）" else fact.text
+                val annotation = when {
+                    fact.kind == MemoryFactEntity.KIND_HYPOTHESIS -> "（推测，待验证）"
+                    fact.source == MemoryFactEntity.SOURCE_TRANSCRIPTION -> "（来自截图转述）"
+                    else -> ""
+                }
+                if (annotation.isEmpty()) fact.text else "${fact.text}$annotation"
             }
             .take(2000)
     }

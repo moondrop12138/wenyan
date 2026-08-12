@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -173,6 +174,7 @@ fun MemoryEditScreen(
                                         fact = fact,
                                         onEdit = { vm.openEditFact(fact) },
                                         onDelete = { vm.deleteFact(fact) },
+                                        onMakePermanent = { vm.makePermanent(fact) },
                                     )
                                 }
                             }
@@ -246,31 +248,72 @@ private fun TimelineEditor(vm: MemoryEditViewModel) {
     }
 }
 
-/** 单条事实行：文本 + 编辑/删除（删除不二次确认） */
+/** 单条事实行：文本 + 徽标（推测/临时/来源）+ 转永久 + 编辑/删除（删除不二次确认） */
 @Composable
 private fun MemoryFactRow(
     fact: MemoryFactUi,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onMakePermanent: () -> Unit,
 ) {
     val p = LocalGtjColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(fact.text, style = GtjType.BodySm, color = p.fg, modifier = Modifier.weight(1f))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(fact.text, style = GtjType.BodySm, color = p.fg)
+            // v1.9.1 徽标行：临时（有过期时间）/ 来源
+            if (fact.expiresAt != null || fact.source != "manual") {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    if (fact.expiresAt != null) {
+                        FactBadge(text = "临时", tint = p.accentSoft, content = p.accent)
+                    }
+                    sourceBadge(fact.source)?.let { (label, tint, content) ->
+                        FactBadge(text = label, tint = tint, content = content)
+                    }
+                }
+            }
+        }
         // v1.9.0 推断类事实标注（模型推测，区别于用户明确陈述的事实）
         if (fact.kind == "hypothesis") {
-            Text(
-                "推测",
-                style = GtjType.Caption,
-                color = p.muted,
-                modifier = Modifier
-                    .padding(end = 6.dp)
-                    .clip(GtjShape.sm)
-                    .background(p.borderSoft)
-                    .padding(horizontal = 5.dp, vertical = 2.dp),
+            FactBadge(text = "推测", tint = p.borderSoft, content = p.muted)
+        }
+        // v1.9.1 临时事实可一键转永久（锁形图标）
+        if (fact.expiresAt != null) {
+            GtjIconButton(
+                icon = Icons.Outlined.Lock,
+                contentDescription = "转为永久记忆",
+                onClick = onMakePermanent,
+                iconSize = 18.dp,
             )
         }
         GtjIconButton(icon = Icons.Outlined.Edit, contentDescription = "编辑事实", onClick = onEdit, iconSize = 18.dp)
         GtjIconButton(icon = Icons.Outlined.Delete, contentDescription = "删除事实", onClick = onDelete, tint = p.danger, iconSize = 18.dp)
+    }
+}
+
+/** v1.9.1 小徽标（临时/推测/来源共用样式） */
+@Composable
+private fun FactBadge(text: String, tint: Color, content: Color) {
+    Text(
+        text,
+        style = GtjType.Caption,
+        color = content,
+        modifier = Modifier
+            .padding(end = 6.dp)
+            .clip(GtjShape.sm)
+            .background(tint)
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+    )
+}
+
+/** v1.9.1 素材来源徽标（manual 不展示，返回 null；转述用 warn 文字色提示可能有误差） */
+@Composable
+private fun sourceBadge(source: String): Triple<String, Color, Color>? {
+    val p = LocalGtjColors.current
+    return when (source) {
+        "paste" -> Triple("粘贴记录", p.accentSoft, p.accent)
+        "transcription" -> Triple("截图转述", p.borderSoft, p.warn)
+        "chat" -> Triple("口述", p.borderSoft, p.muted)
+        else -> null
     }
 }
 

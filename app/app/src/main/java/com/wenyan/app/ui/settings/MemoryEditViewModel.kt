@@ -175,4 +175,9 @@ class MemoryEditViewModel(
     fun deleteFact(fact: MemoryFactUi) {
         viewModelScope.launch { repo.deleteFact(fact.id) }
     }
+
+    /** v1.9.1 临时事实转永久（清空到期时间；Flow 自动刷新） */
+    fun makePermanent(fact: MemoryFactUi) {
+        viewModelScope.launch { repo.makePermanent(fact.id) }
+    }
 }

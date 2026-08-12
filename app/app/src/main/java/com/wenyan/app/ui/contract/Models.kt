@@ -59,12 +59,16 @@ data class TargetUi(
     val factCount: Int = 0,
 )
 
-/** v1.7.3 单条已记住事实（MemoryEditScreen 列表管理）；v1.9.0 加 kind（fact/hypothesis） */
+/** v1.7.3 单条已记住事实（MemoryEditScreen 列表管理）；v1.9.0 加 kind；v1.9.1 加 expiresAt/source */
 data class MemoryFactUi(
     val id: Long,
     val text: String,
     val createdAt: Long,
     val kind: String = "fact",
+    /** v1.9.1 到期毫秒（null=永久）；非空=临时事实 */
+    val expiresAt: Long? = null,
+    /** v1.9.1 素材来源：paste/transcription/chat/manual */
+    val source: String = "manual",
 )
 
 data class ChatMessageUi(

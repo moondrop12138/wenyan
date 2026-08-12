@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -272,6 +273,55 @@ class ProfileRepositoryMemoryTest {
         assertEquals(0, repo.countFacts(999L))
     }
 
+    // ===== v1.9.1 过期过滤 / 转永久 / 来源标注 =====
+
+    @Test
+    fun `memoryText filters out expired facts`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val now = System.currentTimeMillis()
+        repo.addFact(id, "永久事实", MemoryFactEntity.KIND_FACT, expiresAt = null, source = MemoryFactEntity.SOURCE_MANUAL)
+        repo.addFact(id, "已过期事实", MemoryFactEntity.KIND_FACT, expiresAt = now - 1000, source = MemoryFactEntity.SOURCE_MANUAL)
+        repo.addFact(id, "未到期事实", MemoryFactEntity.KIND_FACT, expiresAt = now + 100_000, source = MemoryFactEntity.SOURCE_MANUAL)
+        val text = repo.memoryText(id)
+        assertTrue(text.contains("永久事实"))
+        assertTrue(text.contains("未到期事实"))
+        assertFalse(text.contains("已过期事实"))
+    }
+
+    @Test
+    fun `memoryText annotates transcription source`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        repo.addFact(id, "她说她喜欢猫", MemoryFactEntity.KIND_FACT, null, MemoryFactEntity.SOURCE_TRANSCRIPTION)
+        val text = repo.memoryText(id)
+        assertTrue(text.contains("（来自截图转述）"))
+    }
+
+    @Test
+    fun `makePermanent clears expiry`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val now = System.currentTimeMillis()
+        val factId = repo.addFact(id, "临时事实", MemoryFactEntity.KIND_FACT, expiresAt = now + 1000, source = MemoryFactEntity.SOURCE_CHAT)
+        repo.makePermanent(factId)
+        // 转永久后不再被过期过滤
+        assertTrue(repo.memoryText(id).contains("临时事实"))
+        val stored = repo.getFacts(id).first { it.id == factId }
+        assertEquals(null, stored.expiresAt)
+    }
+
+    @Test
+    fun `addFact manual path defaults permanent and manual source`() = runTest {
+        val repo = newRepo()
+        val id = repo.saveTarget(TargetEntity(codeName = "小A"))
+        val factId = repo.addFact(id, "手工事实")
+        val stored = repo.getFacts(id).first { it.id == factId }
+        assertEquals(MemoryFactEntity.KIND_FACT, stored.kind)
+        assertEquals(null, stored.expiresAt)
+        assertEquals(MemoryFactEntity.SOURCE_MANUAL, stored.source)
+    }
+
     @Test
     fun `migrateNoteToFactsOnce note already blank stays idempotent`() = runTest {
         val repo = newRepo()
@@ -341,7 +391,6 @@ private class FakeTargetDao : TargetDao {
         _flow.value = emptyList()
     }
 }
-
 /** 内存 ProfileDao（MVP 单行：最新一行） */
 private class FakeProfileDao : ProfileDao {
     private val store = mutableListOf<ProfileEntity>()

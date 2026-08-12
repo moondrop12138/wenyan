@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
+import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.image.ImageCompressor
 import com.wenyan.app.data.repository.ConversationRepository
@@ -11,6 +12,7 @@ import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
 import com.wenyan.app.domain.ConversationState
 import com.wenyan.app.domain.ConversationStateTracker
+import com.wenyan.app.domain.HistoryCompactor
 import com.wenyan.app.domain.MemoryExtractor
 import com.wenyan.app.knowledge.CrisisDetector
 import com.wenyan.app.knowledge.KnowledgeEngine
@@ -218,8 +220,14 @@ class RealChatRepository(
                         // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
                         titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
                         // v1.7.2：新话题自动提炼记忆（仅 persistUser=true 首轮；开关关/无档案/同题追问跳过）
+                        // v1.9.1：素材来源按输入通道——FIVE_STEP=粘贴聊天记录，其余=口述输入
                         if (persistUser && shouldExtractMemory(sid, state, text)) {
-                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText) }
+                            val source = if (mode == AnalysisMode.FIVE_STEP) {
+                                MemoryFactEntity.SOURCE_PASTE
+                            } else {
+                                MemoryFactEntity.SOURCE_CHAT
+                            }
+                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, source) }
                         }
                         // v1.6 状态回填走卡片字段：结论摘要=advice.core（空则 empathy 首句），话术=reply
                         val newState = stateTracker.onModelReply(
@@ -356,10 +364,10 @@ class RealChatRepository(
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        // v1.7.2 转述确认同样自动提炼（素材取 transcription）
+                        // v1.7.2 转述确认同样自动提炼（素材取 transcription）；v1.9.1 来源=截图转述
                         val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
                         if (shouldExtractMemory(sid, stateNow, transcription)) {
-                            memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText) }
+                            memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                     }
@@ -455,8 +463,11 @@ class RealChatRepository(
      *   freetext（assistant 自由文本）→ 原文截断；
      *   analysis（assistant 结构化卡片 JSON）→ 提取 reply 字段作为 assistant 历史，解析失败跳过
      * - 剔除末尾与当前消息重复的 USER 条目（当前消息已由 userText 单独传入）
-     * - 超长兜底：粗估 (system+user+history)/4 > [HISTORY_TOKEN_LIMIT] 时从最早轮次成对丢弃，
-     *   并在头部插入一条仅模型可见的省略提示
+     * - 超长兜底（v1.9.1 预算选择式，替代纯丢弃）：粗估 (system+user+history)/4 > [HISTORY_TOKEN_LIMIT]
+     *   时按「优先保留尾部（工作集）→ 早期消息逐条裁剪保头」处理：
+     *   先对早期消息做内容裁剪（每条最多保留 [EARLY_MSG_CHAR_BUDGET] 字 + 截断标记），
+     *   仍超预算再从最早整条丢弃，并在头部插入仅模型可见的省略提示。
+     *   相比旧版整轮丢弃，被裁消息的关键信息（开头）仍保留在上下文里。
      */
     private suspend fun buildHistory(sid: Long, currentUserContent: String): List<ChatHistoryMessage> {
         val entities = conversationRepository.listMessages(sid)
@@ -485,20 +496,12 @@ class RealChatRepository(
             trimmed.removeAt(trimmed.lastIndex)
         }
 
-        // 超长兜底：从最早轮次成对丢弃
-        val result = trimmed.toMutableList()
-        var estimated = result.sumOf { it.content.length } / 4
-        var truncated = false
-        while (estimated > HISTORY_TOKEN_LIMIT && result.size > 2) {
-            result.removeAt(0)
-            // 尽量成对丢弃（user + assistant），保持轮次完整
-            if (result.size > 2) result.removeAt(0)
-            truncated = true
-            estimated = result.sumOf { it.content.length } / 4
-        }
+        // v1.9.1 超长兜底：预算选择式压缩（共享 HistoryCompactor：先裁剪早期消息保头，仍超再从最早成对丢弃）
+        val (compacted, truncated) = HistoryCompactor.compact(trimmed)
+        val result = compacted.toMutableList()
         if (truncated) {
-            Log.w("RealChatRepository", "history truncated to ${result.size} messages (~$estimated tokens)")
-            result.add(0, ChatHistoryMessage("user", "[注：更早的对话已因长度限制省略]"))
+            Log.w("RealChatRepository", "history truncated to ${result.size} messages (~${HistoryCompactor.estimatedTokens(result)} tokens)")
+            result.add(0, ChatHistoryMessage("user", "[注：更早的对话已因长度限制省略，关键信息已保留摘要]"))
         }
         return result
     }
@@ -599,10 +602,10 @@ class RealChatRepository(
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        // v1.7.2 通道 A 直读同样自动提炼（素材取 transcription 转述文本）
+                        // v1.7.2 通道 A 直读同样自动提炼（素材取截图）；v1.9.1 来源=截图转述
                         val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
                         if (shouldExtractMemory(sid, stateNow, text)) {
-                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText) }
+                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                     }
@@ -714,8 +717,10 @@ class RealChatRepository(
      * v1.7.4：per-target Mutex 串行化（锁等待计入 20s 超时；同档案并发触发时后者基于最新 facts 提炼，
      * 不会重复插入）。失败静默 Log.w；重复触发因 mergeFacts 去重不会重复插入。
      * v1.9.0：parseFacts 返回 {text,kind}，hypothesis 走分层写入；成功写入后记录操作日志（供撤销）+ 回执。
+     * v1.9.1：source 素材来源由调用方按输入通道传入（paste/transcription/chat），
+     * expiresIn 由模型标注（today/week）→ computeExpiryMillis 换算到期时间戳落库。
      */
-    private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String) {
+    private suspend fun extractMemoryOnce(sid: Long, userInput: String, replyFullText: String, source: String) {
         runCatching {
             withTimeout(MEMORY_TIMEOUT_MS) {
                 val targetId = conversationRepository.getSession(sid)?.targetId ?: return@withTimeout
@@ -741,9 +746,14 @@ class RealChatRepository(
                             val addedIds = mutableListOf<Long>()
                             toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
                                 .forEach { text ->
-                                    val kind = facts.firstOrNull { it.text == text }?.kind
-                                        ?: MemoryExtractor.KIND_FACT
-                                    val id = profileRepository.addFact(targetId, text, kind)
+                                    val fact = facts.firstOrNull { it.text == text }
+                                    val id = profileRepository.addFact(
+                                        targetId = targetId,
+                                        text = text,
+                                        kind = fact?.kind ?: MemoryExtractor.KIND_FACT,
+                                        expiresAt = MemoryExtractor.computeExpiryMillis(fact?.expiresIn),
+                                        source = source,
+                                    )
                                     if (id > 0L) addedIds.add(id)
                                 }
                             // v1.9.0 撤销日志：记录本次自动写入的 fact id（供设置页撤销最近一次）
@@ -765,8 +775,7 @@ class RealChatRepository(
     private data class ResolvedClient(val model: String, val client: LlmClient)
 
     private companion object {
-        /** 历史消息 token 上限（粗估，字符数/4），超出从最早轮次成对丢弃 */
-        const val HISTORY_TOKEN_LIMIT = 24_000
+        /** v1.9.1 历史消息超长兜底统一走共享 HistoryCompactor（domain 包） */
         /** 历史中的图片消息占位文本 */
         const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
 

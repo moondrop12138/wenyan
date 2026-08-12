@@ -326,4 +326,73 @@ class MemoryExtractorTest {
         val merged = MemoryExtractor.mergeFacts(existing, listOf("新事实"))
         assertEquals(listOf("最早事实", "中间事实", "新事实"), merged)
     }
+
+    // ===== v1.9.1 expires_in 解析 + 过期换算 =====
+
+    @Test
+    fun `parseFacts parses expires_in today and week`() {
+        val facts = MemoryExtractor.parseFacts(
+            """{"facts":[
+                {"text":"她今天忙","kind":"fact","expires_in":"today"},
+                {"text":"她这周要考试","kind":"fact","expires_in":"week"},
+                {"text":"她喜欢猫","kind":"fact"}
+            ]}"""
+        )
+        assertEquals(3, facts.size)
+        assertEquals(MemoryExtractor.EXPIRES_TODAY, facts[0].expiresIn)
+        assertEquals(MemoryExtractor.EXPIRES_WEEK, facts[1].expiresIn)
+        assertEquals(null, facts[2].expiresIn)
+    }
+
+    @Test
+    fun `parseFacts ignores invalid expires_in`() {
+        val facts = MemoryExtractor.parseFacts(
+            """{"facts":[{"text":"她喜欢猫","expires_in":"year"},{"text":"她怕黑","expires_in":123}]}"""
+        )
+        assertTrue(facts.all { it.expiresIn == null })
+    }
+
+    @Test
+    fun `parseFacts legacy string format has no expiry`() {
+        val facts = MemoryExtractor.parseFacts("""{"facts":["她喜欢猫"]}""")
+        assertEquals(1, facts.size)
+        assertEquals(null, facts[0].expiresIn)
+    }
+
+    @Test
+    fun `computeExpiryMillis today is next midnight in zone`() {
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        // 2026-08-12 12:00 CST → 次日 2026-08-13 00:00 CST
+        val now = java.time.ZonedDateTime.of(2026, 8, 12, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val expiry = MemoryExtractor.computeExpiryMillis(MemoryExtractor.EXPIRES_TODAY, now, zone)!!
+        val expected = java.time.ZonedDateTime.of(2026, 8, 13, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, expiry)
+    }
+
+    @Test
+    fun `computeExpiryMillis week rolls to next monday`() {
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        // 2026-08-12 是周三 → 下周一 2026-08-17 00:00
+        val now = java.time.ZonedDateTime.of(2026, 8, 12, 9, 30, 0, 0, zone).toInstant().toEpochMilli()
+        val expiry = MemoryExtractor.computeExpiryMillis(MemoryExtractor.EXPIRES_WEEK, now, zone)!!
+        val expected = java.time.ZonedDateTime.of(2026, 8, 17, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, expiry)
+    }
+
+    @Test
+    fun `computeExpiryMillis week on monday rolls to next monday`() {
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        // 2026-08-10 是周一 → 次周一 2026-08-17
+        val now = java.time.ZonedDateTime.of(2026, 8, 10, 8, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val expiry = MemoryExtractor.computeExpiryMillis(MemoryExtractor.EXPIRES_WEEK, now, zone)!!
+        val expected = java.time.ZonedDateTime.of(2026, 8, 17, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, expiry)
+    }
+
+    @Test
+    fun `computeExpiryMillis returns null for null or unknown`() {
+        assertEquals(null, MemoryExtractor.computeExpiryMillis(null))
+        assertEquals(null, MemoryExtractor.computeExpiryMillis("month"))
+        assertEquals(null, MemoryExtractor.computeExpiryMillis(""))
+    }
 }

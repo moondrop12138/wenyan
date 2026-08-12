@@ -89,6 +89,9 @@ interface SettingsRepository {
     suspend fun updateFact(factId: Long, text: String)
     suspend fun deleteFact(factId: Long)
 
+    /** v1.9.1 临时事实转永久（清空到期时间） */
+    suspend fun makePermanent(factId: Long)
+
     /** v1.9.0 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志可撤销） */
     suspend fun undoLastMemoryWrite(): List<Long>
 
