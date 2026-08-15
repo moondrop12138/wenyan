@@ -948,6 +948,38 @@ async function renderSettings(col){
   exRow.appendChild(el('span','ch','导出'));
   exRow.onclick = () => { location.href = '/api/export'; toast('正在导出…'); };
   g5.appendChild(exRow);
+
+  // O1: 从备份恢复
+  const impRow = el('div','setrow glass edge');
+  impRow.appendChild(el('span','ic','⇧'));
+  const impTx = el('span','tx');
+  impTx.appendChild(el('span','t','从备份恢复'));
+  impTx.appendChild(el('span','d','选择导出的 JSON 备份，覆盖当前数据（Key 需重新输入）'));
+  impRow.appendChild(impTx);
+  impRow.appendChild(el('span','ch','恢复'));
+  const impInput = el('input');
+  impInput.type = 'file'; impInput.accept = '.json,application/json'; impInput.style.display = 'none';
+  document.body.appendChild(impInput);
+  impInput.onchange = async () => {
+    const file = impInput.files && impInput.files[0];
+    impInput.value = '';
+    if (!file) return;
+    if (!confirm('从备份恢复会清空当前全部数据并覆盖，确定继续？')) return;
+    try {
+      const text = await file.text();
+      const r = await fetch('/api/import', { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: text });
+      const j = await r.json();
+      if (j.ok){
+        S.sessionId = null;
+        await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions()]);
+        renderSidebar(); renderSettings(col);
+        toast('导入完成');
+      } else toast(j.error || '导入失败');
+    } catch(err){ toast('导入失败：' + (err.message||err)); }
+  };
+  impRow.onclick = () => impInput.click();
+  g5.appendChild(impRow);
+
   const clRow = el('div','setrow glass edge');
   clRow.appendChild(el('span','ic','⌫'));
   const clTx = el('span','tx');

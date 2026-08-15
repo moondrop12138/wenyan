@@ -500,6 +500,17 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         service.seedIfEmpty()
         call.respondJson(JSONObject().put("ok", true))
     }
+
+    /** O1: 从备份 JSON 恢复（校验 + 清空重建 + FK 重映射；Key 脱敏需重新输入） */
+    post("/api/import") {
+        val json = runCatching { org.json.JSONObject(call.receiveText()) }.getOrNull()
+        if (json == null) {
+            call.respondJson(JSONObject().put("ok", false).put("error", "备份文件不是有效 JSON"))
+            return@post
+        }
+        val (ok, error) = service.importAllJson(json)
+        call.respondJson(JSONObject().put("ok", ok).put("error", error))
+    }
 }
 
 /** 统一 JSON 响应 */
