@@ -6,8 +6,8 @@
 // 由 desktop 侧提供替代实现。
 
 plugins {
-    id("org.jetbrains.kotlin.jvm")
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ksp)
     application
 }
 
@@ -73,44 +73,44 @@ ksp {
 
 dependencies {
     // Ktor Server（CIO 引擎：纯 Kotlin，无 native 依赖，适合 jpackage）
-    implementation("io.ktor:ktor-server-core-jvm:2.3.12")
-    implementation("io.ktor:ktor-server-cio-jvm:2.3.12")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:2.3.12")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.12")
-    implementation("io.ktor:ktor-server-host-common-jvm:2.3.12")  // staticResources
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.host.common)  // staticResources
 
     // Room KMP（2.7.x 起官方支持 JVM desktop；entity/DAO/Migration 代码共享）
     // 注：room-ktx 是 Android-only，KMP 版 Flow/协程支持已并入 room-runtime，不再单独引
-    implementation("androidx.room:room-runtime:2.7.2")
-    ksp("androidx.room:room-compiler:2.7.2")
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
     // Room KMP desktop 需要 SQLite 驱动（bundled 模式：自带 native sqlite，无需系统安装）
-    implementation("androidx.sqlite:sqlite-bundled:2.5.2")
+    implementation(libs.sqlite.bundled)
 
     // LLM 调用（与 Android 同版本）
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)
 
     // JSON（与 ChatRequestBuilder/AnalysisParser 一致，手写 org.json）
-    implementation("org.json:json:20240303")
+    implementation(libs.json)
 
     // 图片解码增强（TwelveMonkeys ImageIO 插件，SPI 自动注册，DesktopImageCompressor 零改动）：
     // - imageio-jpeg：更健壮的 JPEG 读写（覆盖 CMYK/渐进式等原生 reader 啃不动的变体）
     // - imageio-webp + webp-imageio(gotson, 自带 native libwebp)：补 WebP（截图/微信存图常见格式）
     // 注：AVIF/HEIC 无可靠纯 Java 解码方案，维持不支持（上传报「无法识别的图片格式」）
-    implementation("com.twelvemonkeys.imageio:imageio-jpeg:3.12.0")
-    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
-    implementation("com.github.gotson:webp-imageio:0.2.2")
+    implementation(libs.twelvemonkeys.jpeg)
+    implementation(libs.twelvemonkeys.webp)
+    implementation(libs.webp.imageio)
 
     // 协程
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    implementation(libs.kotlinx.coroutines.core)
 
     // 日志
-    implementation("org.slf4j:slf4j-simple:2.0.13")
+    implementation(libs.slf4j.simple)
 
     // 测试
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockwebserver)
 }
 
 tasks.test {
