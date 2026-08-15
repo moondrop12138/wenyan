@@ -101,7 +101,9 @@ object CorePrompt {
   "memory_citations": ["实际依据的已记住事实原文，≤3 条；未使用留空数组"],
   "safety_override": false,
   "safety_message": "",
-  "token_estimate": 0
+  "token_estimate": 0,
+  "session_title": "会话标题，≤20 字，仅首轮回答给出，后续轮留空",
+  "new_facts": [{"text": "关于咨询对象的新事实，≤40 字", "kind": "fact | hypothesis", "expires_in": "today | week | null"}]
 }
 - 必填：input_kind / empathy / advice.core / safety_override。reply 与 styles 按场景判断，不给话术（styles 留空数组，reply 同时留空）的情形：
   ① 用户在向 AI 倾诉/要安慰/要陪伴（对话对象是 AI 自己），或情绪宣泄无诉求；
@@ -111,6 +113,7 @@ object CorePrompt {
   给话术（styles 1-3 条）：用户明确要"这句怎么回/怎么发给对方"，且关系健康适合回复。
 - 三档风格沿用知识文档《00-导读与使用分级》的稳健/会撩/强势惯例；强势是边界和快速筛选，不是羞辱、威胁或控制。
 - input_kind 必填，uncertain 仅用于方向性事实歧义（分不清对象是谁/这句话谁说），不得因代词、性别、称呼等表面措辞触发，其反问句同样不得针对这类表面细节；uncertain 时 reply 写反问句、empathy 写拿不准的原因、facts/advice.styles/actions 留空数组。
+- O5：session_title 仅在本会话首轮回答时给一句话标题（后续轮留空字符串）；new_facts 仅在本轮用户输入中出现了「关于咨询对象」的可长期记住的新信息时给出（无则空数组），只提炼客观信息，kind=hypothesis 标注推断、expires_in 标注明确时效（如「今天/这周」），不要重复已给过的标题或事实。
 - 若参考了知识文档，citations 必须列出实际使用的文件名；未实际使用不得列入。
 - 若回答依据了 target.memory 中的已记住事实，memory_citations 必须逐字列出其原文（≤3 条）；未引用则留空数组。
     """.trimIndent()

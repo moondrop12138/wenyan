@@ -264,4 +264,40 @@ class AnalysisParserTest {
         assertTrue(c.actions.isEmpty())
         assertNull(c.tokenEstimate)
     }
+
+    // ===== O5: session_title + new_facts =====
+
+    @Test
+    fun `parseAny reads session title and new facts`() {
+        val json = """{
+          "input_kind": "pasted_chat",
+          "empathy": "x",
+          "reply": "",
+          "facts": {"known": [], "assumed": [], "unknown": []},
+          "advice": {"core": "z", "styles": []},
+          "actions": [],
+          "citations": [],
+          "safety_override": false,
+          "safety_message": "",
+          "session_title": "和她冷战的复盘",
+          "new_facts": [
+            {"text": "她最近在备考", "kind": "fact", "expires_in": null},
+            {"text": "她可能对我有好感", "kind": "hypothesis", "expires_in": "week"}
+          ]
+        }"""
+        val c = AnalysisParser.parseAny(json)
+        assertEquals("和她冷战的复盘", c.sessionTitle)
+        assertEquals(2, c.newFacts.size)
+        assertEquals("她最近在备考", c.newFacts[0].text)
+        assertEquals("fact", c.newFacts[0].kind)
+        assertEquals("hypothesis", c.newFacts[1].kind)
+        assertEquals("week", c.newFacts[1].expiresIn)
+    }
+
+    @Test
+    fun `parseAny missing session title and facts default empty`() {
+        val c = AnalysisParser.parseAny("""{"input_kind":"greeting","empathy":"","reply":"","facts":{},"advice":{},"actions":[],"citations":[]}""")
+        assertEquals("", c.sessionTitle)
+        assertTrue(c.newFacts.isEmpty())
+    }
 }

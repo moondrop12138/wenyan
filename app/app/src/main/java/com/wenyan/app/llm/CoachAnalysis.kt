@@ -23,7 +23,17 @@ data class CoachAnalysis(
     val safetyOverride: Boolean = false,
     val safetyMessage: String = "",
     val tokenEstimate: Int? = null,
+    /** O5: 主回复顺带产出的会话标题（≤20 字，首轮给；空则走独立标题生成降级） */
+    val sessionTitle: String = "",
+    /** O5: 主回复顺带产出的新事实（替代独立记忆提炼 LLM 调用；空则走降级） */
+    val newFacts: List<NewFact> = emptyList(),
 ) {
+    data class NewFact(
+        val text: String = "",
+        val kind: String = "fact",
+        val expiresIn: String? = null,
+    )
+
     data class Facts(
         val known: List<String> = emptyList(),
         val assumed: List<String> = emptyList(),

@@ -218,8 +218,14 @@ class RealChatRepository(
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        // v1.2.1：首轮回复完成后异步拟题（素材取 reply 字段）
-                        titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        // O5: 主回复顺带产出标题则直接落库，否则走独立标题生成降级
+                        if (analysis.sessionTitle.isNotBlank()) {
+                            if (conversationRepository.getSession(sid)?.title?.isNotBlank() != true) {
+                                conversationRepository.updateSessionTitle(sid, SessionTitle.sanitizeTitle(analysis.sessionTitle))
+                            }
+                        } else {
+                            titleScope.launch { generateTitleOnce(sid, text, event.fullText, isStructured = true) }
+                        }
                         // v1.7.2：新话题自动提炼记忆（仅 persistUser=true 首轮；开关关/无档案/同题追问跳过）
                         // v1.9.1：素材来源按输入通道——FIVE_STEP=粘贴聊天记录，其余=口述输入
                         if (persistUser && shouldExtractMemory(sid, state, text)) {
@@ -228,7 +234,15 @@ class RealChatRepository(
                             } else {
                                 MemoryFactEntity.SOURCE_CHAT
                             }
-                            memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, source) }
+                            // O5: 主回复顺带产出新事实则直接落库，否则走独立记忆提炼降级
+                            if (analysis.newFacts.isNotEmpty()) {
+                                val facts = analysis.newFacts.map {
+                                    MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
+                                }
+                                memoryScope.launch { persistFactsFromReply(sid, facts, source, text) }
+                            } else {
+                                memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, source) }
+                            }
                         }
                         // v1.6 状态回填走卡片字段：结论摘要=advice.core（空则 empathy 首句），话术=reply
                         val newState = stateTracker.onModelReply(
@@ -760,40 +774,64 @@ class RealChatRepository(
                     val json = client.client.stream(
                         ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt),
                     ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
-                    val facts = MemoryExtractor.parseFacts(json ?: "")
-                    val merged = MemoryExtractor.mergeFacts(existing, facts.map { it.text })
-                    val toAdd = merged.drop(existing.size)
-                    if (toAdd.isNotEmpty()) {
-                        if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
-                            Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
-                        } else {
-                            val addedIds = mutableListOf<Long>()
-                            toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size)
-                                .forEach { text ->
-                                    val fact = facts.firstOrNull { it.text == text }
-                                    val id = profileRepository.addFact(
-                                        targetId = targetId,
-                                        text = text,
-                                        kind = fact?.kind ?: MemoryExtractor.KIND_FACT,
-                                        expiresAt = MemoryExtractor.computeExpiryMillis(fact?.expiresIn),
-                                        source = source,
-                                    )
-                                    if (id > 0L) addedIds.add(id)
-                                }
-                            // v1.9.0 撤销日志：记录本次自动写入的 fact id（供设置页撤销最近一次）
-                            if (addedIds.isNotEmpty()) {
-                                dataStore.recordMemoryWrite(targetId, addedIds, userInput.take(20))
-                                // v1.9.0 写入回执：UI 层 toast 提示一次（可到设置中查看/撤销）
-                                _streamingState.update {
-                                    it.copy(memoryReceipt = "已记住 ${addedIds.size} 条事实，可在设置中查看或撤销")
-                                }
-                            }
-                            Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
-                        }
-                    }
+                    persistFactsOnce(targetId, MemoryExtractor.parseFacts(json ?: ""), source, userInput)
                 }
             }
         }.onFailure { Log.w("RealChatRepository", "memory extraction failed", it) }
+    }
+
+    /** O5: 主回复已顺带产出新事实，直接落库（不走独立 LLM 提炼） */
+    private suspend fun persistFactsFromReply(
+        sid: Long,
+        facts: List<MemoryExtractor.ExtractedFact>,
+        source: String,
+        userInput: String,
+    ) {
+        runCatching {
+            val targetId = conversationRepository.getSession(sid)?.targetId ?: return@runCatching
+            if (profileRepository.getTarget(targetId) == null) return@runCatching
+            val mutex = extractMutexes.getOrPut(targetId) { Mutex() }
+            mutex.withLock {
+                profileRepository.migrateNoteToFactsOnce(targetId)
+                persistFactsOnce(targetId, facts, source, userInput)
+            }
+        }.onFailure { Log.w("RealChatRepository", "persist facts from reply failed", it) }
+    }
+
+    /** O5: 合并+插入已解析事实（不含 LLM 调用；调用方负责 per-target 互斥） */
+    private suspend fun persistFactsOnce(
+        targetId: Long,
+        facts: List<MemoryExtractor.ExtractedFact>,
+        source: String,
+        userInput: String,
+    ) {
+        val existing = profileRepository.getFacts(targetId).map { it.text }
+        val merged = MemoryExtractor.mergeFacts(existing, facts.map { it.text })
+        val toAdd = merged.drop(existing.size)
+        if (toAdd.isEmpty()) return
+        if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
+            Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
+            return
+        }
+        val addedIds = mutableListOf<Long>()
+        toAdd.take(MemoryExtractor.DEFAULT_FACT_LIMIT - existing.size).forEach { text ->
+            val fact = facts.firstOrNull { it.text == text }
+            val id = profileRepository.addFact(
+                targetId = targetId,
+                text = text,
+                kind = fact?.kind ?: MemoryExtractor.KIND_FACT,
+                expiresAt = MemoryExtractor.computeExpiryMillis(fact?.expiresIn),
+                source = source,
+            )
+            if (id > 0L) addedIds.add(id)
+        }
+        if (addedIds.isNotEmpty()) {
+            dataStore.recordMemoryWrite(targetId, addedIds, userInput.take(20))
+            _streamingState.update {
+                it.copy(memoryReceipt = "已记住 ${addedIds.size} 条事实，可在设置中查看或撤销")
+            }
+        }
+        Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
     }
 
     private data class ResolvedClient(val model: String, val client: LlmClient)

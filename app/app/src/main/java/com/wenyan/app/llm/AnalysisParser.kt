@@ -136,7 +136,28 @@ object AnalysisParser {
             safetyOverride = json.optBoolean("safety_override", false),
             safetyMessage = json.optString("safety_message", ""),
             tokenEstimate = if (json.has("token_estimate")) json.optInt("token_estimate") else null,
+            // O5: 主回复顺带产出（旧模型无字段 → 空，不崩）
+            sessionTitle = json.optString("session_title", ""),
+            newFacts = parseNewFacts(json.optJSONArray("new_facts")),
         )
+    }
+
+    private fun parseNewFacts(array: JSONArray?): List<CoachAnalysis.NewFact> {
+        if (array == null) return emptyList()
+        return buildList {
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val text = obj.optString("text", "").trim()
+                if (text.isEmpty()) continue
+                add(
+                    CoachAnalysis.NewFact(
+                        text = text.take(40),
+                        kind = obj.optString("kind", "fact").trim(),
+                        expiresIn = obj.optString("expires_in", "").trim().takeIf { it.isNotBlank() },
+                    )
+                )
+            }
+        }.take(5)
     }
 
     private fun parseStyles(array: JSONArray?): List<CoachAnalysis.Advice.Style> {

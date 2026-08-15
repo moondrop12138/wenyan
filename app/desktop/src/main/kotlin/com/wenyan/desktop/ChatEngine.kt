@@ -180,16 +180,29 @@ class ChatEngine(
                             JSONObject().put("type", "card")
                                 .put("card", analysis.toJson().put("citations", JSONArray(refs)))
                         )
-                        // 异步副作用（失败静默，不阻塞流）
-                        sideEffectScope.launch { generateTitleOnce(sessionId, text, event.fullText, resolved) }
+                        // O5: 主回复顺带产出标题则直接落库，否则走独立标题生成降级
+                        if (analysis.sessionTitle.isNotBlank()) {
+                            if (service.getSession(sessionId)?.title?.isNotBlank() != true) {
+                                service.updateSessionTitle(sessionId, analysis.sessionTitle.trim().take(20))
+                            }
+                        } else {
+                            sideEffectScope.launch { generateTitleOnce(sessionId, text, event.fullText, resolved) }
+                        }
                         if (session.targetId != null && shouldExtractMemory(state, text)) {
-                            // v1.9.1：CHAT_LOG（粘贴聊天记录）=paste，其余=口述输入
                             val source = if (routeByInputShape(text) == InputShape.CHAT_LOG) {
                                 MemoryFactEntity.SOURCE_PASTE
                             } else {
                                 MemoryFactEntity.SOURCE_CHAT
                             }
-                            sideEffectScope.launch { extractMemoryOnce(session.targetId, text, event.fullText, resolved, source) }
+                            // O5: 主回复顺带产出新事实则直接落库，否则走独立记忆提炼降级
+                            if (analysis.newFacts.isNotEmpty()) {
+                                val facts = analysis.newFacts.map {
+                                    MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
+                                }
+                                sideEffectScope.launch { persistFacts(session.targetId, facts, source, text) }
+                            } else {
+                                sideEffectScope.launch { extractMemoryOnce(session.targetId, text, event.fullText, resolved, source) }
+                            }
                         }
                     } else {
                         // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库（与手机版一致），并报错提示
@@ -313,10 +326,22 @@ class ChatEngine(
                             JSONObject().put("type", "card")
                                 .put("card", analysis.toJson().put("citations", JSONArray(refs)))
                         )
-                        sideEffectScope.launch { generateTitleOnce(sessionId, transcription, event.fullText, resolved) }
+                        if (analysis.sessionTitle.isNotBlank()) {
+                            if (service.getSession(sessionId)?.title?.isNotBlank() != true) {
+                                service.updateSessionTitle(sessionId, analysis.sessionTitle.trim().take(20))
+                            }
+                        } else {
+                            sideEffectScope.launch { generateTitleOnce(sessionId, transcription, event.fullText, resolved) }
+                        }
                         if (session.targetId != null && shouldExtractMemory(state, transcription)) {
-                            // v1.9.1：转述/截图通道来源=transcription
-                            sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
+                            if (analysis.newFacts.isNotEmpty()) {
+                                val facts = analysis.newFacts.map {
+                                    MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
+                                }
+                                sideEffectScope.launch { persistFacts(session.targetId, facts, MemoryFactEntity.SOURCE_TRANSCRIPTION, transcription) }
+                            } else {
+                                sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
+                            }
                         }
                     } else {
                         // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库，并报错提示
@@ -516,26 +541,31 @@ class ChatEngine(
             ).collect { event ->
                 if (event is LlmEvent.Done) json = event.fullText
             }
-            val facts = MemoryExtractor.parseFacts(json)
-            if (facts.isEmpty()) return
-            val merged = MemoryExtractor.mergeFacts(existingFacts, facts.map { it.text })
-            val toAdd = merged.drop(existingFacts.size)
-            if (toAdd.isEmpty()) return
-            val addedIds = mutableListOf<Long>()
-            toAdd.forEach { text ->
-                val fact = facts.firstOrNull { it.text == text }
-                val id = service.addFact(
-                    targetId = targetId,
-                    text = text,
-                    kind = fact?.kind ?: MemoryExtractor.KIND_FACT,
-                    expiresAt = MemoryExtractor.computeExpiryMillis(fact?.expiresIn),
-                    source = source,
-                )
-                if (id > 0L) addedIds.add(id)
-            }
-            if (addedIds.isNotEmpty()) {
-                service.recordMemoryWrite(targetId, addedIds, userText.take(20))
-            }
+            persistFacts(targetId, MemoryExtractor.parseFacts(json), source, userText)
+        }
+    }
+
+    /** O5: 主回复已顺带产出新事实，直接落库（不走独立 LLM 提炼）；也供 extractMemoryOnce 复用 */
+    private suspend fun persistFacts(targetId: Long, facts: List<MemoryExtractor.ExtractedFact>, source: String, userText: String) {
+        if (facts.isEmpty()) return
+        val existingFacts = service.listFacts(targetId).map { it.text }
+        val merged = MemoryExtractor.mergeFacts(existingFacts, facts.map { it.text })
+        val toAdd = merged.drop(existingFacts.size)
+        if (toAdd.isEmpty()) return
+        val addedIds = mutableListOf<Long>()
+        toAdd.forEach { text ->
+            val fact = facts.firstOrNull { it.text == text }
+            val id = service.addFact(
+                targetId = targetId,
+                text = text,
+                kind = fact?.kind ?: MemoryExtractor.KIND_FACT,
+                expiresAt = MemoryExtractor.computeExpiryMillis(fact?.expiresIn),
+                source = source,
+            )
+            if (id > 0L) addedIds.add(id)
+        }
+        if (addedIds.isNotEmpty()) {
+            service.recordMemoryWrite(targetId, addedIds, userText.take(20))
         }
     }
 
