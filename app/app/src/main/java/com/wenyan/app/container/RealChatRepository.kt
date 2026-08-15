@@ -186,7 +186,7 @@ class RealChatRepository(
         //   target.copy(note = facts.joinToString("；").take(2000))，PromptBuilder 零改动。
         val target = resolveTargetWithMemory(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
-        val history = buildHistory(sid, text)
+        val (history, historyTruncated) = buildHistory(sid, text)
         val user = when (mode) {
             AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
             // REPLY/RELAYED/GREETING 共用简短输入模板（§3.3）：
@@ -258,6 +258,7 @@ class RealChatRepository(
                         conversationRepository.updateSessionState(sid, newState.toJson())
                         val card = UiMappers.toCoachCard(analysis)
                         emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
+                        if (historyTruncated) _streamingState.update { it.copy(notice = HISTORY_TRUNCATED_NOTICE) }
                     } else {
                         // H3: 解析失败不丢内容——原始回复以 freetext 落库展示，并提示
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
@@ -375,7 +376,7 @@ class RealChatRepository(
         val target = resolveTargetWithMemory(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
         val user = promptBuilder.buildUserTranscription(transcription)
-        val history = buildHistory(sid, transcription)
+        val (history, historyTruncated) = buildHistory(sid, transcription)
 
         val client = resolveClient() ?: run {
             emit(StreamEvent.Error(noConfigError()))
@@ -396,6 +397,7 @@ class RealChatRepository(
                             memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
+                        if (historyTruncated) _streamingState.update { it.copy(notice = HISTORY_TRUNCATED_NOTICE) }
                     } else {
                         // H3: 解析失败兜底——原始回复以 freetext 落库展示
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
@@ -502,7 +504,8 @@ class RealChatRepository(
      *   仍超预算再从最早整条丢弃，并在头部插入仅模型可见的省略提示。
      *   相比旧版整轮丢弃，被裁消息的关键信息（开头）仍保留在上下文里。
      */
-    private suspend fun buildHistory(sid: Long, currentUserContent: String): List<ChatHistoryMessage> {
+    /** O9: 返回 (历史消息, 是否发生压缩截断) */
+    private suspend fun buildHistory(sid: Long, currentUserContent: String): Pair<List<ChatHistoryMessage>, Boolean> {
         val entities = conversationRepository.listMessages(sid)
         val mapped = entities.mapNotNull { e ->
             when (e.type) {
@@ -536,7 +539,7 @@ class RealChatRepository(
             Log.w("RealChatRepository", "history truncated to ${result.size} messages (~${HistoryCompactor.estimatedTokens(result)} tokens)")
             result.add(0, ChatHistoryMessage("user", "[注：更早的对话已因长度限制省略，关键信息已保留摘要]"))
         }
-        return result
+        return result to truncated
     }
 
     private suspend fun ensureSession(): Long {
@@ -608,7 +611,7 @@ class RealChatRepository(
             emit(StreamEvent.Error(noConfigError()))
             return@flow
         }
-        val history = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER })
+        val (history, historyTruncated) = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER })
         val userText = when {
             text.isBlank() -> "以下是用户聊天截图，请按四段结构分析。"
             mode == AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
@@ -642,6 +645,7 @@ class RealChatRepository(
                             memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
+                        if (historyTruncated) _streamingState.update { it.copy(notice = HISTORY_TRUNCATED_NOTICE) }
                     } else {
                         // H3: 解析失败兜底——原始回复以 freetext 落库展示
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
@@ -853,5 +857,8 @@ class RealChatRepository(
 
         /** H3: 解析失败兜底提示（原始回复已以 freetext 展示） */
         const val PARSE_FALLBACK_NOTICE = "模型输出格式异常，已展示原文"
+
+        /** O9: 历史压缩透明化提示 */
+        const val HISTORY_TRUNCATED_NOTICE = "对话较长，较早内容已摘要化，如需精确信息请补充"
     }
 }
