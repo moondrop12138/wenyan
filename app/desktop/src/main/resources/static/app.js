@@ -145,6 +145,26 @@ function renderSidebar(){
     list.appendChild(item);
   });
 }
+// O3: 会话/消息全文搜索（Enter 触发，跳转到命中会话）
+function wireSearch(){
+  const inp = $('sbSearch');
+  if (!inp) return;
+  inp.onkeydown = async e => {
+    if (e.key !== 'Enter') return;
+    const q = inp.value.trim();
+    if (!q) return;
+    try {
+      const r = await api.get('/api/search?q=' + encodeURIComponent(q));
+      const ids = [...new Set((r.results||[]).map(x => x.sessionId))];
+      if (!ids.length){ toast('没有匹配的消息'); return; }
+      const target = S.sessions.find(s => ids.includes(s.id));
+      if (target){
+        S.sessionId = target.id; S.streamSeq++; renderSidebar(); renderChat();
+        toast('找到 ' + ids.length + ' 个相关会话，已跳转最近一个');
+      }
+    } catch(err){ toast('搜索失败'); }
+  };
+}
 function fmtTime(ts){
   const d = new Date(ts), now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
@@ -1454,6 +1474,7 @@ async function render(){
   applyTheme();
   await loadToken();
   await loadVersion();
+  wireSearch();
   await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions(), refreshSettings()]);
   renderSidebar();
   renderModelPill();

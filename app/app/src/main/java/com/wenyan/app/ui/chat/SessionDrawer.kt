@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,9 @@ fun SessionDrawerContent(
     onSelectSession: (Long) -> Unit,
     onLongPressSession: (SessionSummaryUi) -> Unit,
     modifier: Modifier = Modifier,
+    searchQuery: String = "",
+    searchResults: List<Long> = emptyList(),
+    onSearchQueryChange: (String) -> Unit = {},
 ) {
     val p = LocalGtjColors.current
     Column(
@@ -114,13 +118,28 @@ fun SessionDrawerContent(
         )
         Spacer(Modifier.height(8.dp))
 
-        if (sessions.isEmpty()) {
+        // O3: 全文搜索（命中 sessionId 或标题包含关键词）
+        TextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { Text("搜索会话 / 消息", style = GtjType.Caption, color = p.muted) },
+            singleLine = true,
+            textStyle = GtjType.BodySm,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+
+        val filtered = if (searchQuery.isBlank()) sessions else sessions.filter {
+            searchResults.contains(it.id) || it.title.contains(searchQuery, ignoreCase = true)
+        }
+
+        if (filtered.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "暂无历史会话\n新建一个开始聊天吧",
+                    if (searchQuery.isBlank()) "暂无历史会话\n新建一个开始聊天吧" else "没有匹配的会话",
                     style = GtjType.BodySm,
                     color = p.muted,
                 )
@@ -134,7 +153,7 @@ fun SessionDrawerContent(
                 // v1.7.3 F4 会话按记忆档案分组（v1.7.3-fix：分组键改 targetId，同名档案不再合并）；
                 // 组内保持列表顺序（id DESC = 时间倒序）；每组前加档案名组头（取组内第一条的 targetName）；
                 // 未关联（targetId=null）归最后
-                val grouped = sessions.groupBy { it.targetId }
+                val grouped = filtered.groupBy { it.targetId }
                 val orderedGroups = grouped.filterKeys { it != null } +
                     (grouped[null]?.let { mapOf<Long?, List<SessionSummaryUi>>(null to it) } ?: emptyMap())
                 orderedGroups.forEach { (_, groupSessions) ->

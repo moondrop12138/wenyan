@@ -133,6 +133,19 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         call.respondJson(com.wenyan.app.llm.UsageMetrics.toJson())
     }
 
+    /** O3: 全文检索（?q=关键词，命中消息 → 前端跳转对应会话） */
+    get("/api/search") {
+        val q = call.request.queryParameters["q"] ?: ""
+        val results = JSONArray().apply {
+            service.searchMessages(q).forEach { m ->
+                put(org.json.JSONObject()
+                    .put("sessionId", m.sessionId).put("type", m.type)
+                    .put("content", m.content).put("createdAt", m.createdAt))
+            }
+        }
+        call.respondJson(JSONObject().put("results", results))
+    }
+
     /** 诊断：报告正在运行的服务进程实际加载的 ImageIO 解码器（排查格式支持用） */
     get("/api/debug/imageio") {
         javax.imageio.ImageIO.scanForPlugins()

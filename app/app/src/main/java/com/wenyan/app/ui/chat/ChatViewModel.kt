@@ -66,6 +66,12 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _currentSessionId = MutableStateFlow<Long?>(null)
     val currentSessionId: StateFlow<Long?> = _currentSessionId.asStateFlow()
 
+    /** O3: 全文搜索（查询 + 命中去重 sessionId） */
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    private val _searchResults = MutableStateFlow<List<Long>>(emptyList())
+    val searchResults: StateFlow<List<Long>> = _searchResults.asStateFlow()
+
     /** v1.3.1 待发送图片（v1.6.1 多图：最多 10 张，选图后暂存，点发送才真正发出） */
     private val _pendingImages = MutableStateFlow<List<Uri>>(emptyList())
     val pendingImages: StateFlow<List<Uri>> = _pendingImages.asStateFlow()
@@ -120,6 +126,18 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
 
     fun onInputChange(text: String) {
         _input.value = text
+    }
+
+    /** O3: 全文搜索（空白清空结果） */
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            _searchResults.value = repo.searchSessions(query)
+        }
     }
 
     fun sendText(mode: AnalysisMode? = null) {

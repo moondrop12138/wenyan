@@ -413,6 +413,10 @@ class RealChatRepository(
     override suspend fun deleteMessage(messageId: Long) =
         conversationRepository.deleteMessage(messageId)
 
+    /** O3: 全文检索（命中消息 → 去重 sessionId 列表） */
+    override suspend fun searchSessions(query: String): List<Long> =
+        conversationRepository.searchMessages(query).map { it.sessionId }.distinct()
+
     override suspend fun switchSession(sessionId: Long) {
         this.sessionId.value = sessionId
     }

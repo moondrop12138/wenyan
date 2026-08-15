@@ -41,6 +41,10 @@ class ConversationRepository(
     suspend fun listMessages(sessionId: Long): List<MessageEntity> =
         messageDao.listBySession(sessionId)
 
+    /** O3: 全文检索（LIKE 起步，空白返回空） */
+    suspend fun searchMessages(query: String): List<MessageEntity> =
+        if (query.isBlank()) emptyList() else messageDao.search(query.trim())
+
     suspend fun addMessage(
         sessionId: Long,
         role: String,

@@ -34,6 +34,10 @@ interface MessageDao {
     )
     fun observeFirstUserMessages(): Flow<List<SessionFirstMessage>>
 
+    /** O3: 会话全文检索（LIKE 起步，命中消息原文，限 50 条） */
+    @Query("SELECT * FROM message WHERE content LIKE '%' || :query || '%' ORDER BY id DESC LIMIT 50")
+    suspend fun search(query: String): List<MessageEntity>
+
     @Query("DELETE FROM message WHERE sessionId = :sessionId")
     suspend fun deleteBySession(sessionId: Long)
 

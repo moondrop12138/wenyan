@@ -118,6 +118,8 @@ fun ChatScreen(
     val streaming by vm.streaming.collectAsState()
     val input by vm.input.collectAsState()
     val pendingImages by vm.pendingImages.collectAsState()
+    val searchQuery by vm.searchQuery.collectAsState()
+    val searchResults by vm.searchResults.collectAsState()
 
     // O10: 草稿输入 saveable——进程被杀后恢复（发送后清空）
     val savedDraft = rememberSaveable { mutableStateOf("") }
@@ -251,6 +253,9 @@ fun ChatScreen(
                         scope.launch { drawerState.close() }
                     },
                     onLongPressSession = { confirmDeleteSession = it },
+                    searchQuery = searchQuery,
+                    searchResults = searchResults,
+                    onSearchQueryChange = vm::onSearchQueryChange,
                 )
             }
         },

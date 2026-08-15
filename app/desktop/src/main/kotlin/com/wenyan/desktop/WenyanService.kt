@@ -171,6 +171,10 @@ class WenyanService(
     suspend fun listMessages(sessionId: Long): List<MessageEntity> =
         db.messageDao().listBySession(sessionId)
 
+    /** O3: 全文检索（空白查询返回空；命中消息原文，不含脱敏 Key） */
+    suspend fun searchMessages(query: String): List<MessageEntity> =
+        if (query.isBlank()) emptyList() else db.messageDao().search(query.trim())
+
     suspend fun addMessage(sessionId: Long, role: String, type: String, content: String): Long =
         db.messageDao().insert(
             MessageEntity(sessionId = sessionId, role = role, type = type, content = content)

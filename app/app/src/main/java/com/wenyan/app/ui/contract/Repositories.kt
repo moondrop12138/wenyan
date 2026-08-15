@@ -69,6 +69,9 @@ interface ChatRepository {
     /** 删除整个会话（长按抽屉条目） */
     suspend fun deleteSession(sessionId: Long)
 
+    /** O3: 全文检索（命中消息 → 去重 sessionId），供抽屉搜索跳转 */
+    suspend fun searchSessions(query: String): List<Long>
+
     /** 停止当前流（取消应用级收集 job；用户消息已落库的不受影响） */
     fun cancel()
 
