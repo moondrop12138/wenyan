@@ -56,6 +56,8 @@ sealed class LlmEvent {
     data class Thinking(val text: String) : LlmEvent()
     data class Done(val fullText: String) : LlmEvent()
     data class Failed(val error: LlmErrorCode, val detail: String = "") : LlmEvent()
+    /** H1: 对可重试错误发起重试前发出，通知 UI 清空已累积的增量文本，避免与重试后新流重复拼接 */
+    data object Restart : LlmEvent()
 }
 
 /**

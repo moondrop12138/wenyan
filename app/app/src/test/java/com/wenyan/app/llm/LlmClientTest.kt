@@ -138,4 +138,50 @@ class LlmClientTest {
         val failed = events.filterIsInstance<LlmEvent.Failed>().single()
         assertEquals(LlmErrorCode.EMPTY_CONTENT, failed.error)
     }
+
+    @Test
+    fun `H1 retry after partial stream emits Restart between delta batches`() = runBlocking {
+        // 第一段流：先出部分增量，随后返回可重试错误（等价于断流触发重试）
+        server.enqueue(
+            sseResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"你\"},\"finish_reason\":null}]}",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"好\"},\"finish_reason\":null}]}",
+                "data: {\"error\":{\"message\":\"limit\",\"type\":\"rate_limit\"}}",
+            )
+        )
+        // 第二段流：完整输出
+        server.enqueue(
+            sseResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"再见\"},\"finish_reason\":\"stop\"}]}",
+                "data: [DONE]",
+            )
+        )
+        val events = client.stream(ChatRequest("m", "s", "u")).toList()
+        assertEquals(2, server.requestCount)
+        val deltas = events.filterIsInstance<LlmEvent.Delta>().map { it.text }
+        assertEquals(listOf("你", "好", "再见"), deltas)
+        val restarts = events.filterIsInstance<LlmEvent.Restart>()
+        assertEquals(1, restarts.size)
+        // Restart 位于第一批 Delta 之后、第二批 Delta 之前（UI 据此清空累积文本，避免重复拼接）
+        val restartIndex = events.indexOf(restarts.single())
+        val firstBatchEnd = events.indexOfLast { it is LlmEvent.Delta && it.text == "好" }
+        assertTrue(restartIndex > firstBatchEnd)
+        val done = events.filterIsInstance<LlmEvent.Done>().single()
+        assertEquals("再见", done.fullText)
+        assertTrue(events.none { it is LlmEvent.Failed })
+    }
+
+    @Test
+    fun `H2 finish_reason length maps to output truncated fatal without retry`() = runBlocking {
+        server.enqueue(
+            sseResponse(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"半截话术\"},\"finish_reason\":\"length\"}]}",
+                "data: [DONE]",
+            )
+        )
+        val events = client.stream(ChatRequest("m", "s", "u")).toList()
+        assertEquals(1, server.requestCount)
+        val failed = events.filterIsInstance<LlmEvent.Failed>().single()
+        assertEquals(LlmErrorCode.OUTPUT_TRUNCATED, failed.error)
+    }
 }

@@ -39,6 +39,14 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         _memoryReceipt.value = null
     }
 
+    /** H3: 一次性提示（如解析失败兜底「已展示原文」），UI toast 后清空 */
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    fun consumeNotice() {
+        _notice.value = null
+    }
+
     private val _transcription = MutableStateFlow<String?>(null)
     val transcription: StateFlow<String?> = _transcription.asStateFlow()
 
@@ -93,6 +101,10 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
                 // v1.9.0 自动记忆写入回执 → UI toast 提示一次
                 if (st.memoryReceipt != null) {
                     _memoryReceipt.value = st.memoryReceipt
+                }
+                // H3: 一次性提示 → UI toast 提示一次
+                if (st.notice != null) {
+                    _notice.value = st.notice
                 }
                 // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
                 if (!st.streaming && st.error != null) {

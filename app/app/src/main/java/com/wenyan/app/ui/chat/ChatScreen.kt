@@ -137,6 +137,14 @@ fun ChatScreen(
             vm.consumeMemoryReceipt()
         }
     }
+    // H3: 解析失败兜底提示 → 一次性 toast
+    val notice by vm.notice.collectAsState()
+    LaunchedEffect(notice) {
+        notice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            vm.consumeNotice()
+        }
+    }
     // v1.8.2-fix（审查 P3-10）：输入框焦点，空状态索引点击填入后聚焦（对齐桌面端）
     val inputFocusRequester = remember { FocusRequester() }
     var showModelSheet by remember { mutableStateOf(false) }

@@ -53,6 +53,14 @@ class SseParserTest {
     }
 
     @Test
+    fun `finish reason length extracted`() {
+        val chunk = SseParser.parseDataLine(
+            """{"choices":[{"index":0,"delta":{},"finish_reason":"length"}]}"""
+        )
+        assertEquals("length", chunk?.finishReason)
+    }
+
+    @Test
     fun `stream error extracted`() {
         val chunk = SseParser.parseDataLine(
             """{"error":{"message":"rate limit exceeded","type":"rate_limit"}}"""

@@ -53,15 +53,16 @@ class ErrorMapperFullTest {
     // ---- 12 个错误码齐全 ----
 
     @Test
-    fun `all 12 error codes exist with non empty user message`() {
+    fun `all 13 error codes exist with non empty user message`() {
         val codes = LlmErrorCode.entries
         // v1.7.1 终检：新增 UNSUPPORTED_URL（公网明文地址被网络安全策略拦截，提示改 https/localhost）
-        assertEquals("应有 12 个错误码", 12, codes.size)
+        // H2：新增 OUTPUT_TRUNCATED（finish_reason=length 截断）
+        assertEquals("应有 13 个错误码", 13, codes.size)
 
         val expected = setOf(
             "UNAUTHORIZED", "FORBIDDEN", "MODEL_NOT_FOUND", "RATE_LIMITED",
             "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "UNSUPPORTED_URL",
-            "STREAM_ERROR", "EMPTY_CONTENT", "PARSE_ERROR", "UNKNOWN",
+            "STREAM_ERROR", "EMPTY_CONTENT", "PARSE_ERROR", "OUTPUT_TRUNCATED", "UNKNOWN",
         )
         assertEquals(expected, codes.map { it.name }.toSet())
 

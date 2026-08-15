@@ -155,6 +155,9 @@ class ChatEngine(
                 is LlmEvent.Thinking -> {
                     // reasoning_content 已彻底舍弃展示，不传给前端。
                 }
+                is LlmEvent.Restart -> {
+                    // H1: 重试重发。桌面主链路不本地累积增量（Delta 不入 UI），无需清空状态。
+                }
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -229,6 +232,8 @@ class ChatEngine(
             when (event) {
                 is LlmEvent.Delta -> transcription.append(event.text)
                 is LlmEvent.Thinking -> { /* reasoning 不外传（与主链路一致） */ }
+                // H1: 重试前清空已累积转述，避免与重试后新流重复拼接
+                is LlmEvent.Restart -> transcription.clear()
                 is LlmEvent.Failed -> emitError(onEvent, event.error.name, event.error.userMessage + if (event.detail.isNotBlank()) "（${event.detail.take(120)}）" else "")
                 is LlmEvent.Done -> {
                     if (transcription.isBlank()) {
@@ -285,6 +290,7 @@ class ChatEngine(
             when (event) {
                 is LlmEvent.Delta -> { /* 拼入 accumulator，Done 后解析（不流式展示） */ }
                 is LlmEvent.Thinking -> { /* reasoning 不外传 */ }
+                is LlmEvent.Restart -> { /* H1: 重试重发，无本地累积，忽略 */ }
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {

@@ -17,6 +17,8 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
     STREAM_ERROR("模型返回错误：", false),
     EMPTY_CONTENT("模型未返回内容，请重试", true),
     PARSE_ERROR("响应格式异常，请重试或更换模型", false),
+    // H2: finish_reason=length，回答被模型按长度上限截断，不可重试（重试仍会截断）
+    OUTPUT_TRUNCATED("回答已达长度上限被截断", false),
     UNKNOWN("请求失败，请稍后重试", true),
     ;
 

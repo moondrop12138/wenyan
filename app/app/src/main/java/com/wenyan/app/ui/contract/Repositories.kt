@@ -89,6 +89,8 @@ data class StreamingState(
     val transcribing: Boolean = false,
     val error: LlmError? = null,
     val memoryReceipt: String? = null,
+    /** H3: 一次性提示（如解析失败兜底「已展示原文」），UI toast 后清空 */
+    val notice: String? = null,
 )
 
 /**
@@ -118,6 +120,9 @@ sealed interface StreamEvent {
     data class Error(val error: LlmError) : StreamEvent
 
     data object Done : StreamEvent
+
+    /** H1: LLM 重试前发出，UI 清空已累积的增量文本/思考再继续渲染 */
+    data object Restart : StreamEvent
 }
 
 /** 归一错误（llm-contract.md §4 错误码映射，UI 侧 ErrorCard 按 code 取标题文案） */

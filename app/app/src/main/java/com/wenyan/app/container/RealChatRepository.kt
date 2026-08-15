@@ -212,8 +212,9 @@ class RealChatRepository(
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                is LlmEvent.Restart -> emit(StreamEvent.Restart)
                 is LlmEvent.Done -> {
-                    // v1.6 统一结构化落库：解析失败不落库（Room 无脏数据），流结束置 Done
+                    // v1.6 统一结构化落库：解析失败兜底（H3）落库 freetext 展示原文，流结束置 Done
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
                         conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
@@ -243,6 +244,10 @@ class RealChatRepository(
                         conversationRepository.updateSessionState(sid, newState.toJson())
                         val card = UiMappers.toCoachCard(analysis)
                         emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
+                    } else {
+                        // H3: 解析失败不丢内容——原始回复以 freetext 落库展示，并提示
+                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                        _streamingState.update { it.copy(notice = PARSE_FALLBACK_NOTICE) }
                     }
                     emit(StreamEvent.Done)
                 }
@@ -329,6 +334,10 @@ class RealChatRepository(
                 when (event) {
                     is LlmEvent.Delta -> transcription.append(event.text)
                     is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                    is LlmEvent.Restart -> {
+                        transcription.clear()
+                        emit(StreamEvent.Restart)
+                    }
                     is LlmEvent.Failed -> emit(StreamEvent.Error(UiMappers.toLlmError(event.error)))
                     is LlmEvent.Done -> {
                         if (transcription.isBlank()) {
@@ -362,6 +371,7 @@ class RealChatRepository(
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                is LlmEvent.Restart -> emit(StreamEvent.Restart)
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -372,6 +382,10 @@ class RealChatRepository(
                             memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
+                    } else {
+                        // H3: 解析失败兜底——原始回复以 freetext 落库展示
+                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                        _streamingState.update { it.copy(notice = PARSE_FALLBACK_NOTICE) }
                     }
                     emit(StreamEvent.Done)
                 }
@@ -454,6 +468,7 @@ class RealChatRepository(
             is StreamEvent.Error -> _streamingState.update {
                 it.copy(streaming = false, error = event.error, transcribing = false)
             }
+            StreamEvent.Restart -> _streamingState.update { it.copy(text = "", thinking = "") }
             StreamEvent.Done -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
         }
     }
@@ -602,6 +617,7 @@ class RealChatRepository(
             when (event) {
                 is LlmEvent.Delta -> emit(StreamEvent.Delta(event.text))
                 is LlmEvent.Thinking -> emit(StreamEvent.Thinking(event.text))
+                is LlmEvent.Restart -> emit(StreamEvent.Restart)
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
@@ -612,6 +628,10 @@ class RealChatRepository(
                             memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
+                    } else {
+                        // H3: 解析失败兜底——原始回复以 freetext 落库展示
+                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                        _streamingState.update { it.copy(notice = PARSE_FALLBACK_NOTICE) }
                     }
                     emit(StreamEvent.Done)
                 }
@@ -792,5 +812,8 @@ class RealChatRepository(
         const val MEMORY_TIMEOUT_MS = 20_000L
         /** v1.7.2：记忆提炼 system prompt，只输出 JSON */
         const val MEMORY_SYSTEM_PROMPT = "你是记忆提炼器。只输出 JSON，不加解释。"
+
+        /** H3: 解析失败兜底提示（原始回复已以 freetext 展示） */
+        const val PARSE_FALLBACK_NOTICE = "模型输出格式异常，已展示原文"
     }
 }

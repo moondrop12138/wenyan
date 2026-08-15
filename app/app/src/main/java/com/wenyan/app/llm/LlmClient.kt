@@ -80,6 +80,8 @@ class LlmClient(
                             close()
                         } else {
                             attempt++
+                            // H1: 重试前通知 UI 清空已渲染增量，避免与重试后新流拼接重复
+                            trySend(LlmEvent.Restart)
                             val delay = retryPolicy.delayWithRetryAfter(attempt, event.retryAfterSeconds)
                             this@callbackFlow.launch {
                                 kotlinx.coroutines.delay(delay)
@@ -173,7 +175,7 @@ class LlmClient(
                 }
                 if (chunk.finishReason != null) {
                     eventSource.cancel()
-                    settle(resolveDone(accumulator.toString()))
+                    settle(resolveDone(accumulator.toString(), chunk.finishReason))
                 }
             }
 
@@ -185,12 +187,12 @@ class LlmClient(
         return EventSources.createFactory(client).newEventSource(httpRequest, listener)
     }
 
-    private fun resolveDone(text: String): SingleResult =
-        if (text.isBlank()) {
-            SingleResult.Retryable(LlmErrorCode.EMPTY_CONTENT)
-        } else {
-            SingleResult.Success(text)
-        }
+    private fun resolveDone(text: String, finishReason: String?): SingleResult = when {
+        // H2: finish_reason=length 是模型因上下文/输出上限截断，不是成功——透出不可重试的截断错误
+        finishReason == "length" -> SingleResult.Fatal(LlmErrorCode.OUTPUT_TRUNCATED)
+        text.isBlank() -> SingleResult.Retryable(LlmErrorCode.EMPTY_CONTENT)
+        else -> SingleResult.Success(text)
+    }
 
     private fun classifyFailure(t: Throwable?, response: Response?): SingleResult {
         if (response != null) {
