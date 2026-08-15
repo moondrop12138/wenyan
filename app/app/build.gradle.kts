@@ -129,6 +129,8 @@ dependencies {
     implementation(libs.activity.compose)
     // M12: EXIF 方向读取（竖拍照片旋转修正）
     implementation(libs.exifinterface)
+    // O8: Baseline Profile（启动/首帧优化，profileinstaller 读取 bundled baseline-prof.txt）
+    implementation(libs.profileinstaller)
 
     // Room（M1：双端统一 2.7.2）
     implementation(libs.room.runtime)

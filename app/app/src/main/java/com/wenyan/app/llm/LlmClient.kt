@@ -41,6 +41,7 @@ class LlmClient(
         var attempt = 0
         val startedAt = System.currentTimeMillis()
         var deltaCount = 0
+        var firstTokenRecorded = false
         // v1.8.1 B1 修复：持有当前 EventSource 引用。重试时 launchAttempt 会创建新实例，
         // 若仍 cancel 首次的旧引用，重试中的 OkHttp 长连接在用户取消时不释放（连接泄漏）
         var currentEventSource: EventSource? = null
@@ -51,6 +52,8 @@ class LlmClient(
             "provider" to provider,
             "est_tokens" to request.estimatedInputTokens(),
         )
+        // O6: 记录请求与输入 token 估算
+        UsageMetrics.recordRequestStart(request.estimatedInputTokens())
 
         fun launchAttempt() {
             val eventSource = startEventSource(request) { event ->
@@ -63,6 +66,8 @@ class LlmClient(
                             "duration_ms" to (System.currentTimeMillis() - startedAt),
                             "delta_count" to deltaCount,
                         )
+                        // O6: 完成记录输出 token（delta 计数近似）
+                        UsageMetrics.recordCompletion(deltaCount)
                         trySend(Done(event.text))
                         close()
                     }
@@ -76,6 +81,7 @@ class LlmClient(
                                 "retries" to retryPolicy.maxRetries,
                                 "duration_ms" to (System.currentTimeMillis() - startedAt),
                             )
+                            UsageMetrics.recordFailure(event.error.name)
                             trySend(Failed(event.error, event.detail))
                             close()
                         } else {
@@ -98,14 +104,23 @@ class LlmClient(
                             "retries" to retryPolicy.maxRetries,
                             "duration_ms" to (System.currentTimeMillis() - startedAt),
                         )
+                        UsageMetrics.recordFailure(event.error.name)
                         trySend(Failed(event.error, event.detail))
                         close()
                     }
                     is SingleResult.Delta -> {
                         deltaCount++
+                        if (!firstTokenRecorded) {
+                            firstTokenRecorded = true
+                            UsageMetrics.recordFirstToken(System.currentTimeMillis() - startedAt)
+                        }
                         trySend(Delta(event.text))
                     }
                     is SingleResult.Thinking -> {
+                        if (!firstTokenRecorded) {
+                            firstTokenRecorded = true
+                            UsageMetrics.recordFirstToken(System.currentTimeMillis() - startedAt)
+                        }
                         trySend(LlmEvent.Thinking(event.text))
                     }
                 }

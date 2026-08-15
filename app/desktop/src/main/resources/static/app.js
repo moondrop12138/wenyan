@@ -936,6 +936,26 @@ async function renderSettings(col){
   g3.appendChild(undoRow);
   col.appendChild(g3);
 
+  // O6: 用量 / 诊断
+  const gMetrics = el('div','setgrp');
+  gMetrics.appendChild(el('span','gl','用量 / 诊断'));
+  const mRow = el('div','setrow glass edge');
+  mRow.appendChild(el('span','ic','📊'));
+  const mTx = el('span','tx');
+  mTx.appendChild(el('span','t','本次运行用量'));
+  mTx.appendChild(el('span','d','请求数 · 输入/输出 token · 首字延迟 · 失败分类'));
+  mRow.appendChild(mTx);
+  mRow.appendChild(el('span','ch','查看'));
+  mRow.onclick = async () => {
+    try {
+      const m = await api.get('/api/metrics');
+      const failStr = Object.entries(m.failures||{}).map(([k,v])=>k+'×'+v).join('、') || '无';
+      toast('请求 ' + m.totalRequests + ' 次 · 输入 ' + m.totalInputTokens + ' tok · 输出 ' + m.totalOutputTokens + ' tok · 首字 ' + m.avgTtftMs + 'ms · 失败: ' + failStr);
+    } catch(err){ toast('读取用量失败'); }
+  };
+  gMetrics.appendChild(mRow);
+  col.appendChild(gMetrics);
+
   // 数据管理
   const g5 = el('div','setgrp');
   g5.appendChild(el('span','gl','数据管理'));

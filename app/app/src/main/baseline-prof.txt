@@ -1,0 +1,5 @@
+HSPL
+# O8: Baseline Profile（手写最小启动画像，正式版本应由 macro benchmark 在 CI 生成覆盖热路径）
+# 覆盖 App 启动关键类，profileinstaller 在安装/首次启动时预编译（AOT）
+Lcom/wenyan/app/WenyanApp;
+Lcom/wenyan/app/MainActivity;

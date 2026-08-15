@@ -73,3 +73,5 @@ jobs:
 
       # TODO(M10): androidTest（MigrationTest 等 4 个 instrumentation 测试）需模拟器，成本高，暂不纳入；
       #            接入 emulator runner 后补齐。action 依赖建议进一步 pin 到 commit SHA（当前用 tag）。
+      # TODO(O8): Baseline Profile 正式生成需 macro benchmark + 模拟器（benchmark-macro-junit4 + BaselineProfileGenerator），
+      #           接入后产出 src/main/baseline-prof.txt 并随 APK 发布；当前为手写最小画像。

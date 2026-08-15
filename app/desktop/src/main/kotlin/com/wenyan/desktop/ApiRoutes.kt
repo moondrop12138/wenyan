@@ -128,6 +128,11 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         call.respondText("""{"ok":true,"version":"$DESKTOP_VERSION-desktop"}""", ContentType.Application.Json)
     }
 
+    /** O6: 用量指标（进程内累计；仅计数/耗时，不含用户消息原文） */
+    get("/api/metrics") {
+        call.respondJson(com.wenyan.app.llm.UsageMetrics.toJson())
+    }
+
     /** 诊断：报告正在运行的服务进程实际加载的 ImageIO 解码器（排查格式支持用） */
     get("/api/debug/imageio") {
         javax.imageio.ImageIO.scanForPlugins()
