@@ -13,6 +13,7 @@ import com.wenyan.app.data.repository.ProviderRepository
 import com.wenyan.app.domain.ConversationState
 import com.wenyan.app.domain.ConversationStateTracker
 import com.wenyan.app.domain.HistoryCompactor
+import com.wenyan.app.domain.MemoryConflictDetector
 import com.wenyan.app.domain.MemoryExtractor
 import com.wenyan.app.knowledge.CrisisDetector
 import com.wenyan.app.knowledge.KnowledgeEngine
@@ -817,6 +818,11 @@ class RealChatRepository(
         val merged = MemoryExtractor.mergeFacts(existing, facts.map { it.text })
         val toAdd = merged.drop(existing.size)
         if (toAdd.isEmpty()) return
+        // O2: 冲突检测——新事实与既有事实矛盾时提示（记忆页裁决）
+        val conflictCount = toAdd.sumOf { MemoryConflictDetector.findConflicts(it, existing).size }
+        if (conflictCount > 0) {
+            _streamingState.update { it.copy(notice = "发现 $conflictCount 条与已记住事实可能矛盾，请到记忆页确认") }
+        }
         if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
             Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
             return
