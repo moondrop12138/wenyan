@@ -23,6 +23,10 @@ interface MemoryFactDao {
     @Query("SELECT * FROM memory_fact WHERE targetId = :targetId ORDER BY createdAt DESC, id DESC")
     suspend fun listByTarget(targetId: Long): List<MemoryFactEntity>
 
+    /** L5: 单档案事实计数（COUNT 查询，替代全表拉取） */
+    @Query("SELECT COUNT(*) FROM memory_fact WHERE targetId = :targetId")
+    suspend fun countByTarget(targetId: Long): Int
+
     @Query("SELECT * FROM memory_fact WHERE id = :id")
     suspend fun getById(id: Long): MemoryFactEntity?
 

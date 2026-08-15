@@ -38,7 +38,7 @@ class RealAppContainer(
         database.providerDao(), database.modelDao(), cipher
     )
     private val profileRepository = ProfileRepository(
-        database.profileDao(), database.targetDao(), database.memoryFactDao()
+        database.profileDao(), database.targetDao(), database.memoryFactDao(), database
     )
     private val conversationRepository = ConversationRepository(
         database.sessionDao(), database.messageDao()

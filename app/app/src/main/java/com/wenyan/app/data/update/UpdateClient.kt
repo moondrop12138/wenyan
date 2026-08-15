@@ -54,6 +54,8 @@ class UpdateClient(
             val request = Request.Builder()
                 .url("https://api.github.com/repos/$repo/releases?per_page=100")
                 .header("Accept", "application/vnd.github+json")
+                // L8: GitHub 要求带 User-Agent，否则 403（未认证限流 60/h）
+                .header("User-Agent", "wenyan-update-checker")
                 .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@runCatching null

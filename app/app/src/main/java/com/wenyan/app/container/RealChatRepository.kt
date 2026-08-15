@@ -680,7 +680,6 @@ class RealChatRepository(
                         model = client.model,
                         system = TITLE_SYSTEM_PROMPT,
                         userText = SessionTitle.buildTitlePrompt(userLine, replyLine),
-                        temperature = 0.3,
                     ),
                 ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
             }
@@ -759,7 +758,7 @@ class RealChatRepository(
                     val prompt = MemoryExtractor.buildPrompt(userInput, reply, existing.joinToString("；"))
                     val client = resolveClient() ?: return@withLock
                     val json = client.client.stream(
-                        ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt, temperature = 0.3),
+                        ChatRequest(client.model, MEMORY_SYSTEM_PROMPT, prompt),
                     ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
                     val facts = MemoryExtractor.parseFacts(json ?: "")
                     val merged = MemoryExtractor.mergeFacts(existing, facts.map { it.text })

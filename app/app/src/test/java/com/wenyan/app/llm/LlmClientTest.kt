@@ -117,7 +117,7 @@ class LlmClientTest {
     @Test
     fun `invalid json chunk maps to parse error fatal`() = runBlocking {
         server.enqueue(
-            sseResponse("data: not-json-at-all")
+            sseResponse("data: {not-json-at-all")
         )
         val events = client.stream(ChatRequest("m", "s", "u")).toList()
         assertEquals(1, server.requestCount)

@@ -432,6 +432,8 @@ private class FakeMemoryFactDao : MemoryFactDao {
     override suspend fun listByTarget(targetId: Long): List<MemoryFactEntity> =
         store.filter { it.targetId == targetId }.sortedByDescending { it.id }
 
+    override suspend fun countByTarget(targetId: Long): Int = store.count { it.targetId == targetId }
+
     override suspend fun getById(id: Long): MemoryFactEntity? = store.firstOrNull { it.id == id }
 
     override suspend fun insert(entity: MemoryFactEntity): Long {

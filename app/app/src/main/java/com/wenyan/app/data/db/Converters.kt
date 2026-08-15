@@ -9,7 +9,12 @@ import org.json.JSONArray
  */
 class Converters {
     @TypeConverter
-    fun fromJsonArray(value: String): JSONArray = JSONArray(value)
+    fun fromJsonArray(value: String): JSONArray = try {
+        JSONArray(value)
+    } catch (e: Exception) {
+        // L4: 非法 JSON 返回空数组，不抛异常（防历史脏数据崩溃）
+        JSONArray()
+    }
 
     @TypeConverter
     fun toJsonArray(value: JSONArray): String = value.toString()

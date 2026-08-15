@@ -49,13 +49,13 @@ object MemoryExtractor {
         append("- expires_in：仅当信息明确有时效（如\"今天\"\"这周\"\"今晚\"相关），填 today（次日零点失效）或 week（下周一零点失效）；无时效信息填 null 或省略；\n")
         append("- 只提炼客观、可长期记住的信息，不提炼一次性情绪或建议；\n")
         if (existingNote.isNotBlank()) {
-            append("- 以下事实已记住，重复内容不要再输出：\n").append(existingNote.take(2000)).append("\n")
+            append("- 以下事实已记住，重复内容不要再输出：\n").append(takeCodePoints(existingNote, 2000)).append("\n")
         } else {
             append("- 没有已记住的内容。\n")
         }
         append("- 没有新事实时输出 {\"facts\":[]}。\n\n")
-        append("用户输入：").append(userInput.take(1000)).append("\n")
-        append("军师回复：").append(replyText.take(2000)).append("\n")
+        append("用户输入：").append(takeCodePoints(userInput, 1000)).append("\n")
+        append("军师回复：").append(takeCodePoints(replyText, 2000)).append("\n")
         append("输出：")
     }
 
@@ -181,6 +181,14 @@ object MemoryExtractor {
         if (a.contains(b) || b.contains(a)) return true
         val prefix = b.take(6)
         return prefix.length >= 6 && a.contains(prefix)
+    }
+
+    /** L10: codePoint 安全截断（不切断 UTF-16 代理对，如 emoji） */
+    private fun takeCodePoints(text: String, max: Int): String {
+        if (text.length <= max) return text
+        var end = max
+        if (end < text.length && Character.isLowSurrogate(text[end])) end--
+        return text.substring(0, end)
     }
 
     /** 去掉 ```json 围栏（对齐 AnalysisParser.stripFence） */

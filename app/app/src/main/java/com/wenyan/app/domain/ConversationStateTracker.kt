@@ -89,7 +89,7 @@ class ConversationStateTracker {
         val t = userInput.trim()
         if (t.isEmpty()) return true
         // 完整聊天记录粘贴 = 新分析任务，换题
-        if (t.contains('\n') && t.contains("：")) return false
+        if (t.contains('\n') && (t.contains("：") || t.contains(":"))) return false
         // 追问/指代开场 = 强同题信号
         if (FOLLOW_UP_PATTERN.containsMatchIn(t)) return true
         // 与话题摘要共享实义词 = 同题

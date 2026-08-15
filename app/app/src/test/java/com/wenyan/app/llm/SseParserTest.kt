@@ -72,11 +72,18 @@ class SseParserTest {
 
     @Test
     fun `invalid json marks parse error`() {
-        val chunk = SseParser.parseDataLine("not-json")
+        val chunk = SseParser.parseDataLine("{not-json")
         assertTrue(chunk?.parseError == true)
         assertNull(chunk?.contentDelta)
         assertNull(chunk?.finishReason)
         assertNull(chunk?.streamError)
+    }
+
+    @Test
+    fun `keepalive non json line ignored`() {
+        // L3: data: ping 等非 JSON keepalive 行不再误判 PARSE_ERROR
+        assertNull(SseParser.parseDataLine("ping"))
+        assertNull(SseParser.parseDataLine(": keep-alive"))
     }
 
     @Test

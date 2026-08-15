@@ -231,9 +231,21 @@ dependencies {
 // 知识库完整性校验 + 路由表生成（AC-17 构建门禁）
 tasks.register<Exec>("knowledgeCheck") {
     workingDir = rootProject.projectDir
-    commandLine("python", "scripts/gen_routes.py")
+    // L12: python 缺失/是 Windows Store stub 时回退 python3；都缺失则清晰报错
+    commandLine(findPython(), "scripts/gen_routes.py")
     // gen_routes.py 校验 41 份文档齐全、生成 routes-v2.json；缺失/不匹配即非零退出
 }
 tasks.named("preBuild") {
     dependsOn("knowledgeCheck")
 }
+
+fun findPython(): String =
+    listOf("python", "python3").firstOrNull { cmd ->
+        try {
+            val p = ProcessBuilder(cmd, "--version").redirectErrorStream(true).start()
+            p.waitFor()
+            p.exitValue() == 0
+        } catch (e: Exception) {
+            false
+        }
+    } ?: throw GradleException("knowledgeCheck 需要 python 或 python3，请先安装（Windows 可用 winget install Python.Python.3.12）")

@@ -19,6 +19,8 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
     PARSE_ERROR("响应格式异常，请重试或更换模型", false),
     // H2: finish_reason=length，回答被模型按长度上限截断，不可重试（重试仍会截断）
     OUTPUT_TRUNCATED("回答已达长度上限被截断", false),
+    // L2: context length exceeded 等 400/413/422 归一为上下文过长（不可重试，重试仍会超）
+    CONTEXT_TOO_LONG("上下文过长，请缩短输入或更换模型", false),
     UNKNOWN("请求失败，请稍后重试", true),
     ;
 
@@ -32,9 +34,12 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
 object ErrorMapper {
 
     fun fromHttpStatus(status: Int): LlmErrorCode = when (status) {
+        400 -> LlmErrorCode.CONTEXT_TOO_LONG
         401 -> LlmErrorCode.UNAUTHORIZED
         403 -> LlmErrorCode.FORBIDDEN
         404 -> LlmErrorCode.MODEL_NOT_FOUND
+        413 -> LlmErrorCode.CONTEXT_TOO_LONG
+        422 -> LlmErrorCode.CONTEXT_TOO_LONG
         429 -> LlmErrorCode.RATE_LIMITED
         in 500..599 -> LlmErrorCode.SERVER_ERROR
         else -> LlmErrorCode.UNKNOWN

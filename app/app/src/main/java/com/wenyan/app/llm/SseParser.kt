@@ -31,6 +31,8 @@ object SseParser {
      */
     fun parseDataLine(data: String): Chunk? {
         if (data.isBlank() || data == DONE) return null
+        // L3: 仅对以 { 开头的行做 JSON 解析（data: ping 等 keepalive 行直接忽略，不误判 PARSE_ERROR）
+        if (!data.trimStart().startsWith("{")) return null
 
         val json = try {
             JSONObject(data)

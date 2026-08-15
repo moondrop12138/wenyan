@@ -22,11 +22,6 @@ data class ChatRequest(
     val userText: String,
     /** v1.6.1 多图：一次请求可携带最多 [MAX_IMAGES_PER_REQUEST] 张图（content 数组多 image_url part） */
     val imageDataUrls: List<String> = emptyList(),
-    /**
-     * 历史兼容字段：v1.7.x 起不再写入请求体（thinking-only 模型只允许 temperature=1）。
-     * 保留参数避免改调用方；如需服务端调整，请直接用 system prompt 约束。
-     */
-    val temperature: Double = 0.7,
     /** 同会话历史消息，注入在 system 之后、当前 user 之前 */
     val history: List<ChatHistoryMessage> = emptyList(),
 )

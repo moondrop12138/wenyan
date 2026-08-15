@@ -9,6 +9,7 @@ import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.domain.MemoryExtractor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import androidx.room.withTransaction
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -25,6 +26,8 @@ class ProfileRepository(
     private val profileDao: ProfileDao,
     private val targetDao: TargetDao,
     private val memoryFactDao: MemoryFactDao,
+    /** L5: RoomDatabase（可选，注入后 migrate 走 withTransaction；测试注入 null 走直连） */
+    private val database: androidx.room.RoomDatabase? = null,
 ) {
     /**
      * v1.7.4 搬移互斥锁：检查-插入-清空三步非原子，注入链与提炼链并发会重复插入；
@@ -115,7 +118,7 @@ class ProfileRepository(
 
     suspend fun deleteFact(factId: Long) = memoryFactDao.deleteById(factId)
 
-    suspend fun countFacts(targetId: Long): Int = memoryFactDao.listByTarget(targetId).size
+    suspend fun countFacts(targetId: Long): Int = memoryFactDao.countByTarget(targetId)
 
     /**
      * v1.7.4 惰性搬移（幂等 + 并发安全）：老 note 数据首访时拆分为 facts 后清空 note。
@@ -128,14 +131,20 @@ class ProfileRepository(
      */
     suspend fun migrateNoteToFactsOnce(targetId: Long) {
         migrateMutex.withLock {
-            val target = getTarget(targetId) ?: return
-            if (target.note.isBlank()) return
-            val existing = getFacts(targetId).map { it.text }
-            val segments = MemoryExtractor.splitNoteToFacts(target.note).take(MemoryExtractor.DEFAULT_FACT_LIMIT)
-            val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.size)
-            toAdd.forEach { memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = it)) }
-            targetDao.clearNote(targetId)
+            // L5: 多次 INSERT + 清 note 包进事务（database 可用时）；测试无数据库则直连
+            val db = database
+            if (db != null) db.withTransaction { doMigrate(targetId) } else doMigrate(targetId)
         }
+    }
+
+    private suspend fun doMigrate(targetId: Long) {
+        val target = getTarget(targetId) ?: return
+        if (target.note.isBlank()) return
+        val existing = getFacts(targetId).map { it.text }
+        val segments = MemoryExtractor.splitNoteToFacts(target.note).take(MemoryExtractor.DEFAULT_FACT_LIMIT)
+        val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.size)
+        toAdd.forEach { memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = it)) }
+        targetDao.clearNote(targetId)
     }
 
     /**
