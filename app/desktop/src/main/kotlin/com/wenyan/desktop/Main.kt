@@ -1,6 +1,9 @@
 package com.wenyan.desktop
 
 import com.wenyan.app.data.db.AppDatabase
+import com.wenyan.app.llm.DesktopMetricsStore
+import com.wenyan.app.llm.UsageMetrics
+import com.wenyan.app.log.AppLogger
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -39,6 +42,12 @@ const val DESKTOP_VERSION = "1.9.2"
 fun main() {
     // 更新检查走系统代理（本机 Git 代理场景直连 api.github.com 会失败；用户走系统代理时 HttpURLConnection 自动生效）
     System.setProperty("java.net.useSystemProxies", "true")
+
+    // O6: 启动时恢复用量指标并接管后续写盘
+    UsageMetrics.attachStore(DesktopMetricsStore())
+
+    // O4: 桌面日志 sink（stdout）
+    AppLogger.sink = { level, line -> println("[Wenyan/$level] $line") }
 
     val service = WenyanService()
     // 首次启动注入预设提供商/模型（幂等）

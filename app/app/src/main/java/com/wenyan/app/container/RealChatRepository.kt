@@ -10,6 +10,7 @@ import com.wenyan.app.data.image.ImageCompressor
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
+import com.wenyan.app.domain.ChatOrchestrator
 import com.wenyan.app.domain.ConversationState
 import com.wenyan.app.domain.ConversationStateTracker
 import com.wenyan.app.domain.HistoryCompactor
@@ -692,7 +693,7 @@ class RealChatRepository(
         } else {
             replyFullText
         }
-        val (userLine, replyLine) = SessionTitle.buildTitleMaterial(userText, replyMaterial)
+        val (userLine, replyLine) = ChatOrchestrator.buildTitleMaterial(userText, replyMaterial)
         if (userLine.isBlank()) return
 
         val title = runCatching {
@@ -702,7 +703,7 @@ class RealChatRepository(
                     ChatRequest(
                         model = client.model,
                         system = TITLE_SYSTEM_PROMPT,
-                        userText = SessionTitle.buildTitlePrompt(userLine, replyLine),
+                        userText = ChatOrchestrator.buildTitlePrompt(userLine, replyLine),
                     ),
                 ).filterIsInstance<LlmEvent.Done>().firstOrNull()?.fullText
             }
@@ -722,25 +723,14 @@ class RealChatRepository(
      * 新话题时提炼话题摘要：取用户输入的前 24 字（足够模型对齐"在聊什么"）。
      * 模型输出仅作补充——empathy 首句（空则 advice.core）关键词追加在后面，总长控制在 40 字内。
      */
-    private fun summarizeTopic(userInput: String, analysis: CoachAnalysis): String {
-        val base = userInput.replace(Regex("\\s+"), " ").take(24)
-        val firstSentence = analysis.empathy.ifBlank { analysis.advice.core }
-            .replace(Regex("[#*>`\\-]"), "")
-            .split(Regex("[。！？\n]"))
-            .firstOrNull { it.isNotBlank() }
-            ?.trim()
-            ?.take(16)
-            .orEmpty()
-        return if (firstSentence.isBlank()) base else "$base｜$firstSentence".take(40)
-    }
+    private fun summarizeTopic(userInput: String, analysis: CoachAnalysis): String =
+        ChatOrchestrator.summarizeTopic(userInput, analysis)
 
     /**
      * 提炼本轮结论摘要：advice.core（空则 empathy 首句，至多 40 字），作为"已给结论"记入状态。
      */
     private fun summarizeConclusion(analysis: CoachAnalysis): String =
-        analysis.advice.core.ifBlank {
-            analysis.empathy.split(Regex("[。！？\n]")).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-        }.replace(Regex("[#*>`\\-]"), "").take(40)
+        ChatOrchestrator.summarizeConclusion(analysis)
 
     // ===== v1.7.2 自动记忆提炼辅助 =====
 
@@ -753,9 +743,9 @@ class RealChatRepository(
     private suspend fun shouldExtractMemory(sid: Long, state: ConversationState, userInput: String): Boolean {
         if (!dataStore.memoryAutoEnabled.first()) return false
         val targetId = conversationRepository.getSession(sid)?.targetId ?: return false
-        if (profileRepository.getTarget(targetId) == null) return false
-        // M2: 与桌面端对齐——过短输入（<10 字）不提炼记忆
-        return userInput.length >= 10 && (!state.hasActiveTopic || !stateTracker.isSameTopic(state, userInput))
+        val hasTarget = profileRepository.getTarget(targetId) != null
+        // M2/O4: 双端统一判定收敛到 ChatOrchestrator
+        return ChatOrchestrator.shouldExtractMemory(state, userInput, memoryAutoEnabled = true, hasTarget = hasTarget)
     }
 
     /**

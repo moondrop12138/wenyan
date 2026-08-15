@@ -2,6 +2,7 @@ package com.wenyan.desktop
 
 import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.TargetEntity
+import com.wenyan.app.domain.ChatOrchestrator
 import com.wenyan.app.domain.ConversationState
 import com.wenyan.app.domain.ConversationStateTracker
 import com.wenyan.app.domain.HistoryCompactor
@@ -188,7 +189,8 @@ class ChatEngine(
                         } else {
                             sideEffectScope.launch { generateTitleOnce(sessionId, text, event.fullText, resolved) }
                         }
-                        if (session.targetId != null && shouldExtractMemory(state, text)) {
+                        val targetId = session.targetId
+                        if (targetId != null && shouldExtractMemory(state, text)) {
                             val source = if (routeByInputShape(text) == InputShape.CHAT_LOG) {
                                 MemoryFactEntity.SOURCE_PASTE
                             } else {
@@ -199,9 +201,9 @@ class ChatEngine(
                                 val facts = analysis.newFacts.map {
                                     MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
                                 }
-                                sideEffectScope.launch { persistFacts(session.targetId, facts, source, text) }
+                                sideEffectScope.launch { persistFacts(targetId, facts, source, text) }
                             } else {
-                                sideEffectScope.launch { extractMemoryOnce(session.targetId, text, event.fullText, resolved, source) }
+                                sideEffectScope.launch { extractMemoryOnce(targetId, text, event.fullText, resolved, source) }
                             }
                         }
                     } else {
@@ -333,14 +335,15 @@ class ChatEngine(
                         } else {
                             sideEffectScope.launch { generateTitleOnce(sessionId, transcription, event.fullText, resolved) }
                         }
-                        if (session.targetId != null && shouldExtractMemory(state, transcription)) {
+                        val targetId = session.targetId
+                        if (targetId != null && shouldExtractMemory(state, transcription)) {
                             if (analysis.newFacts.isNotEmpty()) {
                                 val facts = analysis.newFacts.map {
                                     MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
                                 }
-                                sideEffectScope.launch { persistFacts(session.targetId, facts, MemoryFactEntity.SOURCE_TRANSCRIPTION, transcription) }
+                                sideEffectScope.launch { persistFacts(targetId, facts, MemoryFactEntity.SOURCE_TRANSCRIPTION, transcription) }
                             } else {
-                                sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
+                                sideEffectScope.launch { extractMemoryOnce(targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                             }
                         }
                     } else {
@@ -442,7 +445,7 @@ class ChatEngine(
         // v1.9.1：expiresAt 已到期条目过滤不注入；transcription 来源带「（来自截图转述）」标注
         val now = System.currentTimeMillis()
         return service.listFacts(targetId)
-            .filter { fact -> fact.expiresAt == null || fact.expiresAt > now }
+            .filter { fact -> val expires = fact.expiresAt; expires == null || expires > now }
             .joinToString("；") { fact ->
                 val annotation = when {
                     fact.kind == com.wenyan.app.data.db.MemoryFactEntity.KIND_HYPOTHESIS -> "（推测，待验证）"
@@ -501,13 +504,18 @@ class ChatEngine(
     }
 
     private fun shouldExtractMemory(state: ConversationState, text: String): Boolean =
-        service.isMemoryAutoEnabled() && !state.hasActiveTopic && text.length >= 10
+        ChatOrchestrator.shouldExtractMemory(
+            state = state,
+            userInput = text,
+            memoryAutoEnabled = service.isMemoryAutoEnabled(),
+            hasTarget = true,
+        )
 
     private fun summarizeTopic(text: String, analysis: CoachAnalysis): String =
-        analysis.facts.known.firstOrNull()?.take(30) ?: text.take(30)
+        ChatOrchestrator.summarizeTopic(text, analysis)
 
     private fun summarizeConclusion(analysis: CoachAnalysis): String =
-        analysis.advice.core.ifBlank { analysis.empathy.lineSequence().firstOrNull().orEmpty() }.take(80)
+        ChatOrchestrator.summarizeConclusion(analysis)
 
     private fun parseSafety(hit: String): CoachAnalysis = AnalysisParser.parseAny(
         """{"input_kind":"user_question","empathy":"","reply":"","reply_timing":"","facts":{"known":[],"assumed":[],"unknown":[]},"advice":{"tag":"","core":"","reasons":[],"styles":[]},"actions":[],"citations":[],"safety_override":true,"safety_message":"检测到可能涉及安全风险的表述（$hit）。请优先确保自己的人身安全：离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。","token_estimate":0}"""

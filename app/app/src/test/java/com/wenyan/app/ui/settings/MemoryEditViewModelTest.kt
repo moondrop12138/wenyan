@@ -6,6 +6,7 @@ import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
 import com.wenyan.app.ui.contract.TargetUi
+import com.wenyan.app.ui.contract.UsageMetricsUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -87,6 +88,8 @@ private class FakeSettingsRepoForMemoryEdit : SettingsRepository {
     override suspend fun setVisionFlag(id: Long, supportsVision: Boolean) = Unit
     override suspend fun markConnectionStatus(providerId: Long, ok: Boolean) = Unit
     override suspend fun wipeAll() = Unit
+    override suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String> = false to "测试未实现"
+    override fun usageMetrics(): UsageMetricsUi = UsageMetricsUi(0L, 0L, 0L, 0L, emptyMap())
     override suspend fun setPrivacyAck(ack: Boolean) = Unit
     override suspend fun createTarget(name: String): Long = 0L
     override suspend fun updateTarget(id: Long, name: String, note: String) = Unit

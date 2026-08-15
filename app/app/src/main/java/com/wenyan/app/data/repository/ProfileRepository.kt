@@ -158,7 +158,7 @@ class ProfileRepository(
         migrateNoteToFactsOnce(targetId)
         val now = System.currentTimeMillis()
         return memoryFactDao.listByTarget(targetId)
-            .filter { fact -> fact.expiresAt == null || fact.expiresAt > now }
+            .filter { fact -> val expires = fact.expiresAt; expires == null || expires > now }
             .joinToString("；") { fact ->
                 val annotation = when {
                     fact.kind == MemoryFactEntity.KIND_HYPOTHESIS -> "（推测，待验证）"

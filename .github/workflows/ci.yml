@@ -26,26 +26,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # M10: pin 到 commit SHA（tag 可漂移；SHA 为当前 v4 所指向提交）
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Android SDK
         # 设置 ANDROID_HOME / ANDROID_SDK_ROOT；AGP 按需自动下载缺失 platform/build-tools
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
 
       - name: Set up Python
         # knowledgeCheck 通过 `python` 命令调用 gen_routes.py；setup-python 同时提供 python/python3
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
             ~/.gradle/caches
@@ -65,13 +66,13 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: wenyan-debug-apk
           path: app/app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
 
       # TODO(M10): androidTest（MigrationTest 等 4 个 instrumentation 测试）需模拟器，成本高，暂不纳入；
-      #            接入 emulator runner 后补齐。action 依赖建议进一步 pin 到 commit SHA（当前用 tag）。
-      # TODO(O8): Baseline Profile 正式生成需 macro benchmark + 模拟器（benchmark-macro-junit4 + BaselineProfileGenerator），
-      #           接入后产出 src/main/baseline-prof.txt 并随 APK 发布；当前为手写最小画像。
+      #            接入 emulator runner 后补齐。action 依赖已 pin 到 commit SHA（2026-08 更新）。
+      # TODO(O8): Baseline Profile 正式生成见 .github/workflows/baseline-profile.yml（AGP Managed Device 模拟器），
+      #           独立触发避免拖慢主 CI；生成后回写 app/src/main/baseline-prof.txt。当前基线为手写最小画像。

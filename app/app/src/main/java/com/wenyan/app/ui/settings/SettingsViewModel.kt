@@ -12,6 +12,7 @@ import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
 import com.wenyan.app.ui.contract.TargetUi
+import com.wenyan.app.ui.contract.UsageMetricsUi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,20 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     private val _showWipeDialog = MutableStateFlow(false)
     val showWipeDialog: StateFlow<Boolean> = _showWipeDialog.asStateFlow()
+
+    // O1: 从备份恢复
+    private val _showImportDialog = MutableStateFlow(false)
+    val showImportDialog: StateFlow<Boolean> = _showImportDialog.asStateFlow()
+
+    // O6: 用量/诊断面板
+    private val _showUsageDialog = MutableStateFlow(false)
+    val showUsageDialog: StateFlow<Boolean> = _showUsageDialog.asStateFlow()
+
+    private val _usage = MutableStateFlow<UsageMetricsUi?>(null)
+    val usage: StateFlow<UsageMetricsUi?> = _usage.asStateFlow()
+
+    var importing by mutableStateOf(false)
+        private set
 
     // ===== v1.7.2 记忆档案 =====
 
@@ -123,6 +138,35 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     fun acceptPrivacy() {
         _showPrivacyDialog.value = false
         viewModelScope.launch { repo.setPrivacyAck(true) }
+    }
+
+    fun requestUsage() {
+        _usage.value = repo.usageMetrics()
+        _showUsageDialog.value = true
+    }
+
+    fun dismissUsage() {
+        _showUsageDialog.value = false
+    }
+
+    fun requestImport() {
+        _showImportDialog.value = true
+    }
+
+    fun dismissImport() {
+        _showImportDialog.value = false
+    }
+
+    /** O1: 选中的备份 JSON 文件 → 清空重建导入；成功/失败均 Toast 反馈 */
+    fun confirmImport(uri: Uri) {
+        _showImportDialog.value = false
+        if (importing) return
+        importing = true
+        viewModelScope.launch {
+            val (ok, error) = repo.importBackup(uri)
+            importing = false
+            _toastMessage.value = if (ok) "恢复完成：API Key 已脱敏，请重新输入" else error
+        }
     }
 
     fun requestWipe() {

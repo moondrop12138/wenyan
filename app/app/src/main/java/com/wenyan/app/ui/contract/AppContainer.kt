@@ -4,6 +4,15 @@ import com.wenyan.app.data.update.UpdateCheckResult
 import com.wenyan.app.data.update.UpdateInfo
 import kotlinx.coroutines.flow.Flow
 
+/** O6: 设置页「用量/诊断」面板展示的快照 */
+data class UsageMetricsUi(
+    val totalRequests: Long,
+    val totalInputTokens: Long,
+    val totalOutputTokens: Long,
+    val avgTtftMs: Long,
+    val failures: Map<String, Long>,
+)
+
 /**
  * 设置项 Repository（DataStore + Room provider/model 表）。后端实现。
  */
@@ -119,6 +128,12 @@ interface SettingsRepository {
 
     /** v1.7.3 T4 唤起系统安装器（FileProvider + ACTION_VIEW）；返回是否成功发起 */
     suspend fun installApk(file: java.io.File): Boolean
+
+    /** O1: 从备份 JSON 恢复（Android 设置页选文件）；成功返回 (true, "")，失败返回 (false, 错误信息) */
+    suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String>
+
+    /** O6: 读取当前进程内的用量快照（已在启动时从本地文件恢复） */
+    fun usageMetrics(): UsageMetricsUi
 }
 
 /**

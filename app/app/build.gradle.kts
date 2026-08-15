@@ -132,6 +132,9 @@ dependencies {
     // O8: Baseline Profile（启动/首帧优化，profileinstaller 读取 bundled baseline-prof.txt）
     implementation(libs.profileinstaller)
 
+    // O4: 共享业务逻辑（llm/domain/prompt/knowledge/data 纯逻辑，KMP commonMain）
+    implementation(project(":shared"))
+
     // Room（M1：双端统一 2.7.2）
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

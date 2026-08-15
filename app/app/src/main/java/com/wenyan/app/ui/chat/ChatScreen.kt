@@ -56,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -78,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
 import com.wenyan.app.container.UiMappers
 import com.wenyan.app.ui.components.CoachCard
 import com.wenyan.app.ui.components.CrisisCard
@@ -106,6 +108,12 @@ import kotlinx.coroutines.launch
  * 对话首页（/chat，SPEC §7 页面1）：消息流 + 空状态 + 输入栏 + 模型切换弹层。
  * 纯组装无业务逻辑；状态全部来自 ChatViewModel。
  */
+
+/** O10: 待发图片 Uri 的 saveable 存/取（每条 Uri 作为一个可保存的 String 元素） */
+private val PendingUrisSaver = listSaver<ArrayList<String>, String>(
+    save = { list -> list.toList() },
+    restore = { list -> ArrayList(list) },
+)
 @Composable
 fun ChatScreen(
     container: AppContainer,
@@ -121,19 +129,36 @@ fun ChatScreen(
     val searchQuery by vm.searchQuery.collectAsState()
     val searchResults by vm.searchResults.collectAsState()
 
-    // O10: 草稿输入 saveable——进程被杀后恢复（发送后清空）
+    // O10: 草稿输入 + 待发图片 saveable——进程被杀后恢复（发送后清空）
     val savedDraft = rememberSaveable { mutableStateOf("") }
+    val savedPendingUris = rememberSaveable(stateSaver = PendingUrisSaver) { mutableStateOf(arrayListOf<String>()) }
     val onInputChange: (String) -> Unit = { text ->
         savedDraft.value = text
         vm.onInputChange(text)
     }
+    // 首次组合：从 saveable 恢复到 VM（进程重建后 VM 为空）；restoredPending 防止
+    // 恢复前被「pendingImages 为空」的同步副作用把保存值清掉。
+    var restoredPending by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (savedDraft.value.isNotEmpty() && input.isEmpty() && !streaming) {
             vm.onInputChange(savedDraft.value)
         }
+        if (savedPendingUris.value.isNotEmpty() && pendingImages.isEmpty()) {
+            vm.addPendingImages(savedPendingUris.value.map(Uri::parse))
+        }
+        restoredPending = true
+    }
+    // 待发图片变更（增删/发送清空）→ 同步 saveable，供进程重建恢复
+    LaunchedEffect(pendingImages) {
+        if (restoredPending) {
+            savedPendingUris.value = ArrayList(pendingImages.map { it.toString() })
+        }
     }
     LaunchedEffect(streaming) {
-        if (streaming) savedDraft.value = ""
+        if (streaming) {
+            savedDraft.value = ""
+            savedPendingUris.value = arrayListOf()
+        }
     }
     val lastError by vm.lastError.collectAsState()
     val transcription by vm.transcription.collectAsState()

@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.wenyan.app.domain.MemoryConflictDetector
 import com.wenyan.app.ui.contract.MemoryFactUi
 import com.wenyan.app.ui.contract.SettingsRepository
 import com.wenyan.app.ui.contract.TargetUi
@@ -17,6 +18,12 @@ import org.json.JSONObject
 data class TimelineItemUi(
     val time: String,
     val event: String,
+)
+
+/** O2: 一对冲突事实（记忆页标红 + 用户裁决） */
+data class ConflictPairUi(
+    val a: MemoryFactUi,
+    val b: MemoryFactUi,
 )
 
 /**
@@ -54,6 +61,14 @@ class MemoryEditViewModel(
     var factDraft by mutableStateOf("")
         private set
 
+    // ---- O2: 冲突检测与裁决 ----
+    var conflictPairs by mutableStateOf<List<ConflictPairUi>>(emptyList())
+        private set
+    var conflictFactIds by mutableStateOf<Set<Long>>(emptySet())
+        private set
+    var selectedConflict by mutableStateOf<ConflictPairUi?>(null)
+        private set
+
     init {
         // v1.7.4：打开详情页先搬移老 note（merge 幂等）——防「先手工加事实、再首访」时老数据永不搬移；
         // 搬移插入的 facts 会经 observeFacts Flow 自动刷新展示
@@ -70,6 +85,7 @@ class MemoryEditViewModel(
         viewModelScope.launch {
             repo.observeFacts(targetId).collectLatest { list ->
                 facts = list
+                recomputeConflicts()
                 loading = false
             }
         }
@@ -81,7 +97,46 @@ class MemoryEditViewModel(
         mbti = t.mbti
         score = t.score ?: 0
         relationStatus = t.relationStatus
-        timeline = parseTimeline(t.timeline)
+        timeline = parseTimeline(t.timeline).sortedBy { it.time.ifBlank { "9999" } }
+    }
+
+    /** O2: 两两启发式矛盾判定（同档案内），标红冲突对供用户裁决 */
+    private fun recomputeConflicts() {
+        val list = facts
+        val pairs = mutableListOf<ConflictPairUi>()
+        for (i in 0 until list.size) {
+            for (j in i + 1 until list.size) {
+                if (MemoryConflictDetector.conflicts(list[i].text, list[j].text)) {
+                    pairs.add(ConflictPairUi(list[i], list[j]))
+                }
+            }
+        }
+        conflictPairs = pairs
+        conflictFactIds = pairs.flatMap { listOf(it.a.id, it.b.id) }.toSet()
+    }
+
+    // ---- O2: 冲突裁决 ----
+
+    fun openConflict(pair: ConflictPairUi) {
+        selectedConflict = pair
+    }
+
+    fun dismissConflict() {
+        selectedConflict = null
+    }
+
+    /** 保留 A，删除 B */
+    fun resolveConflictKeepA() {
+        val pair = selectedConflict ?: return
+        selectedConflict = null
+        viewModelScope.launch { repo.deleteFact(pair.b.id) }
+    }
+
+    /** 保留 B，删除 A */
+    fun resolveConflictKeepB() {
+        val pair = selectedConflict ?: return
+        selectedConflict = null
+        viewModelScope.launch { repo.deleteFact(pair.a.id) }
     }
 
     private fun parseTimeline(json: String): List<TimelineItemUi> {

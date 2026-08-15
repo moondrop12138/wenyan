@@ -18,7 +18,7 @@
 | 界面 | Compose 液态玻璃 | 纯静态 HTML/CSS/JS 液态玻璃 |
 | 数据 | Room SQLite，本机 | Room KMP SQLite，本机 `%APPDATA%\Wenyan` |
 | Key 加密 | Android Keystore + AES-GCM | 机器指纹派生 AES-256-GCM |
-| 业务逻辑 | 两端**物理共享同一套 Kotlin 源码**（llm / domain / prompt / knowledge / data） | 同左 |
+| 业务逻辑 | 两端共享 `:shared` KMP 模块（llm / domain / prompt / knowledge / data 纯逻辑） | 同左 |
 
 两端功能完全对齐：四段式回答、跨会话记忆档案、多模型 BYOK、测连接、截图分析、深浅色主题、数据导出/清空、检查更新。
 
@@ -44,16 +44,12 @@
 
 ```
 app/
-├── app/src/main/java/com/wenyan/app/      # 手机版 + 两端共享业务源码
+├── shared/                   # 两端共享 KMP 模块（commonMain：llm/domain/prompt/knowledge/data 纯逻辑）
+├── app/src/main/java/com/wenyan/app/      # 手机版（Android 平台接缝 + UI）
 │   ├── MainActivity.kt        # 入口：edge-to-edge + 主题装配
 │   ├── WenyanApp.kt           # Application：依赖容器装配
 │   ├── ui/                    # Compose UI（chat / settings / onboarding / navigation）
-│   ├── llm/                   # LLM 客户端（OkHttp + SSE）、解析器、错误归一、重试策略
-│   ├── domain/                # 会话状态机、输入路由
-│   ├── knowledge/             # 知识检索与危机检测
-│   ├── data/                  # Room / DataStore / 图片压缩 / 加密
-│   ├── prompt/                # Prompt 构建
-│   └── container/             # 仓库实现与 UI 映射
+│   ├── container/             # 仓库实现与 UI 映射
 ├── app/src/main/assets/knowledge/   # 40 份知识文档 + 路由表（构建门禁生成）
 │
 ├── desktop/                   # Windows 桌面版（纯 JVM 模块）
@@ -69,7 +65,7 @@ app/
 └── docs/                      # 架构 / 数据库 / LLM 契约 / 设计令牌 / ADR
 ```
 
-桌面版通过 Gradle sourceSet 物理共享手机版的纯 JVM 业务源码（`llm / domain / prompt / knowledge / data`），仅替换平台相关实现（加密、数据库驱动、图片压缩、知识资产读取），保证两端行为一致、单点维护。
+桌面版与手机版共同依赖 `:shared` KMP 模块（commonMain：`llm / domain / prompt / knowledge / data` 纯逻辑），平台差异通过接口注入 / expect-actual 处理（加密、数据库驱动、图片压缩、知识资产读取、日志 sink），保证两端行为一致、单点维护。
 
 设计细节见 [docs/architecture.md](docs/architecture.md)、[docs/llm-contract.md](docs/llm-contract.md)、[docs/db-schema.md](docs/db-schema.md)。
 

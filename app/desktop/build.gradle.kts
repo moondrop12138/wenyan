@@ -27,36 +27,9 @@ application {
     mainClass.set("com.wenyan.desktop.MainKt")
 }
 
-// 共享 Android 业务源码根
-val appSharedSrc = rootProject.file("app/src/main/java/com/wenyan/app")
-
-sourceSets {
-    main {
-        kotlin {
-            // 业务逻辑层（llm/domain/prompt 零 android import）
-            srcDir("$appSharedSrc/llm")
-            srcDir("$appSharedSrc/domain")
-            srcDir("$appSharedSrc/prompt")
-            srcDir("$appSharedSrc/knowledge")
-            // 数据层：Room KMP 共享 entity/DAO/Converters（AppDatabase/PresetSeed 由 desktop 重写）
-            srcDir("$appSharedSrc/data/db")
-            // 安全层：AesGcmCipher（纯 JCE）共享；KeystoreAesGcmCipher 由 desktop 同名重写
-            srcDir("$appSharedSrc/data/security")
-            // 图片规格契约（纯数据类）；ImageCompressor 由 desktop ImageIO 重写
-            srcDir("$appSharedSrc/data/image")
-
-            // ---- 排除 Android 特有文件（desktop 侧提供同名/替代实现）----
-            exclude("**/AndroidKnowledgeAssetReader.kt")   // android.content.Context 读 assets
-            exclude("**/KeystoreAesGcmCipher.kt")          // AndroidKeyStore → desktop 机器指纹 provider
-            exclude("**/ImageCompressor.kt")               // android.graphics.Bitmap → ImageIO
-            exclude("**/AppDatabase.kt")                   // Context builder → desktop BundledSQLiteDriver
-            exclude("**/PresetSeed.kt")                    // 依赖 AppDatabase（desktop 同名重写，seed 逻辑复用）
-            // 注：data/repository 与 ui/contract 不共享——那是 Android UI 层接缝（耦合
-            // Keystore 具体类 / UpdateChecker / android.net.Uri），desktop 后端直接面向
-            // DAO + LlmClient 暴露 HTTP API，不经过 UI 契约层。
-        }
-    }
-}
+// O4: 共享业务逻辑改由 :shared KMP 模块提供（commonMain）。
+// 桌面端只保留平台接缝实现：DesktopAppDatabase/DesktopPresetSeed/DesktopKnowledgeAssetReader/
+// DesktopImageCompressor/KeystoreAesGcmCipher（PBKDF2 派生）与 AppLogger 的 sink 接线。
 
 // 知识库资源：打包时从 :app 的 assets 复制进 jar（routes.json + 40 份文档）
 tasks.processResources {
@@ -72,6 +45,9 @@ ksp {
 }
 
 dependencies {
+    // O4: 共享业务逻辑（llm/domain/prompt/knowledge/data 纯逻辑）
+    implementation(project(":shared"))
+
     // Ktor Server（CIO 引擎：纯 Kotlin，无 native 依赖，适合 jpackage）
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)

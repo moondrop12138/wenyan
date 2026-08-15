@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
 import com.wenyan.app.data.db.TargetEntity
+import com.wenyan.app.data.repository.BackupRepository
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
@@ -14,6 +15,7 @@ import com.wenyan.app.llm.ChatRequest
 import com.wenyan.app.llm.LlmClient
 import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.llm.LlmEvent
+import com.wenyan.app.llm.UsageMetrics
 import com.wenyan.app.log.AppLogger
 import com.wenyan.app.log.CrashLogStore
 import com.wenyan.app.ui.contract.LlmError
@@ -22,6 +24,7 @@ import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
 import com.wenyan.app.ui.contract.TargetUi
+import com.wenyan.app.ui.contract.UsageMetricsUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -39,6 +42,7 @@ class RealSettingsRepository(
     private val providerRepository: ProviderRepository,
     private val profileRepository: ProfileRepository,
     private val conversationRepository: ConversationRepository,
+    private val backupRepository: BackupRepository,
     private val crashLogStore: CrashLogStore,
     private val updateChecker: UpdateChecker,
 ) : SettingsRepository {
@@ -187,6 +191,38 @@ class RealSettingsRepository(
 
     /** 下载完成后唤起系统安装器（FileProvider + ACTION_VIEW + FLAG_GRANT_READ_URI_PERMISSION）；
      *  H4：Android 8+ 安装未知应用需用户授权，未授权先引导到「安装未知应用」设置页 */
+    /** O6: 设置页用量面板读取当前快照（启动时已由 MetricsFileStore 恢复） */
+    override fun usageMetrics(): UsageMetricsUi {
+        val s = UsageMetrics.snapshot()
+        return UsageMetricsUi(
+            totalRequests = s.totalRequests,
+            totalInputTokens = s.totalInputTokens,
+            totalOutputTokens = s.totalOutputTokens,
+            avgTtftMs = s.avgTtftMs,
+            failures = s.failures,
+        )
+    }
+
+    /** O1: 读取选中的备份 JSON → 清空重建导入；成功后同步清 DataStore 设置槽位（旧模型 id 已失效） */
+    override suspend fun importBackup(uri: Uri): Pair<Boolean, String> {
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (text.isNullOrBlank()) {
+            return false to "无法读取所选备份文件"
+        }
+        val json = runCatching { org.json.JSONObject(text) }.getOrNull()
+            ?: return false to "备份文件不是有效的 JSON"
+        val (ok, error) = backupRepository.restore(json)
+        if (ok) {
+            dataStore.clearAll()
+            AppLogger.i("backup_restore_ok")
+        } else {
+            AppLogger.i("backup_restore_fail")
+        }
+        return ok to error
+    }
+
     override suspend fun installApk(file: java.io.File): Boolean = runCatching {
         if (!context.packageManager.canRequestPackageInstalls()) {
             val settingsIntent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {

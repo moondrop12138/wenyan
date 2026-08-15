@@ -39,6 +39,37 @@ fun PrivacyDialog(
 }
 
 /**
+ * O1: 从备份恢复二次确认——导入会清空当前全部数据（对齐桌面端导入策略）。
+ */
+@Composable
+fun ImportBackupDialog(
+    importing: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = GtjShape.lg,
+        containerColor = p.surfaceElevated,
+        titleContentColor = p.fg,
+        textContentColor = p.fgSecondary,
+        title = { Text("从备份恢复", style = GtjType.Title) },
+        text = { Text("导入将清空当前本机数据，并用备份文件覆盖。API Key 密文不会随备份导入，完成后需要重新输入。建议先导出当前数据。", style = GtjType.BodySm) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !importing) {
+                Text(if (importing) "导入中…" else "选择文件并导入", style = GtjType.Label, color = p.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !importing) {
+                Text("取消", style = GtjType.Label, color = p.muted)
+            }
+        },
+    )
+}
+
+/**
  * 清除全部档案二次确认（AC-12，design-pages 页面3）：删除 Key/档案/会话全部本地数据。
  */
 @Composable

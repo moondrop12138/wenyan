@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -34,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -166,12 +169,38 @@ fun MemoryEditScreen(
                                 Text("已记住的事实", style = GtjType.Label, color = p.muted, modifier = Modifier.weight(1f))
                                 GtjIconButton(icon = Icons.Outlined.Add, contentDescription = "添加事实", onClick = vm::openCreateFact, tint = p.accent, iconSize = 20.dp)
                             }
+                            if (vm.conflictPairs.isNotEmpty()) {
+                                Text(
+                                    "发现 ${vm.conflictPairs.size} 组疑似冲突，点击裁决",
+                                    style = GtjType.Caption,
+                                    color = p.danger,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                                vm.conflictPairs.forEach { pair ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(GtjShape.sm)
+                                            .background(p.dangerSoft)
+                                            .clickable { vm.openConflict(pair) }
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(pair.a.text, style = GtjType.Caption, color = p.danger, maxLines = 2)
+                                            Text(pair.b.text, style = GtjType.Caption, color = p.danger, maxLines = 2)
+                                        }
+                                        Text("裁决", style = GtjType.Caption, color = p.danger)
+                                    }
+                                }
+                            }
                             if (vm.facts.isEmpty()) {
                                 Text("还没有事实，回复后会自动提炼", style = GtjType.BodySm, color = p.meta)
                             } else {
                                 vm.facts.forEach { fact ->
                                     MemoryFactRow(
                                         fact = fact,
+                                        conflicted = fact.id in vm.conflictFactIds,
                                         onEdit = { vm.openEditFact(fact) },
                                         onDelete = { vm.deleteFact(fact) },
                                         onMakePermanent = { vm.makePermanent(fact) },
@@ -197,6 +226,14 @@ fun MemoryEditScreen(
             onConfirm = { text -> vm.confirmFact(text) },
         )
     }
+    vm.selectedConflict?.let { pair ->
+        ConflictResolutionDialog(
+            pair = pair,
+            onDismiss = vm::dismissConflict,
+            onKeepA = vm::resolveConflictKeepA,
+            onKeepB = vm::resolveConflictKeepB,
+        )
+    }
 }
 
 /** 关键事件编辑（时间 + 事件两字段，每行可删，➕新增） */
@@ -217,12 +254,37 @@ private fun TimelineEditor(vm: MemoryEditViewModel) {
             if (vm.timeline.isEmpty()) {
                 Text("还没有关键事件，点击 ➕ 添加（时间 + 事件）", style = GtjType.BodySm, color = p.meta)
             } else {
-                vm.timeline.forEachIndexed { index, item ->
+                // O2: 按时间排序渲染为纵向时间轴（圆点 + 连接线 + 时间 + 事件），编辑能力保留
+                val sortedTimeline = remember(vm.timeline) {
+                    vm.timeline.withIndex().sortedBy { it.value.time.ifBlank { "9999" } }
+                }
+                sortedTimeline.forEach { indexed ->
+                    val index = indexed.index
+                    val item = indexed.value
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        // 时间轴节点 + 连接线
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(16.dp),
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(if (item.time.isNotBlank()) p.accent else p.borderSoft)
+                            )
+                            Box(
+                                Modifier
+                                    .width(2.dp)
+                                    .height(52.dp)
+                                    .background(p.borderSoft)
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
                         OutlinedTextField(
                             value = item.time,
                             onValueChange = { vm.updateTimelineItem(index, it, item.event) },
-                            modifier = Modifier.weight(0.35f),
+                            modifier = Modifier.weight(0.32f),
                             placeholder = { Text("时间", style = GtjType.BodySm, color = p.meta) },
                             textStyle = GtjType.BodySm,
                             singleLine = true,
@@ -252,6 +314,7 @@ private fun TimelineEditor(vm: MemoryEditViewModel) {
 @Composable
 private fun MemoryFactRow(
     fact: MemoryFactUi,
+    conflicted: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onMakePermanent: () -> Unit,
@@ -259,7 +322,10 @@ private fun MemoryFactRow(
     val p = LocalGtjColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(fact.text, style = GtjType.BodySm, color = p.fg)
+            Text(fact.text, style = GtjType.BodySm, color = if (conflicted) p.danger else p.fg)
+            if (conflicted) {
+                Text("疑似冲突", style = GtjType.Caption, color = p.danger)
+            }
             // v1.9.1 徽标行：临时（有过期时间）/ 来源
             if (fact.expiresAt != null || fact.source != "manual") {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
@@ -354,6 +420,55 @@ private fun FactEditDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消", style = GtjType.Label, color = p.muted)
+            }
+        },
+    )
+}
+
+/** O2: 冲突裁决弹窗——用户选择保留哪条；未选中的一条将被删除（落库后冲突自然消失） */
+@Composable
+private fun ConflictResolutionDialog(
+    pair: ConflictPairUi,
+    onDismiss: () -> Unit,
+    onKeepA: () -> Unit,
+    onKeepB: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = GtjShape.lg,
+        containerColor = p.surfaceElevated,
+        titleContentColor = p.fg,
+        textContentColor = p.fgSecondary,
+        title = { Text("记忆冲突裁决", style = GtjType.Title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("以下两条事实疑似矛盾，请选择保留哪一条（另一条将被删除）：", style = GtjType.BodySm, color = p.fgSecondary)
+                Surface(
+                    shape = GtjShape.sm,
+                    color = p.dangerSoft,
+                    border = BorderStroke(1.dp, p.danger),
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("A：${pair.a.text}", style = GtjType.BodySm, color = p.fg)
+                        Text("B：${pair.b.text}", style = GtjType.BodySm, color = p.fg)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onKeepA) {
+                Text("保留 A", style = GtjType.Label, color = p.accent)
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onKeepB) {
+                    Text("保留 B", style = GtjType.Label, color = p.accent)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("取消", style = GtjType.Label, color = p.muted)
+                }
             }
         },
     )

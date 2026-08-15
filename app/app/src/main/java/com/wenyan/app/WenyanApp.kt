@@ -1,6 +1,7 @@
 package com.wenyan.app
 
 import android.app.Application
+import android.util.Log
 import com.wenyan.app.container.RealAppContainer
 import com.wenyan.app.data.db.AppDatabase
 import com.wenyan.app.data.db.PresetSeed
@@ -34,7 +35,17 @@ class WenyanApp : Application() {
 
     /** 崩溃兜底：全局未捕获异常 → 缓冲落盘 last_crash.txt → 转交原 handler（可观测性埋点，不含用户内容） */
     private fun installCrashLogger() {
-        AppLogger.crashStore = crashLogStore
+        // O4: AppLogger 收拢到 :shared commonMain，平台差异通过 sink 注入
+        AppLogger.sink = { level, line ->
+            val priority = when (level) {
+                "DEBUG" -> Log.DEBUG
+                "INFO" -> Log.INFO
+                "WARN" -> Log.WARN
+                else -> Log.ERROR
+            }
+            Log.println(priority, AppLogger.TAG, line)
+            crashLogStore.append(line)
+        }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             AppLogger.e("app_crash", throwable, "thread" to thread.name, "class" to throwable.javaClass.simpleName)

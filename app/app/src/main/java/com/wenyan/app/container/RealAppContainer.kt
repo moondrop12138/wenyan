@@ -5,6 +5,8 @@ import com.wenyan.app.BuildConfig
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
 import com.wenyan.app.data.db.AppDatabase
 import com.wenyan.app.data.image.ImageCompressor
+import com.wenyan.app.data.metrics.MetricsFileStore
+import com.wenyan.app.data.repository.BackupRepository
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
@@ -13,6 +15,7 @@ import com.wenyan.app.data.update.UpdateChecker
 import com.wenyan.app.data.update.UpdateClient
 import com.wenyan.app.knowledge.AndroidKnowledgeAssetReader
 import com.wenyan.app.knowledge.KnowledgeEngine
+import com.wenyan.app.llm.UsageMetrics
 import com.wenyan.app.log.CrashLogStore
 import com.wenyan.app.prompt.PromptBuilder
 import com.wenyan.app.ui.contract.AppContainer
@@ -43,6 +46,14 @@ class RealAppContainer(
     private val conversationRepository = ConversationRepository(
         database.sessionDao(), database.messageDao()
     )
+    private val backupRepository = BackupRepository(database)
+
+    /** O6: 用量指标持久化（filesDir/metrics.json），启动时恢复快照 */
+    private val metricsStore = MetricsFileStore(java.io.File(appContext.filesDir, "metrics.json"))
+
+    init {
+        UsageMetrics.attachStore(metricsStore)
+    }
 
     /** v1.7.3 T4 更新检查（GitHub Releases 直连 + OkHttp 下载）；v1.7.3-fix：只传 versionName，不传本地刻度 versionCode */
     private val updateChecker = UpdateChecker(
@@ -58,6 +69,7 @@ class RealAppContainer(
             providerRepository = providerRepository,
             profileRepository = profileRepository,
             conversationRepository = conversationRepository,
+            backupRepository = backupRepository,
             crashLogStore = crashLogStore,
             updateChecker = updateChecker,
         )

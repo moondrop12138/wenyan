@@ -3,6 +3,7 @@ package com.wenyan.app.ui.settings
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
+import com.wenyan.app.ui.contract.UsageMetricsUi
 import com.wenyan.app.ui.contract.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -235,6 +236,8 @@ class ProviderEditViewModelTest {
             connectionStatusCalls.add(providerId to ok)
         }
         override suspend fun wipeAll() = Unit
+    override suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String> = false to "测试未实现"
+    override fun usageMetrics(): UsageMetricsUi = UsageMetricsUi(0L, 0L, 0L, 0L, emptyMap())
         override suspend fun setPrivacyAck(ack: Boolean) {
             privacyAckValue = ack
             privacyAck.value = ack

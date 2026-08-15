@@ -2,6 +2,7 @@ package com.wenyan.app.ui.settings
 
 import com.wenyan.app.BuildConfig
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -43,6 +44,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -99,6 +102,9 @@ fun SettingsScreen(
     val themeMode by vm.themeMode.collectAsState()
     val showPrivacy by vm.showPrivacyDialog.collectAsState()
     val showWipe by vm.showWipeDialog.collectAsState()
+    val showImport by vm.showImportDialog.collectAsState()
+    val showUsage by vm.showUsageDialog.collectAsState()
+    val usage by vm.usage.collectAsState()
     val targets by vm.targets.collectAsState()
     val memoryAutoEnabled by vm.memoryAutoEnabled.collectAsState()
     val toastMessage by vm.toastMessage.collectAsState()
@@ -108,6 +114,11 @@ fun SettingsScreen(
     val p = LocalGtjColors.current
     val context = LocalContext.current
     var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
+
+    // O1: 备份文件选择器（JSON / 文本 / 任意二进制，系统按 MIME 过滤）
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri?.let { vm.confirmImport(it) }
+    }
 
     // v1.7.2 切换激活档案 Toast（一次性事件，消费后清空）
     LaunchedEffect(toastMessage) {
@@ -331,6 +342,24 @@ fun SettingsScreen(
                 )
             }
             item {
+                // O1: 从备份恢复（选择温言导出的 JSON 备份文件，清空重建；二次确认见导入弹窗）
+                SettingsRow(
+                    label = "从备份恢复",
+                    value = if (vm.importing) "导入中…" else "选择备份文件",
+                    icon = null,
+                    onClick = vm::requestImport,
+                )
+            }
+            item {
+                // O6: 用量/诊断面板（TTFT/token/失败分类，本地存储，不含消息原文）
+                SettingsRow(
+                    label = "用量 / 诊断",
+                    value = "查看",
+                    icon = null,
+                    onClick = vm::requestUsage,
+                )
+            }
+            item {
                 // v1.8.0：清除全部档案也统一为玻璃卡片样式（与提供商/设置行一致）
                 GlassSurface(
                     onClick = vm::requestWipe,
@@ -392,6 +421,19 @@ fun SettingsScreen(
     }
     if (showWipe) {
         WipeDialog(onDismiss = vm::dismissWipe, onConfirm = { vm.confirmWipe(onBack) })
+    }
+    if (showImport) {
+        ImportBackupDialog(
+            importing = vm.importing,
+            onDismiss = vm::dismissImport,
+            onConfirm = {
+                vm.dismissImport()
+                importPicker.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+            },
+        )
+    }
+    if (showUsage) {
+        UsageMetricsDialog(usage = usage, onDismiss = vm::dismissUsage)
     }
     // ===== v1.7.2 记忆弹窗 =====
     if (showNameDialog) {

@@ -130,7 +130,7 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
 
     /** O6: 用量指标（进程内累计；仅计数/耗时，不含用户消息原文） */
     get("/api/metrics") {
-        call.respondJson(com.wenyan.app.llm.UsageMetrics.toJson())
+        call.respondJson(org.json.JSONObject(com.wenyan.app.llm.UsageMetrics.toJson().toString()))
     }
 
     /** O3: 全文检索（?q=关键词，命中消息 → 前端跳转对应会话） */

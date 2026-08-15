@@ -28,3 +28,5 @@ dependencyResolutionManagement {
 rootProject.name = "wenyan"
 include(":app")
 include(":desktop")
+include(":benchmark")
+include(":shared")
