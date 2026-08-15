@@ -56,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -117,6 +118,21 @@ fun ChatScreen(
     val streaming by vm.streaming.collectAsState()
     val input by vm.input.collectAsState()
     val pendingImages by vm.pendingImages.collectAsState()
+
+    // O10: 草稿输入 saveable——进程被杀后恢复（发送后清空）
+    val savedDraft = rememberSaveable { mutableStateOf("") }
+    val onInputChange: (String) -> Unit = { text ->
+        savedDraft.value = text
+        vm.onInputChange(text)
+    }
+    LaunchedEffect(Unit) {
+        if (savedDraft.value.isNotEmpty() && input.isEmpty() && !streaming) {
+            vm.onInputChange(savedDraft.value)
+        }
+    }
+    LaunchedEffect(streaming) {
+        if (streaming) savedDraft.value = ""
+    }
     val lastError by vm.lastError.collectAsState()
     val transcription by vm.transcription.collectAsState()
     val transcribing by vm.transcribing.collectAsState()
@@ -268,11 +284,11 @@ fun ChatScreen(
                 input = input,
                 streaming = streaming,
                 pendingImages = pendingImages,
-                onInputChange = vm::onInputChange,
+                onInputChange = onInputChange,
                 // v1.3.1 统一发送入口：有图 → 图文同发/纯图，无图 → 纯文本
                 onSend = vm::sendPending,
                 onStop = vm::stop,
-                onPasteText = { vm.onInputChange(it) },
+                onPasteText = onInputChange,
                 onPendingImagesPicked = vm::addPendingImages,
                 onRemovePendingImage = vm::removePendingImage,
                 inputFocusRequester = inputFocusRequester,
@@ -295,7 +311,7 @@ fun ChatScreen(
                 // v1.8.2-fix（审查 P3-10）：点击索引填入输入栏并聚焦（对齐桌面端）
                 ChatEmptyState(
                     onExampleClick = { text ->
-                        vm.onInputChange(text)
+                        onInputChange(text)
                         inputFocusRequester.requestFocus()
                     },
                 )
