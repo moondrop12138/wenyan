@@ -732,7 +732,8 @@ class RealChatRepository(
         if (!dataStore.memoryAutoEnabled.first()) return false
         val targetId = conversationRepository.getSession(sid)?.targetId ?: return false
         if (profileRepository.getTarget(targetId) == null) return false
-        return !state.hasActiveTopic || !stateTracker.isSameTopic(state, userInput)
+        // M2: 与桌面端对齐——过短输入（<10 字）不提炼记忆
+        return userInput.length >= 10 && (!state.hasActiveTopic || !stateTracker.isSameTopic(state, userInput))
     }
 
     /**

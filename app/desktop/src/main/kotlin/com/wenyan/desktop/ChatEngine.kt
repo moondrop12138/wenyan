@@ -192,7 +192,8 @@ class ChatEngine(
                             sideEffectScope.launch { extractMemoryOnce(session.targetId, text, event.fullText, resolved, source) }
                         }
                     } else {
-                        // 解析失败不落库（与手机版一致：Room 无脏数据）
+                        // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库（与手机版一致），并报错提示
+                        service.addMessage(sessionId, "ASSISTANT", "freetext", event.fullText)
                         emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
                         return@collect
                     }
@@ -318,6 +319,8 @@ class ChatEngine(
                             sideEffectScope.launch { extractMemoryOnce(session.targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                     } else {
+                        // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库，并报错提示
+                        service.addMessage(sessionId, "ASSISTANT", "freetext", event.fullText)
                         emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
                         return@collect
                     }
@@ -461,9 +464,14 @@ class ChatEngine(
         if (mapped.isNotEmpty() && mapped.last().role == "user" && mapped.last().content == currentText) {
             mapped.removeAt(mapped.size - 1)
         }
-        fun tokens(list: List<ChatHistoryMessage>) = HistoryCompactor.estimatedTokens(list)
         // v1.9.1 预算选择式压缩（共享 HistoryCompactor：先裁剪早期消息保头，仍超再从最早成对丢弃）
-        val (compacted, _) = HistoryCompactor.compact(mapped)
+        val (compacted, truncated) = HistoryCompactor.compact(mapped)
+        // M2: 与手机版对齐——发生整条丢弃截断时，头部插入仅模型可见的省略提示
+        if (truncated) {
+            val result = mutableListOf(ChatHistoryMessage("user", "[注：更早的对话已省略，关键信息已保留摘要]"))
+            result.addAll(compacted)
+            return result
+        }
         return compacted
     }
 
