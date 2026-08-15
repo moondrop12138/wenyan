@@ -2,7 +2,10 @@ package com.wenyan.app.data.image
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.Base64
+import androidx.exifinterface.media.ExifInterface
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
@@ -38,13 +41,19 @@ class ImageCompressor {
         val sampled = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
             ?: throw IOException("cannot decode image")
 
-        val scaled = if (sampled.width == plan.targetWidth && sampled.height == plan.targetHeight) {
-            sampled
+        // M12: 应用 EXIF 旋转修正（竖拍照片方向正确），90/270 时宽高互换
+        val orientation = readExifOrientation(bytes)
+        val oriented = rotateForExif(sampled, orientation)
+        val swap = orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
+            orientation == ExifInterface.ORIENTATION_ROTATE_270
+        val targetW = if (swap) plan.targetHeight else plan.targetWidth
+        val targetH = if (swap) plan.targetWidth else plan.targetHeight
+
+        val scaled = if (oriented.width == targetW && oriented.height == targetH) {
+            oriented
         } else {
-            val resized = Bitmap.createScaledBitmap(
-                sampled, plan.targetWidth, plan.targetHeight, true
-            )
-            if (resized !== sampled) sampled.recycle()
+            val resized = Bitmap.createScaledBitmap(oriented, targetW, targetH, true)
+            if (resized !== oriented) oriented.recycle()
             resized
         }
 
@@ -59,6 +68,23 @@ class ImageCompressor {
             scaled.recycle()
             output.close()
         }
+    }
+
+    /** M12: 读取 EXIF 方向（读取失败/无 EXIF 按 NORMAL） */
+    private fun readExifOrientation(bytes: ByteArray): Int = runCatching {
+        ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(
+            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+        )
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+
+    /** M12: 按 EXIF 方向旋转；无需旋转时原样返回 */
+    private fun rotateForExif(bitmap: Bitmap, orientation: Int): Bitmap {
+        val degrees = ImageSpec.exifOrientationDegrees(orientation)
+        if (degrees == 0) return bitmap
+        val matrix = Matrix().apply { postRotate(degrees.toFloat()) }
+        val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        if (rotated !== bitmap) bitmap.recycle()
+        return rotated
     }
 
     class ImageTooLargeException(message: String) : IOException(message)

@@ -64,4 +64,15 @@ class ImageSpecTest {
             ImageSpec.planResize(0, 100)
         }
     }
+
+    @Test
+    fun `exif orientation maps to degrees`() {
+        // M12: EXIF 常量 1/3/6/8 → 0/180/90/270
+        assertEquals(0, ImageSpec.exifOrientationDegrees(1))
+        assertEquals(180, ImageSpec.exifOrientationDegrees(3))
+        assertEquals(90, ImageSpec.exifOrientationDegrees(6))
+        assertEquals(270, ImageSpec.exifOrientationDegrees(8))
+        assertEquals(0, ImageSpec.exifOrientationDegrees(0))
+        assertEquals(0, ImageSpec.exifOrientationDegrees(2))
+    }
 }

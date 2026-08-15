@@ -55,6 +55,17 @@ object ImageSpec {
     fun isTooLarge(originalBytes: Long): Boolean = originalBytes > MAX_ORIGINAL_BYTES
 
     /**
+     * M12: EXIF orientation 值 → 顺时针旋转角度（0/90/180/270）。
+     * 常量对齐 androidx.exifinterface ExifInterface：NORMAL=1、ROTATE_180=3、ROTATE_90=6、ROTATE_270=8。
+     */
+    fun exifOrientationDegrees(orientation: Int): Int = when (orientation) {
+        6 -> 90
+        3 -> 180
+        8 -> 270
+        else -> 0
+    }
+
+    /**
      * Token 估算（OpenAI low-detail 近似）：
      * token = ceil(宽 x 高 / 750)，保守偏高
      */

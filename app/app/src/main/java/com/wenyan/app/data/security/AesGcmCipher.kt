@@ -15,6 +15,8 @@ open class AesGcmCipher(private val keyProvider: SecretKeyProvider) {
 
     interface SecretKeyProvider {
         fun getOrCreate(): SecretKey
+        /** M7: 仅取已存在密钥（解密用）；不存在返回 null。默认= getOrCreate（桌面派生密钥恒存在） */
+        fun getExisting(): SecretKey? = getOrCreate()
     }
 
     /**
@@ -41,9 +43,15 @@ open class AesGcmCipher(private val keyProvider: SecretKeyProvider) {
         val iv = combined.copyOfRange(0, IV_SIZE_BYTES)
         val ciphertext = combined.copyOfRange(IV_SIZE_BYTES, combined.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, keyProvider.getOrCreate(), GCMParameterSpec(TAG_BITS, iv))
+        // M7: 解密先查密钥存在性，缺失/损坏则明确报错（不静默新建密钥导致旧密文永不可解）
+        val key = keyProvider.getExisting()
+            ?: throw KeyUnavailableException("密钥不可用，请重新输入 API Key")
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
         return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }
+
+    /** M7: 密钥缺失/损坏时抛出，引导用户重新输入 API Key */
+    class KeyUnavailableException(message: String) : Exception(message)
 
     companion object {
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

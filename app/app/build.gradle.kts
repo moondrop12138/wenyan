@@ -197,6 +197,8 @@ dependencies {
 
     // Activity Compose (Photo Picker)
     implementation(libs.activity.compose)
+    // M12: EXIF 方向读取（竖拍照片旋转修正）
+    implementation(libs.exifinterface)
 
     // Room（M1：双端统一 2.7.2）
     implementation(libs.room.runtime)
