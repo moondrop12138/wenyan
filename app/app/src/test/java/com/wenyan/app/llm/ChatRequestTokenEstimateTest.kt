@@ -1,6 +1,7 @@
 package com.wenyan.app.llm
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -38,5 +39,13 @@ class ChatRequestTokenEstimateTest {
         )
         // v1.6.1 多图：10 张 = 850 × 10
         assertEquals(8500, req.estimatedInputTokens())
+    }
+
+    @Test
+    fun `CJK text estimates conservatively over legacy divide-by-4`() {
+        val text = "中".repeat(400)
+        val req = ChatRequest(model = "m", system = "", userText = text)
+        // M6: CJK 1 字 ≈ 1 token，估算应 ≥ 400（远高于旧 /4 = 100 的乐观口径）
+        assertTrue(req.estimatedInputTokens() >= 400)
     }
 }

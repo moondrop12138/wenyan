@@ -71,4 +71,33 @@ class CrisisDetectorBoundaryTest {
         assertTrue("撑不下去应命中", CrisisDetector.isCrisis("我真的撑不下去"))
         assertTrue("活不下去应命中", CrisisDetector.isCrisis("活不下去"))
     }
+
+    // ---- M5: 短词/歧义词白名单（防误报）+ 漏词扩充 ----
+
+    @Test
+    fun `sha in mo sha and miao sha not flagged`() {
+        assertFalse(CrisisDetector.isCrisis("这个方案被抹杀了"))
+        assertFalse(CrisisDetector.isCrisis("他打游戏秒杀对手"))
+    }
+
+    @Test
+    fun `mei yi si movie context not flagged but life context flagged`() {
+        assertFalse(CrisisDetector.isCrisis("这电影真没意思"))
+        assertTrue(CrisisDetector.isCrisis("活着没意思"))
+    }
+
+    @Test
+    fun `threat in generic context not flagged`() {
+        assertFalse(CrisisDetector.isCrisis("这个方案威胁到整体进度"))
+    }
+
+    @Test
+    fun `missed crisis words now covered`() {
+        assertTrue(CrisisDetector.isCrisis("我想跳楼"))
+        assertTrue(CrisisDetector.isCrisis("我写了遗书"))
+        assertTrue(CrisisDetector.isCrisis("我吃了安眠药"))
+        assertTrue(CrisisDetector.isCrisis("我想结束自己"))
+        assertTrue(CrisisDetector.isCrisis("我快撑不住了"))
+        assertTrue(CrisisDetector.isCrisis("我真的受不了了"))
+    }
 }

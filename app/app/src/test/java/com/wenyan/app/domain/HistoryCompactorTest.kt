@@ -38,8 +38,8 @@ class HistoryCompactorTest {
 
     @Test
     fun `over budget trims early messages keeping head`() {
-        // 20 条 × 6000 字 → 估算 ~30k token > 24k 预算，触发阶段一裁剪；裁剪后 < 预算不触发阶段二
-        val list = msgs(20, len = 6000)
+        // 20 条 × 1500 字 → 估算 ~30k token > 24k 预算（M6: CJK 1 字≈1 token），触发阶段一；裁剪后 < 预算不触发阶段二
+        val list = msgs(20, len = 1500)
         val originalLengths = list.map { it.content.length }
         val (out, truncated) = HistoryCompactor.compact(list, maxTokens = 24_000)
         // 工作集末尾 6 轮（12 条）保持完整（长度与原文一致）

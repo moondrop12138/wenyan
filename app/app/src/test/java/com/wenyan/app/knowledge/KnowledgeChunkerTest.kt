@@ -60,4 +60,14 @@ class KnowledgeChunkerTest {
     fun `empty doc returns empty`() {
         assertEquals("", KnowledgeChunker.truncate("", emptyList()))
     }
+
+    @Test
+    fun `first chunk over budget is truncated not fully injected`() {
+        val huge = "# 标题\n\n## 单块\n" + "很".repeat(10_000)
+        val result = KnowledgeChunker.truncate(huge, emptyList())
+        // M4: 首个块也截断到预算 + 省略标记（不整块注入）
+        assertTrue(result.length <= KnowledgeChunker.MAX_CHARS_PER_DOC + KnowledgeChunker.TRUNCATED_MARK.length)
+        assertTrue(result.endsWith(KnowledgeChunker.TRUNCATED_MARK))
+        assertTrue(result.length < 10_000)
+    }
 }

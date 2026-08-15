@@ -11,18 +11,27 @@ import com.wenyan.app.log.AppLogger
  */
 object CrisisDetector {
 
-    private val keywords = listOf(
-        "家暴", "家暴了", "被打", "打我",
+    // 多字短语：语境明确，直接 contains 命中
+    private val phrases = listOf(
+        "家暴", "被打", "打我",
         "跟踪", "被跟踪", "尾随",
-        "胁迫", "强迫我", "逼我",
-        "威胁", "威胁我", "恐吓",
+        "胁迫", "强迫我", "逼我", "恐吓",
         "自伤", "自杀", "不想活", "活不下去", "想死",
-        "想不开", "撑不下去", "坚持不下去", "坚持不下去了", "没意思",
+        "想不开", "撑不下去", "坚持不下去", "坚持不下去了",
         "伤害自己", "割腕", "轻生",
-        "杀", "杀人", "伤害他", "报复",
+        "杀人", "伤害他", "报复",
         "财务控制", "控制我", "软禁", "囚禁",
         "强奸", "性侵", "被下药",
         "勒索", "偷拍", "裸照威胁",
+        // M5 漏词扩充
+        "跳楼", "遗书", "安眠药", "结束自己", "撑不住", "受不了",
+    )
+
+    // M5: 短词/歧义词白名单——仅在命中组合词时判定，避免「抹杀/秒杀/威胁论/电影没意思」误报
+    private val compoundKeywords = mapOf(
+        "杀" to listOf("杀害", "想杀", "杀了我", "杀了他", "杀死", "杀掉"),
+        "威胁" to listOf("威胁我", "威胁你", "威胁分手", "威胁自杀"),
+        "没意思" to listOf("活着没意思", "人生没意思", "生活没意思"),
     )
 
     /**
@@ -31,12 +40,17 @@ object CrisisDetector {
      */
     fun detect(text: String): List<String> {
         if (text.isBlank()) return emptyList()
-        val hits = keywords.filter { text.contains(it) }
-        // 隐私优先：只记录固定词典命中的关键词类型与数量，绝不记录用户输入原文
-        if (hits.isNotEmpty()) {
-            AppLogger.w("crisis_detected", "hit" to hits.first(), "hit_count" to hits.size)
+        val hits = mutableListOf<String>()
+        for (p in phrases) if (text.contains(p)) hits.add(p)
+        for ((word, whitelist) in compoundKeywords) {
+            if (whitelist.any { text.contains(it) }) hits.add(word)
         }
-        return hits
+        val result = hits.distinct()
+        // 隐私优先：只记录固定词典命中的关键词类型与数量，绝不记录用户输入原文
+        if (result.isNotEmpty()) {
+            AppLogger.w("crisis_detected", "hit" to result.first(), "hit_count" to result.size)
+        }
+        return result
     }
 
     fun isCrisis(text: String): Boolean = detect(text).isNotEmpty()

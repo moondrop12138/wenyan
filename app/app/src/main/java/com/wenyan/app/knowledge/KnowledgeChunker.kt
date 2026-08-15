@@ -13,6 +13,9 @@ object KnowledgeChunker {
 
     const val MAX_CHARS_PER_DOC = 6000 // ≈ 3.6K-4K token（中文保守）
 
+    /** M4: 超预算块截断标记 */
+    const val TRUNCATED_MARK = "…[已截断]"
+
     data class Chunk(
         val heading: String,
         val body: String,
@@ -76,7 +79,14 @@ object KnowledgeChunker {
         for (chunk in (byHit + rest)) {
             if (used >= maxChars) break
             val size = chunk.heading.length + chunk.body.length + 2
-            if (used + size > maxChars && selected.isNotEmpty()) break
+            if (used + size > maxChars) {
+                if (selected.isEmpty()) {
+                    // M4: 首个块就超预算时也截断到预算 + 省略标记（防单份文档 token 预算失效）
+                    val budget = (maxChars - chunk.heading.length - 4).coerceAtLeast(0)
+                    selected.add(chunk.copy(body = chunk.body.take(budget) + TRUNCATED_MARK))
+                }
+                break
+            }
             selected.add(chunk)
             used += size
         }

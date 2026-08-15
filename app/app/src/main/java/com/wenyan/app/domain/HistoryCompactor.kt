@@ -1,6 +1,7 @@
 package com.wenyan.app.domain
 
 import com.wenyan.app.llm.ChatHistoryMessage
+import com.wenyan.app.llm.estimateTextTokens
 
 /**
  * v1.9.1 历史消息预算选择式压缩（纯逻辑，双端共享，JVM 可测）。
@@ -26,9 +27,9 @@ object HistoryCompactor {
     /** 截断标记（提醒模型信息不完整） */
     const val TRUNC_MARK = "…[已省略]"
 
-    /** 粗估 token 数（字符数/4，与既有估算口径一致） */
+    /** 粗估 token 数（M6: CJK 1 字≈1 token、ASCII 4 字≈1 token，保守上界） */
     fun estimatedTokens(messages: List<ChatHistoryMessage>): Int =
-        messages.sumOf { it.content.length } / 4
+        messages.sumOf { estimateTextTokens(it.content) }
 
     /**
      * 预算选择式压缩。

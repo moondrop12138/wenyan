@@ -36,16 +36,36 @@ const val MAX_IMAGES_PER_REQUEST = 10
 
 /**
  * 输入 token 粗略估算（可观测性元数据，仅用量，不含内容）。
- * 文本按 ~4 字符/token；图片按固定常量估算（OpenAI 近似，够观测用）。
+ * M6: 按字符类别加权——CJK 保守按 1 字 ≈ 1 token，ASCII/其他按 4 字 ≈ 1 token；图片固定常量。
  */
 fun ChatRequest.estimatedInputTokens(): Int {
-    val historyLen = history.sumOf { it.content.length }
-    val textTokens = (system.length + userText.length + historyLen) / 4
+    val textTokens = estimateTextTokens(system) + estimateTextTokens(userText) +
+        history.sumOf { estimateTextTokens(it.content) }
     val imageTokens = imageDataUrls.size * IMAGE_TOKEN_ESTIMATE
     return textTokens + imageTokens
 }
 
 private const val IMAGE_TOKEN_ESTIMATE = 850
+
+/** M6: CJK 字符区间（统一表意文字/扩展 A/兼容表意/全角标点/全角符号） */
+private fun isCjk(c: Char): Boolean {
+    val code = c.code
+    return code in 0x4E00..0x9FFF || code in 0x3400..0x4DBF || code in 0xF900..0xFAFF ||
+        code in 0x3000..0x303F || code in 0xFF00..0xFFEF
+}
+
+/**
+ * M6: 按字符类别估算 token（保守上界）——CJK 1 字 ≈ 1 token，ASCII/其他 4 字 ≈ 1 token。
+ * 替代旧的「全量 /4」英文口径，避免中文长文本严重低估导致请求超出模型上下文。
+ */
+fun estimateTextTokens(text: String): Int {
+    var cjk = 0
+    var other = 0
+    for (c in text) {
+        if (isCjk(c)) cjk++ else other++
+    }
+    return cjk + other / 4
+}
 
 /**
  * 流式事件（UI 经 MutableStateFlow 消费）
