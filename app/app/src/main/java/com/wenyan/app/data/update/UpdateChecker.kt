@@ -64,13 +64,14 @@ class UpdateChecker(
             .split(".").map { it.toIntOrNull() ?: 0 }
 
     /**
-     * 下载 APK 到 cacheDir/downloads/wenyan-{versionName}.apk（覆盖写，幂等）。
+     * 下载 APK 到 filesDir/downloads/wenyan-{versionName}.apk（覆盖写，幂等）。
+     * M9：文件名清洗（防路径穿越）+ Content-Length 校验 + SHA256 digest 校验（GitHub asset 元数据）。
      * 失败返回 null（Log.w + 静默），由上层 Toast。
      */
-    suspend fun download(info: UpdateInfo, cacheDir: File): File? = withContext(Dispatchers.IO) {
+    suspend fun download(info: UpdateInfo, filesDir: File): File? = withContext(Dispatchers.IO) {
         runCatching {
-            val dir = File(cacheDir, "downloads").apply { mkdirs() }
-            val target = File(dir, "wenyan-${info.versionName}.apk")
+            val dir = File(filesDir, "downloads").apply { mkdirs() }
+            val target = File(dir, "wenyan-${sanitizeFileName(info.versionName)}.apk")
             val client = okHttp.newBuilder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(120, TimeUnit.SECONDS)
@@ -79,9 +80,32 @@ class UpdateChecker(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@runCatching null
                 val body = response.body ?: return@runCatching null
+                // M9: Content-Length 与 GitHub asset size 对齐（防截断/半包）
+                val contentLength = body.contentLength()
+                if (info.size > 0 && contentLength >= 0 && contentLength != info.size) {
+                    Log.w("UpdateChecker", "apk size mismatch: expected ${info.size} bytes, got $contentLength")
+                    return@runCatching null
+                }
+                // M9: 流式写盘 + 同步计算 SHA-256（防内容被篡改）
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(8192)
                 body.byteStream().use { input ->
                     FileOutputStream(target).use { output ->
-                        input.copyTo(output)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            output.write(buffer, 0, n)
+                            digest.update(buffer, 0, n)
+                        }
+                    }
+                }
+                val expectedDigest = info.digest?.removePrefix("sha256:")?.lowercase()
+                if (expectedDigest != null) {
+                    val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                    if (actual != expectedDigest) {
+                        target.delete()
+                        Log.w("UpdateChecker", "apk digest mismatch")
+                        return@runCatching null
                     }
                 }
             }
@@ -89,3 +113,7 @@ class UpdateChecker(
         }.onFailure { Log.w("UpdateChecker", "apk download failed", it) }.getOrNull()
     }
 }
+
+/** M9: 版本号 → 安全文件名段，仅保留 [A-Za-z0-9_.-]，其余替换为下划线（防恶意 tag 路径穿越） */
+internal fun sanitizeFileName(versionName: String): String =
+    versionName.replace(Regex("[^\\w.-]"), "_").ifBlank { "unknown" }

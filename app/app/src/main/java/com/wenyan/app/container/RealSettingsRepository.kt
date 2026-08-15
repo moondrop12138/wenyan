@@ -183,10 +183,19 @@ class RealSettingsRepository(
     override suspend fun checkUpdate(): UpdateCheckResult = updateChecker.check()
 
     override suspend fun downloadUpdateApk(info: com.wenyan.app.data.update.UpdateInfo): java.io.File? =
-        updateChecker.download(info, context.cacheDir)
+        updateChecker.download(info, context.filesDir)
 
-    /** 下载完成后唤起系统安装器（FileProvider + ACTION_VIEW + FLAG_GRANT_READ_URI_PERMISSION） */
+    /** 下载完成后唤起系统安装器（FileProvider + ACTION_VIEW + FLAG_GRANT_READ_URI_PERMISSION）；
+     *  H4：Android 8+ 安装未知应用需用户授权，未授权先引导到「安装未知应用」设置页 */
     override suspend fun installApk(file: java.io.File): Boolean = runCatching {
+        if (!context.packageManager.canRequestPackageInstalls()) {
+            val settingsIntent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = android.net.Uri.parse("package:${context.packageName}")
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(settingsIntent)
+            return@runCatching
+        }
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",

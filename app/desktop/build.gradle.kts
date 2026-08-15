@@ -11,10 +11,6 @@ plugins {
     application
 }
 
-// WorkBuddy safe-delete 会锁定 build 产物：buildDir 时间戳化绕开（与 :app 同策略）
-val buildRunStamp = System.currentTimeMillis()
-layout.buildDirectory.set(file("build.$buildRunStamp"))
-
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))

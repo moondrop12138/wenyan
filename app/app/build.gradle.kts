@@ -23,11 +23,6 @@ android {
     namespace = "com.wenyan.app"
     compileSdk = 36
 
-    // WorkBuddy safe-delete 会锁定 app/build 产物，导致重复构建时新旧混杂/manifest 冲突。
-    // 每次构建把 buildDir 指到带时间戳的新目录，彻底绕开被锁旧目录；旧目录不再使用、可定期清理。
-    val buildRunStamp = System.currentTimeMillis()
-    buildDir = file("$buildDir.$buildRunStamp")
-
     defaultConfig {
         applicationId = "com.wenyan.app"
         minSdk = 26

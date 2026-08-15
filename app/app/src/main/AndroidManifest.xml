@@ -3,6 +3,8 @@
 
     <!-- 唯一出网权限：用户主动分析时请求用户配置的第三方 LLM 服务 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- H4: Android 8+ 应用内更新安装 APK 需「安装未知应用」授权 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".WenyanApp"

@@ -15,16 +15,31 @@ const el = (tag, cls, html) => {
   return e;
 };
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let WENYAN_TOKEN = '';
+// H5: 统一注入 CSRF token 头（与 Ktor 侧校验一致）
+const authHeaders = (extra) => {
+  const h = Object.assign({}, extra);
+  if (WENYAN_TOKEN) h['X-Wenyan-Token'] = WENYAN_TOKEN;
+  return h;
+};
 const api = {
-  async get(p){ const r = await fetch(p); return r.json(); },
+  async get(p){ const r = await fetch(p, { headers: authHeaders() }); return r.json(); },
   async send(method, p, body){
-    const r = await fetch(p, { method, headers:{'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(p, { method, headers: authHeaders({'Content-Type':'application/json'}), body: body ? JSON.stringify(body) : undefined });
     return r.json();
   },
   post(p,b){ return api.send('POST',p,b); },
   put(p,b){ return api.send('PUT',p,b); },
   del(p){ return api.send('DELETE',p); },
 };
+// H5: 启动时从 /api/bootstrap 获取随机 token（同源可读）
+async function loadToken(){
+  try {
+    const r = await fetch('/api/bootstrap');
+    const j = await r.json();
+    if (j && j.token) WENYAN_TOKEN = j.token;
+  } catch(e) { /* 获取失败则写请求 403，属预期防护 */ }
+}
 let toastTimer;
 function toast(msg){
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -537,7 +552,7 @@ $('fileInput').addEventListener('change', async e => {
   const fd = new FormData();
   files.forEach(f => fd.append('images', f));
   try {
-    const r = await fetch('/api/images/upload', { method:'POST', body: fd });
+    const r = await fetch('/api/images/upload', { method:'POST', headers: authHeaders(), body: fd });
     const j = await r.json();
     if (j.ok){ S.pendingImages.push(...j.dataUrls); renderPending(); }
     else toast(j.error || '图片上传失败');
@@ -624,7 +639,7 @@ async function sendMessage(){
 
   try {
     const resp = await fetch('/api/chat/stream', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, text: text || '[图片]', imageDataUrls: images }),
       signal: ctl.signal,
     });
@@ -735,7 +750,7 @@ async function confirmTranscription(sid, transcription){
 
   try {
     const resp = await fetch('/api/chat/confirm-transcription', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, transcription }),
       signal: ctl.signal,
     });
@@ -1381,6 +1396,7 @@ async function render(){
 // ===== 启动 =====
 (async function init(){
   applyTheme();
+  await loadToken();
   await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions(), refreshSettings()]);
   renderSidebar();
   renderModelPill();

@@ -9,9 +9,11 @@ import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.image.DesktopImageCompressor
 import com.wenyan.app.llm.MAX_IMAGES_PER_REQUEST
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.receiveText
@@ -97,8 +99,27 @@ private fun <T> JSONArray.of(items: List<T>, mapper: (T) -> JSONObject): JSONArr
     return this
 }
 
-/** API 路由（/api 前缀） */
-fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine) {
+/** API 路由（/api 前缀）。token 为启动时生成的随机 CSRF token。 */
+fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: String) {
+
+    // H5: CSRF 防护——所有写请求（POST/PUT/DELETE）校验 X-Wenyan-Token + Host（127.0.0.1/localhost）
+    intercept(ApplicationCallPipeline.Call) {
+        val method = call.request.local.method
+        if (method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Delete) {
+            val tokenOk = call.request.headers["X-Wenyan-Token"] == token
+            val host = call.request.headers["Host"] ?: ""
+            val hostOk = host.isBlank() || host.startsWith("127.0.0.1") || host.startsWith("localhost")
+            if (!tokenOk || !hostOk) {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "forbidden"))
+                finish()
+            }
+        }
+    }
+
+    /** 前端启动时获取 CSRF token（同源可读；跨源攻击者受同源策略限制读不到） */
+    get("/api/bootstrap") {
+        call.respondJson(JSONObject().put("token", token))
+    }
 
     get("/api/health") {
         call.respondText("""{"ok":true,"version":"$DESKTOP_VERSION-desktop"}""", ContentType.Application.Json)

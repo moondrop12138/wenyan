@@ -23,6 +23,10 @@ data class UpdateInfo(
     val versionName: String,   // 如 "1.7.3"
     val apkUrl: String,
     val notes: String,
+    /** M9: GitHub asset 字节数（-1=未知），下载后校验 Content-Length */
+    val size: Long = -1,
+    /** M9: GitHub asset SHA256 digest（"sha256:..."，null=未知），下载后校验完整性 */
+    val digest: String? = null,
 )
 
 /** 更新检查结果（错误码约定：UPDATE_NETWORK / UPDATE_PARSE / UPDATE_NO_ASSET / UPDATE_DOWNLOAD / UPDATE_INSTALL） */
@@ -75,22 +79,32 @@ class UpdateClient(
         if (tag.isEmpty()) return null
         val versionName = tag.removePrefix("v")
         if (versionName.isEmpty()) return null
-        val apkUrl = parseApkUrl(json.optJSONArray("assets"))
-        if (apkUrl == null) return null
+        val asset = parseApkAsset(json.optJSONArray("assets"))
+        if (asset == null) return null
         return UpdateInfo(
             versionName = versionName,
-            apkUrl = apkUrl,
+            apkUrl = asset.url,
             notes = json.optString("body", "").trim(),
+            size = asset.size,
+            digest = asset.digest,
         )
     }
 
-    /** assets 中第一个 .apk 结尾的 browser_download_url */
-    private fun parseApkUrl(assets: org.json.JSONArray?): String? {
+    private data class ApkAsset(val url: String, val size: Long, val digest: String?)
+
+    /** assets 中第一个 .apk 结尾的资产（含 browser_download_url + size + digest） */
+    private fun parseApkAsset(assets: org.json.JSONArray?): ApkAsset? {
         if (assets == null) return null
         for (i in 0 until assets.length()) {
             val obj = assets.optJSONObject(i) ?: continue
             val url = obj.optString("browser_download_url", "")
-            if (url.endsWith(".apk", ignoreCase = true)) return url
+            if (url.endsWith(".apk", ignoreCase = true)) {
+                return ApkAsset(
+                    url = url,
+                    size = obj.optLong("size", -1),
+                    digest = obj.optString("digest", "").takeIf { it.isNotBlank() },
+                )
+            }
         }
         return null
     }

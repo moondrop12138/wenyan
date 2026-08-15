@@ -1,10 +1,16 @@
 package com.wenyan.app.data.update
 
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 
 /**
  * v1.7.3 T4 UpdateChecker 版本比较纯逻辑测试（v1.7.3-fix 统一 versionName 段比较）：
@@ -120,5 +126,81 @@ class UpdateCheckerTest {
     fun `compareVersionNames same version different trailing zeros equal`() {
         val c = checker()
         assertEquals(0, c.compareVersionNames("1.7.3", "1.7.3.0.0"))
+    }
+
+    // ===== M9: 文件名清洗 + 下载完整性校验 =====
+
+    @Test
+    fun `sanitizeFileName keeps plain version`() {
+        assertEquals("1.7.3", sanitizeFileName("1.7.3"))
+        assertEquals("1.7.3-rc.1", sanitizeFileName("1.7.3-rc.1"))
+    }
+
+    @Test
+    fun `sanitizeFileName neutralizes path traversal`() {
+        assertFalse(sanitizeFileName("../../evil").contains("/"))
+        assertFalse(sanitizeFileName("../../evil").contains("\\"))
+    }
+
+    @Test
+    fun `sanitizeFileName empty falls back to unknown`() {
+        assertEquals("unknown", sanitizeFileName(""))
+    }
+
+    @Test
+    fun `download rejects content length mismatch`() = runBlocking {
+        val server = MockWebServer()
+        server.start()
+        try {
+            server.enqueue(MockResponse().setResponseCode(200).setBody("fake-apk"))
+            val tmp = Files.createTempDirectory("wenyan").toFile()
+            val result = checker().download(
+                UpdateInfo("1.7.3", server.url("/a.apk").toString(), "", size = 999),
+                tmp,
+            )
+            assertNull(result)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `download rejects sha256 digest mismatch`() = runBlocking {
+        val server = MockWebServer()
+        server.start()
+        try {
+            server.enqueue(MockResponse().setResponseCode(200).setBody("fake-apk-content"))
+            val tmp = Files.createTempDirectory("wenyan").toFile()
+            val result = checker().download(
+                UpdateInfo(
+                    "1.7.3", server.url("/a.apk").toString(), "",
+                    size = 16,
+                    digest = "sha256:" + "0".repeat(64),
+                ),
+                tmp,
+            )
+            assertNull(result)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `download succeeds with sanitized name`() = runBlocking {
+        val server = MockWebServer()
+        server.start()
+        try {
+            server.enqueue(MockResponse().setResponseCode(200).setBody("fake-apk-content"))
+            val tmp = Files.createTempDirectory("wenyan").toFile()
+            val result = checker().download(
+                UpdateInfo("1.7.3", server.url("/a.apk").toString(), "", size = 16),
+                tmp,
+            )
+            assertNotNull(result)
+            assertEquals("wenyan-1.7.3.apk", result?.name)
+            assertEquals("fake-apk-content", result?.readText())
+        } finally {
+            server.shutdown()
+        }
     }
 }

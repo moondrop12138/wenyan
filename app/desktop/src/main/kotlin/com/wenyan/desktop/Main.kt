@@ -44,6 +44,9 @@ fun main() {
     // 首次启动注入预设提供商/模型（幂等）
     runBlocking { service.seedIfEmpty() }
 
+    // H5: 每次启动生成随机 CSRF token（前端 bootstrap 获取后随请求带 X-Wenyan-Token 头）
+    val token = java.util.UUID.randomUUID().toString().replace("-", "")
+
     val port = findFreePort(18923)
     println("[wenyan-desktop] starting on http://127.0.0.1:$port")
 
@@ -52,7 +55,7 @@ fun main() {
             json(Json { ignoreUnknownKeys = true; prettyPrint = false })
         }
         routing {
-            apiRoutes(service, ChatEngine(service))
+            apiRoutes(service, ChatEngine(service), token)
             staticPage()
         }
     }.start(wait = false)
