@@ -4,7 +4,11 @@
 */
 'use strict';
 
-const APP_VERSION = '1.9.1';
+// L6: 版本号从 /api/health 拉取（避免与后端 DESKTOP_VERSION 漂移），此处为兜底默认
+let APP_VERSION = '1.9.1';
+async function loadVersion(){
+  try { const h = await (await fetch('/api/health')).json(); if (h && h.version) APP_VERSION = h.version.replace('-desktop',''); } catch(e) {}
+}
 
 // ===== 工具 =====
 const $ = id => document.getElementById(id);
@@ -1397,6 +1401,7 @@ async function render(){
 (async function init(){
   applyTheme();
   await loadToken();
+  await loadVersion();
   await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions(), refreshSettings()]);
   renderSidebar();
   renderModelPill();

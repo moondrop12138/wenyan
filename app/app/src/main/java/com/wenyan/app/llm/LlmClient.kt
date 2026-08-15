@@ -136,6 +136,8 @@ class LlmClient(
             .url("$baseUrl/chat/completions")
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
+            // L15: 统一 User-Agent（与 L8 UpdateClient 一致；部分网关按 UA 做访问控制）
+            .header("User-Agent", "wenyan-llm-client")
             .post(requestBody)
             .build()
 

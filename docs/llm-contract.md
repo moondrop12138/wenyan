@@ -1,5 +1,7 @@
 # LLM 契约细化 - 狗头军师（安卓）v1.0
 
+> **L14 版本注**：本文档描述 v1.5 旧契约，与 v1.6+ 代码不一致——当前：不再发送 `temperature`；回答统一四段结构 schema v2（原五步法 JSON 兼容映射）；历史 token 预算 24K（CJK 1 字≈1 token 口径）。以代码 `ChatRequestBuilder` / `AnalysisParser` / `HistoryCompactor` 为准。
+
 > 依据：SPEC.md §5（外部 API 契约）+ architecture.md §4/§5
 > 作者：高见远（架构师）| 日期：2026-08-02
 > 状态：Phase 2 技术细化

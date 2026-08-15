@@ -110,7 +110,7 @@ object MemoryExtractor {
         zone: ZoneId = ZoneId.systemDefault(),
     ): Long? {
         if (expiresIn != EXPIRES_TODAY && expiresIn != EXPIRES_WEEK) return null
-        val today = LocalDate.ofInstant(java.time.Instant.ofEpochMilli(now), zone)
+        val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val target = when (expiresIn) {
             EXPIRES_TODAY -> today.plusDays(1)
             EXPIRES_WEEK -> {

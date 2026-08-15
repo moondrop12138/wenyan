@@ -1,5 +1,6 @@
 package com.wenyan.app.ui.components.glass
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -57,6 +58,7 @@ import com.wenyan.app.ui.theme.LocalGtjIsDark
  *
  * v1.8.1 B4：移除 glowPositions/glowIntensities——dead path（接收后从未使用）且引发 60fps 重组。
  */
+@SuppressLint("NewApi") // RuntimeShader 伪折射已由 isRuntimeShaderSupported() 做 API 33 守卫
 @Composable
 fun Modifier.liquidGlass(
     shape: Shape = GtjShape.xl,

@@ -99,6 +99,9 @@ private fun <T> JSONArray.of(items: List<T>, mapper: (T) -> JSONObject): JSONArr
     return this
 }
 
+/** L7: 图片上传总大小上限（50MB，防全量读内存） */
+private const val MAX_UPLOAD_TOTAL_BYTES = 50L * 1024 * 1024
+
 /** API 路由（/api 前缀）。token 为启动时生成的随机 CSRF token。 */
 fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: String) {
 
@@ -427,16 +430,21 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         // part.dispose() 后 provider() 返回的 Input 立即失效，延迟读取只会得到 0 字节。
         // forEachPart 是普通 lambda 不能 suspend，但 provider() 返回的 Input.readBytes() 是同步阻塞读，可直接用。
         val imagesBytes = mutableListOf<ByteArray>()
+        var totalBytes = 0L
         multipart.forEachPart { part ->
             if (part is PartData.FileItem) {
-                imagesBytes.add(part.provider().readBytes())
+                val bytes = part.provider().readBytes()
+                totalBytes += bytes.size
+                imagesBytes.add(bytes)
             }
             part.dispose()
         }
 
         val dataUrls = mutableListOf<String>()
         var error: String? = null
-        if (imagesBytes.isEmpty()) {
+        if (totalBytes > MAX_UPLOAD_TOTAL_BYTES) {
+            error = "上传总大小超过 50MB 限制"
+        } else if (imagesBytes.isEmpty()) {
             error = "未收到图片"
         } else if (imagesBytes.size > MAX_IMAGES_PER_REQUEST) {
             error = "一次最多上传 $MAX_IMAGES_PER_REQUEST 张图片"
