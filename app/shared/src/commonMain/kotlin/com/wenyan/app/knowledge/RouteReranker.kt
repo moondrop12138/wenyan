@@ -47,6 +47,10 @@ class RouteReranker(
         }
     }
 
+    fun profileFor(doc: String): DocProfile? = profiles[doc]
+
+    fun score(f: DoubleArray): Double = dot(weights, f)
+
     private fun features(query: String, doc: String): DoubleArray {
         val profile = profiles[doc] ?: return DoubleArray(6)
         val keywordHits = profile.keywords.count { query.contains(it) }

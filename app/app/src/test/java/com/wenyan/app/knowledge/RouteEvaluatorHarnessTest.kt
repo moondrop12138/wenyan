@@ -15,7 +15,7 @@ class RouteEvaluatorHarnessTest {
     fun `evaluate contains vs bm25 on real query set`() {
         val userDir = System.getProperty("user.dir") ?: "."
         val roots = listOf(File(userDir), File(userDir, "app"))
-        val routesFile = roots.map { File(it, "src/main/assets/knowledge/routes.json") }.firstOrNull { it.exists() }
+        val routesFile = roots.map { File(it, "src/main/assets/knowledge/routes-v2.json") }.firstOrNull { it.exists() }
             ?: error("routes.json not found from $userDir")
         val routesJson = routesFile.readText(Charsets.UTF_8)
         val index = KnowledgeIndex(routesJson)
