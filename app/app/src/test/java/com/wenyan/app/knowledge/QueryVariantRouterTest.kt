@@ -60,16 +60,16 @@ class QueryVariantRouterTest {
         val bm25Res = RouteEvaluator.evaluate(queries, router = { q -> index.routeByBm25(q, docTexts, topK = 3) })
         val rerankerRes = RouteEvaluator.evaluate(queries, router = { q -> reranker.rank(q) })
         val variantRes = RouteEvaluator.evaluate(queries, router = { q -> variantRouter.route(q) })
-        val hybridRes = RouteEvaluator.evaluate(queries, router = { q ->
+        val hybridRouterRes = RouteEvaluator.evaluate(queries, router = { q -> hybridRouter.route(q) })
+        val hybridFillEmptyRes = RouteEvaluator.evaluate(queries, router = { q ->
             val base = index.route(q).toMutableList()
-            if (base.size < 3) {
-                variantRouter.route(q, topK = 5).forEach { d ->
+            if (base.isEmpty()) {
+                variantRouter.route(q, topK = 3).forEach { d ->
                     if (d !in base && base.size < 3) base.add(d)
                 }
             }
             base
         })
-        val hybridFillEmptyRes = RouteEvaluator.evaluate(queries, router = { q -> hybridRouter.route(q) })
         val hybridFillOneRes = RouteEvaluator.evaluate(queries, router = { q ->
             val base = index.route(q).toMutableList()
             if (base.size < 2) {
@@ -88,12 +88,12 @@ class QueryVariantRouterTest {
         println("variant : P=${variantRes.precisionAtK} R=${variantRes.recallAtK} F1=${f1(variantRes)}")
         println("variant vs contains F1 diff=${f1(variantRes) - f1(containsRes)}")
         println("variant vs reranker F1 diff=${f1(variantRes) - f1(rerankerRes)}")
-        println("hybrid : P=${hybridRes.precisionAtK} R=${hybridRes.recallAtK} F1=${f1(hybridRes)}")
-        println("hybrid vs contains F1 diff=${f1(hybridRes) - f1(containsRes)}")
-        println("hybrid vs variant F1 diff=${f1(hybridRes) - f1(variantRes)}")
+        println("hybridRouter(fillOne): P=${hybridRouterRes.precisionAtK} R=${hybridRouterRes.recallAtK} F1=${f1(hybridRouterRes)}")
+        println("hybrid vs contains F1 diff=${f1(hybridRouterRes) - f1(containsRes)}")
+        println("hybrid vs variant F1 diff=${f1(hybridRouterRes) - f1(variantRes)}")
         println("hybridFillEmpty: P=${hybridFillEmptyRes.precisionAtK} R=${hybridFillEmptyRes.recallAtK} F1=${f1(hybridFillEmptyRes)}")
         println("hybridFillOne  : P=${hybridFillOneRes.precisionAtK} R=${hybridFillOneRes.recallAtK} F1=${f1(hybridFillOneRes)}")
-        assertTrue("hybridFillEmpty should beat contains on F1", f1(hybridFillEmptyRes) > f1(containsRes))
+        assertTrue("hybridRouter(fillOne) should beat contains on F1", f1(hybridRouterRes) > f1(containsRes))
     }
 
     private fun f1(r: RouteEvaluator.EvalResult): Double {

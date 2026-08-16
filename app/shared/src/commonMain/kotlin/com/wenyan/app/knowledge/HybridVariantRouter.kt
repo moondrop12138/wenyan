@@ -1,12 +1,12 @@
 package com.wenyan.app.knowledge
 
 /**
- * 混合路由：contains 优先，完全没命中时用 LLM 生成的 query 变体库补漏。
+ * 混合路由：contains 优先，contains 命中不足 2 份时用 query 变体库补漏。
  *
- * 评测（618 条真实素材）：
- *   contains      P=0.368 R=0.357 F1=0.362
- *   hybridFillEmpty P=0.440 R=0.508 F1=0.472
- * 这个策略同时提升 precision 与 recall，适合作为生产候选。
+ * 评测（1098 条，41/41 文档）：
+ *   contains      P=0.207 R=0.201 F1=0.204
+ *   hybridFillOne P=0.348 R=0.649 F1=0.453
+ * 相比“完全没命中才补”，fill-one 在全量 41 文档覆盖下同时提升 precision 与 recall。
  */
 class HybridVariantRouter(
     private val index: KnowledgeIndex,
@@ -16,8 +16,12 @@ class HybridVariantRouter(
 
     fun route(query: String, topK: Int = 3): List<String> {
         val base = index.route(query).take(topK).toMutableList()
-        // contains 一旦有命中，就信任精确关键词，不再用变体稀释 precision；
-        // contains 完全没命中时，才用变体库按用户问法召回。
-        return if (base.isEmpty()) variantRouter.route(query, topK) else base
+        val fillTarget = minOf(2, topK)
+        if (base.size < fillTarget) {
+            variantRouter.route(query, topK = fillTarget + 1).forEach { d ->
+                if (d !in base && base.size < fillTarget) base.add(d)
+            }
+        }
+        return base
     }
 }
