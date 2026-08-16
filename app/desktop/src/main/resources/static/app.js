@@ -95,8 +95,7 @@ function persistGlassSettings(){
   localStorage.setItem('wenyan.edgeFades', S.edgeFades ? '1' : '0');
 }
 
-let fluidRaf = 0;
-let fluidResize = null;
+let fluidHandle = null;
 let fluidTheme = null;
 
 function applyTheme(){
@@ -146,60 +145,21 @@ function applyGlass(){
   persistGlassSettings();
 }
 
-// ---- 流体背景（Canvas 2D 轻量流体感，非 WebGL 完整模拟） ----
+// ---- 流体背景（WebGL2，1:1 复刻 DSH-Transparent-UI-Plugin fluid-shader） ----
 function startFluid(){
   const canvas = $('wyFluidCanvas');
   const ambient = $('wyAmbient');
-  if (!canvas || !ambient || (fluidRaf && fluidTheme === S.theme)) return;
+  if (!canvas || !ambient || (fluidHandle && fluidTheme === S.theme)) return;
   stopFluid();
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
   fluidTheme = S.theme;
-  const resize = () => {
-    canvas.width = Math.max(1, ambient.clientWidth);
-    canvas.height = Math.max(1, ambient.clientHeight);
-  };
-  resize();
-  fluidResize = resize;
-  window.addEventListener('resize', fluidResize);
-  // 默认流体颜色 = 当前 UI 亮色 / 暗色（与 :root / [data-theme=dark] token 对齐）
-  const palette = S.theme === 'dark'
-    ? ['rgba(33,26,19,0.60)', 'rgba(43,34,26,0.58)', 'rgba(58,42,28,0.52)', 'rgba(206,138,86,0.30)', 'rgba(223,166,120,0.22)']
-    : ['rgba(246,240,230,0.62)', 'rgba(239,230,216,0.56)', 'rgba(192,116,63,0.32)', 'rgba(164,85,28,0.24)', 'rgba(223,166,120,0.26)'];
-  const blobs = Array.from({ length: 8 }, (_, i) => ({
-    x: Math.random(),
-    y: Math.random(),
-    r: 0.20 + Math.random() * 0.24,
-    sx: (Math.random() - 0.5) * 0.0009,
-    sy: (Math.random() - 0.5) * 0.0009,
-    phase: Math.random() * Math.PI * 2,
-    speed: 0.00035 + Math.random() * 0.00065,
-    color: palette[i % palette.length],
-  }));
-  let start = performance.now();
-  const draw = (now) => {
-    if (!ambient || ambient.hidden) return;
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    const t = now - start;
-    blobs.forEach(b => {
-      const x = (b.x + b.sx * t + 0.5 * Math.sin(t * b.speed + b.phase) * 0.07) * w;
-      const y = (b.y + b.sy * t + 0.5 * Math.cos(t * b.speed * 0.7 + b.phase) * 0.07) * h;
-      const r = b.r * Math.min(w, h) * (1 + 0.09 * Math.sin(t * 0.0004 + b.phase));
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, b.color);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    });
-    fluidRaf = requestAnimationFrame(draw);
-  };
-  fluidRaf = requestAnimationFrame(draw);
+  if (window.AquaFluid) fluidHandle = window.AquaFluid.attach(canvas, S.theme);
 }
 
 function stopFluid(){
-  if (fluidRaf){ cancelAnimationFrame(fluidRaf); fluidRaf = 0; }
-  if (fluidResize){ window.removeEventListener('resize', fluidResize); fluidResize = null; }
+  if (fluidHandle){
+    try { fluidHandle.dispose(); } catch (e) { /* ignore */ }
+    fluidHandle = null;
+  }
 }
 
 

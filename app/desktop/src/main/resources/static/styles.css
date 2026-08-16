@@ -463,7 +463,7 @@ a{color:var(--accent);text-decoration:none}
 
 /* ---------- 背景层 ---------- */
 .wy-ambient,.wy-wallpaper{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.wy-ambient canvas{position:absolute;inset:0;width:100%;height:100%;filter:hue-rotate(var(--wy-fluid-hue))}
+.wy-ambient canvas{position:absolute;inset:0;width:100%;height:100%}
 .wy-ambient-veil{position:absolute;inset:0;background-image:
   linear-gradient(rgba(255,255,255,var(--wy-brightness-white)),rgba(255,255,255,var(--wy-brightness-white))),
   linear-gradient(rgba(0,0,0,var(--wy-brightness-black)),rgba(0,0,0,var(--wy-brightness-black)))}
@@ -488,14 +488,23 @@ a{color:var(--accent);text-decoration:none}
   --glass-strong:rgb(34 26 20 / calc(var(--wy-glass-frost) + 0.29));
 }
 
-/* 沉浸式：让流体背景穿透所有大容器，面板全部浮在流体上 */
-[data-wy-glass="on"] body{background:transparent}
+/* 沉浸式：让流体背景穿透所有大容器，面板全部浮在流体上。
+   流体色相直接作用在 body 上，整个界面（流体+玻璃+文字）一起变色。 */
+[data-wy-glass="on"] body{background:transparent;filter:hue-rotate(var(--wy-fluid-hue))}
 [data-wy-glass="on"] #app{background:transparent}
 [data-wy-glass="on"] .main{background:transparent}
 [data-wy-glass="on"] .chat-scroll{background:transparent}
-[data-wy-glass="on"] .page{background:transparent}
-[data-wy-glass="on"] .page-body{background:transparent}
 [data-wy-glass="on"] .empty-state{background:transparent}
+[data-wy-glass="on"] .page-body{background:transparent}
+/* 进入设置时：设置页变成磨砂玻璃层，把背后的聊天/流体直接模糊掉 */
+[data-wy-glass="on"] .page{
+  background:rgb(246 240 230 / calc(var(--wy-glass-frost) * 0.6));
+  backdrop-filter:blur(var(--wy-glass-blur)) saturate(170%);
+  -webkit-backdrop-filter:blur(var(--wy-glass-blur)) saturate(170%);
+}
+[data-wy-glass="on"][data-theme=dark] .page{
+  background:rgb(23 18 14 / calc(var(--wy-glass-frost) * 0.68));
+}
 
 [data-wy-glass="on"] .glass,
 [data-wy-glass="on"] .glass-strong,
@@ -507,6 +516,50 @@ a{color:var(--accent);text-decoration:none}
 [data-wy-glass="on"] .toast{
   backdrop-filter:blur(var(--wy-glass-blur)) saturate(170%);
   -webkit-backdrop-filter:blur(var(--wy-glass-blur)) saturate(170%);
+}
+
+/* ---------- 悬浮玻璃栏（1:1 复刻插件 DSH-Transparent-UI-Plugin 的 mica 卡片配方） ----------
+   顶栏/输入栏脱离文档流，绝对定位浮在消息流之上；消息从玻璃栏底下穿过，
+   被 backdrop-filter 磨砂，而不是在栏边缘被硬切。卡片配方与插件一致：
+   纵向渐变填充（顶部 50%×frost → 底部 35%×frost）+ 1px 描边 + 内高光 + 柔和投影。 */
+[data-wy-glass="on"]{
+  --wy-card-light:linear-gradient(180deg,
+    rgb(255 255 255 / calc(var(--wy-glass-frost) * 0.50)),
+    rgb(255 255 255 / calc(var(--wy-glass-frost) * 0.35)));
+  --wy-card-dark:linear-gradient(180deg,
+    rgb(42 46 56 / calc(var(--wy-glass-frost) * 0.50)),
+    rgb(22 25 34 / calc(var(--wy-glass-frost) * 0.50)));
+}
+[data-wy-glass="on"] .main .topbar{
+  background:var(--wy-card-light);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 28px rgba(110,70,30,.1);
+}
+[data-wy-glass="on"] .main .input-bar{
+  background:var(--wy-card-light);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 32px rgba(110,70,30,.12);
+}
+[data-wy-glass="on"] .main .input-bar:focus-within{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 32px rgba(110,70,30,.12),0 0 0 2px var(--l2b);
+}
+/* 云母模式（插件的悬浮布局）：顶栏/输入栏脱离文档流，消息流从栏下穿过 */
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .main .topbar{
+  position:absolute;top:12px;left:16px;right:16px;margin:0;z-index:8;
+}
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .main .input-zone{
+  position:absolute;left:0;right:0;bottom:0;z-index:8;background:transparent;
+}
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .main .chat-scroll{padding-top:100px;padding-bottom:130px}
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .main .empty-state{padding-top:82px;padding-bottom:122px}
+[data-wy-glass="on"][data-theme=dark] .main .topbar,
+[data-wy-glass="on"][data-theme=dark] .main .input-bar{
+  background:var(--wy-card-dark);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 28px rgba(0,0,0,.3);
+}
+[data-wy-glass="on"][data-theme=dark] .main .input-bar{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 32px rgba(0,0,0,.4);
+}
+[data-wy-glass="on"][data-theme=dark] .main .input-bar:focus-within{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 32px rgba(0,0,0,.4),0 0 0 2px var(--l2b);
 }
 
 /* ---------- Mica 模式：悬浮玻璃卡片布局 ---------- */
