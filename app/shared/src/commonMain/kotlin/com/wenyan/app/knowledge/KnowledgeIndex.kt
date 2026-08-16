@@ -68,6 +68,9 @@ class KnowledgeIndex(rawJson: String) {
 
     fun allDocs(): List<String> = routes.flatMap { it.docs }.distinct()
 
+    /** 返回映射到指定文档的所有 route（DocProfile 构造用） */
+    fun routesFor(doc: String): List<KnowledgeRoute> = routes.filter { doc in it.docs }
+
     /**
      * O7: 纯 BM25 路由（两阶段检索的粗召回候选生成）。
      * 当前仅用于离线评测对比，生产 route() 仍保持 contains 基线；
