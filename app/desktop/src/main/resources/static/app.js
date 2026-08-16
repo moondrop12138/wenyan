@@ -5,7 +5,7 @@
 'use strict';
 
 // L6: 版本号从 /api/health 拉取（避免与后端 DESKTOP_VERSION 漂移），此处为兜底默认
-let APP_VERSION = '1.9.3';
+let APP_VERSION = '1.9.4';
 async function loadVersion(){
   try { const h = await (await fetch('/api/health')).json(); if (h && h.version) APP_VERSION = h.version.replace('-desktop',''); } catch(e) {}
 }
@@ -63,15 +63,14 @@ const S = {
   // Web 端玻璃主题增强（默认关闭：现有 UI 为默认）
   glassEnabled: localStorage.getItem('wenyan.glassEnabled') === '1',
   glassMode: localStorage.getItem('wenyan.glassMode') || 'mica',
-  glassBlur: Number(localStorage.getItem('wenyan.glassBlur')) || 20,
-  glassFrost: localStorage.getItem('wenyan.glassFrost') === null ? 55 : Number(localStorage.getItem('wenyan.glassFrost')),
-  fluidHue: Number(localStorage.getItem('wenyan.fluidHue')) || 0,
-  bgBrightness: localStorage.getItem('wenyan.bgBrightness') === null ? 50 : Number(localStorage.getItem('wenyan.bgBrightness')),
+  glassBlur: localStorage.getItem('wenyan.glass2.blur') === null ? 4 : Number(localStorage.getItem('wenyan.glass2.blur')),
+  glassFrost: localStorage.getItem('wenyan.glass2.frost') === null ? 30 : Number(localStorage.getItem('wenyan.glass2.frost')),
+  fluidHue: localStorage.getItem('wenyan.glass2.hue') === null ? 0 : Number(localStorage.getItem('wenyan.glass2.hue')),
+  bgBrightness: localStorage.getItem('wenyan.glass2.brightness') === null ? 50 : Number(localStorage.getItem('wenyan.glass2.brightness')),
   bgSource: localStorage.getItem('wenyan.bgSource') || 'fluid',
   wallpaper: localStorage.getItem('wenyan.wallpaper') || '',
   wallpaperBlur: Number(localStorage.getItem('wenyan.wallpaperBlur')) || 0,
   wallpaperFrost: Number(localStorage.getItem('wenyan.wallpaperFrost')) || 0,
-  whale: localStorage.getItem('wenyan.whale') !== '0',
   edgeFades: localStorage.getItem('wenyan.edgeFades') !== '0',
   theme: localStorage.getItem('wenyan.theme') || 'light',
   route: 'chat',
@@ -85,23 +84,20 @@ const S = {
 function persistGlassSettings(){
   localStorage.setItem('wenyan.glassEnabled', S.glassEnabled ? '1' : '0');
   localStorage.setItem('wenyan.glassMode', S.glassMode);
-  localStorage.setItem('wenyan.glassBlur', String(S.glassBlur));
-  localStorage.setItem('wenyan.glassFrost', String(S.glassFrost));
-  localStorage.setItem('wenyan.fluidHue', String(S.fluidHue));
-  localStorage.setItem('wenyan.bgBrightness', String(S.bgBrightness));
+  localStorage.setItem('wenyan.glass2.blur', String(S.glassBlur));
+  localStorage.setItem('wenyan.glass2.frost', String(S.glassFrost));
+  localStorage.setItem('wenyan.glass2.hue', String(S.fluidHue));
+  localStorage.setItem('wenyan.glass2.brightness', String(S.bgBrightness));
   localStorage.setItem('wenyan.bgSource', S.bgSource);
   if (localStorage.getItem('wenyan.wallpaper') !== S.wallpaper) localStorage.setItem('wenyan.wallpaper', S.wallpaper);
   localStorage.setItem('wenyan.wallpaperBlur', String(S.wallpaperBlur));
   localStorage.setItem('wenyan.wallpaperFrost', String(S.wallpaperFrost));
-  localStorage.setItem('wenyan.whale', S.whale ? '1' : '0');
   localStorage.setItem('wenyan.edgeFades', S.edgeFades ? '1' : '0');
 }
 
 let fluidRaf = 0;
 let fluidResize = null;
-let whaleRaf = 0;
-let whaleResize = null;
-let whaleParticles = [];
+let fluidTheme = null;
 
 function applyTheme(){
   document.documentElement.dataset.theme = S.theme;
@@ -133,7 +129,6 @@ function applyGlass(){
   const wallpaper = $('wyWallpaper');
   const fadeTop = $('wyFadeTop');
   const fadeBottom = $('wyFadeBottom');
-  const whale = $('wyWhale');
   const useWallpaper = S.glassEnabled && S.bgSource === 'wallpaper' && !!S.wallpaper;
   const useFluid = S.glassEnabled && (S.bgSource === 'fluid' || (S.bgSource === 'wallpaper' && !S.wallpaper));
   if (ambient) ambient.hidden = !useFluid;
@@ -144,12 +139,9 @@ function applyGlass(){
   }
   if (fadeTop) fadeTop.hidden = !(S.glassEnabled && S.edgeFades);
   if (fadeBottom) fadeBottom.hidden = !(S.glassEnabled && S.edgeFades);
-  if (whale) whale.hidden = !(S.glassEnabled && S.whale);
 
   if (useFluid) startFluid();
   else stopFluid();
-  if (S.glassEnabled && S.whale) startWhale();
-  else stopWhale();
 
   persistGlassSettings();
 }
@@ -158,9 +150,11 @@ function applyGlass(){
 function startFluid(){
   const canvas = $('wyFluidCanvas');
   const ambient = $('wyAmbient');
-  if (!canvas || !ambient || fluidRaf) return;
+  if (!canvas || !ambient || (fluidRaf && fluidTheme === S.theme)) return;
+  stopFluid();
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+  fluidTheme = S.theme;
   const resize = () => {
     canvas.width = Math.max(1, ambient.clientWidth);
     canvas.height = Math.max(1, ambient.clientHeight);
@@ -168,15 +162,19 @@ function startFluid(){
   resize();
   fluidResize = resize;
   window.addEventListener('resize', fluidResize);
-  const blobs = Array.from({ length: 7 }, (_, i) => ({
+  // 默认流体颜色 = 当前 UI 亮色 / 暗色（与 :root / [data-theme=dark] token 对齐）
+  const palette = S.theme === 'dark'
+    ? ['rgba(33,26,19,0.60)', 'rgba(43,34,26,0.58)', 'rgba(58,42,28,0.52)', 'rgba(206,138,86,0.30)', 'rgba(223,166,120,0.22)']
+    : ['rgba(246,240,230,0.62)', 'rgba(239,230,216,0.56)', 'rgba(192,116,63,0.32)', 'rgba(164,85,28,0.24)', 'rgba(223,166,120,0.26)'];
+  const blobs = Array.from({ length: 8 }, (_, i) => ({
     x: Math.random(),
     y: Math.random(),
-    r: 0.18 + Math.random() * 0.22,
-    sx: (Math.random() - 0.5) * 0.0008,
-    sy: (Math.random() - 0.5) * 0.0008,
+    r: 0.20 + Math.random() * 0.24,
+    sx: (Math.random() - 0.5) * 0.0009,
+    sy: (Math.random() - 0.5) * 0.0009,
     phase: Math.random() * Math.PI * 2,
-    speed: 0.0003 + Math.random() * 0.0006,
-    color: ['rgba(242,203,169,0.32)', 'rgba(223,166,120,0.28)', 'rgba(192,116,63,0.22)', 'rgba(206,138,86,0.22)'][i % 4],
+    speed: 0.00035 + Math.random() * 0.00065,
+    color: palette[i % palette.length],
   }));
   let start = performance.now();
   const draw = (now) => {
@@ -185,9 +183,9 @@ function startFluid(){
     ctx.clearRect(0, 0, w, h);
     const t = now - start;
     blobs.forEach(b => {
-      const x = (b.x + b.sx * t + 0.5 * Math.sin(t * b.speed + b.phase) * 0.06) * w;
-      const y = (b.y + b.sy * t + 0.5 * Math.cos(t * b.speed * 0.7 + b.phase) * 0.06) * h;
-      const r = b.r * Math.min(w, h) * (1 + 0.08 * Math.sin(t * 0.0004 + b.phase));
+      const x = (b.x + b.sx * t + 0.5 * Math.sin(t * b.speed + b.phase) * 0.07) * w;
+      const y = (b.y + b.sy * t + 0.5 * Math.cos(t * b.speed * 0.7 + b.phase) * 0.07) * h;
+      const r = b.r * Math.min(w, h) * (1 + 0.09 * Math.sin(t * 0.0004 + b.phase));
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0, b.color);
       g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -204,67 +202,7 @@ function stopFluid(){
   if (fluidResize){ window.removeEventListener('resize', fluidResize); fluidResize = null; }
 }
 
-// ---- 粒子鲸鱼（轻量 Canvas 粒子，仅作装饰） ----
-function startWhale(){
-  const host = $('wyWhale');
-  const canvas = $('wyWhaleCanvas');
-  if (!host || !canvas || whaleRaf) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const position = () => {
-    const main = document.querySelector('.main');
-    const r = main ? main.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
-    const size = Math.round(Math.max(180, Math.min(420, r.height * 0.4)));
-    host.style.width = size + 'px';
-    host.style.height = size + 'px';
-    host.style.left = Math.round(r.left + r.width / 2 - size / 2) + 'px';
-    host.style.top = Math.round(r.top + r.height / 2 - size / 2) + 'px';
-  };
-  position();
-  whaleResize = position;
-  window.addEventListener('resize', whaleResize);
-  if (!whaleParticles.length){
-    // 简单鲸鱼剪影点阵（用少量粒子勾勒鱼形）
-    const pts = [];
-    for (let i = 0; i < 90; i++){
-      const a = i / 90 * Math.PI * 2;
-      const rx = 0.42 + 0.08 * Math.sin(a * 3);
-      const ry = 0.22 + 0.05 * Math.cos(a * 2);
-      const x = 0.5 + Math.cos(a) * rx;
-      const y = 0.5 + Math.sin(a) * ry * 0.7;
-      pts.push({ x, y, sx: 0.5 + Math.random() * 0.4 - 0.2, sy: 0.5 + Math.random() * 0.4 - 0.2, p: Math.random() * Math.PI * 2 });
-    }
-    whaleParticles = pts;
-  }
-  const dark = S.theme === 'dark';
-  const color = dark ? 'rgba(255,255,255,0.75)' : 'rgba(80,70,60,0.55)';
-  let start = performance.now();
-  const draw = (now) => {
-    if (!host || host.hidden) return;
-    const w = canvas.width = host.clientWidth || 300;
-    const h = canvas.height = host.clientHeight || 300;
-    ctx.clearRect(0, 0, w, h);
-    const t = (now - start) / 1000;
-    const assemble = Math.min(1, t / 2.5);
-    whaleParticles.forEach((p, i) => {
-      const px = p.sx + (p.x - p.sx) * assemble;
-      const py = p.sy + (p.y - p.sy) * assemble;
-      const jx = Math.sin(t * 0.8 + i + p.p) * 0.008;
-      const jy = Math.cos(t * 0.6 + i * 0.7 + p.p) * 0.008;
-      ctx.beginPath();
-      ctx.arc((px + jx) * w, (py + jy) * h, 1.4 + (i % 3) * 0.4, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    });
-    whaleRaf = requestAnimationFrame(draw);
-  };
-  whaleRaf = requestAnimationFrame(draw);
-}
 
-function stopWhale(){
-  if (whaleRaf){ cancelAnimationFrame(whaleRaf); whaleRaf = 0; }
-  if (whaleResize){ window.removeEventListener('resize', whaleResize); whaleResize = null; }
-}
 
 $('btnTheme').onclick = () => { S.theme = S.theme === 'light' ? 'dark' : 'light'; applyTheme(); };
 
@@ -1173,8 +1111,8 @@ async function renderSettings(col){
 
   if (S.glassEnabled){
     g1.appendChild(wyModeRow());
-    g1.appendChild(wyRangeRow('◌', '模糊', 0, 60, 1, S.glassBlur, 'px', v => { S.glassBlur = v; applyGlass(); }));
-    g1.appendChild(wyRangeRow('▤', '磨砂', 0, 100, 1, S.glassFrost, '%', v => { S.glassFrost = v; applyGlass(); }));
+    g1.appendChild(wyRangeRow('◌', '玻璃模糊度', 0, 60, 1, S.glassBlur, 'px', v => { S.glassBlur = v; applyGlass(); }));
+    g1.appendChild(wyRangeRow('▤', '磨砂度', 0, 100, 1, S.glassFrost, '%', v => { S.glassFrost = v; applyGlass(); }));
 
     const bgRow = el('div','setrow glass edge');
     bgRow.appendChild(el('span','ic','◉'));
@@ -1193,7 +1131,7 @@ async function renderSettings(col){
     g1.appendChild(bgRow);
 
     if (S.bgSource === 'fluid'){
-      g1.appendChild(wyRangeRow('◐', '流体色相', 0, 360, 1, S.fluidHue, '°', v => { S.fluidHue = v; applyGlass(); }));
+      g1.appendChild(wyRangeRow('◐', '背景流体颜色', 0, 360, 1, S.fluidHue, '°', v => { S.fluidHue = v; applyGlass(); }));
     } else {
       g1.appendChild(wyWallpaperPicker());
       g1.appendChild(wyRangeRow('▤', '壁纸模糊', 0, 40, 1, S.wallpaperBlur, 'px', v => { S.wallpaperBlur = v; applyGlass(); }));
@@ -1201,8 +1139,12 @@ async function renderSettings(col){
     }
 
     g1.appendChild(wyRangeRow('☀', '背景亮度', 0, 100, 1, S.bgBrightness, '', v => { S.bgBrightness = v; applyGlass(); }));
-    g1.appendChild(wySwitchRow('✦', '粒子鲸鱼', '聊天区中央粒子装饰', S.whale, v => { S.whale = v; applyGlass(); }));
-    g1.appendChild(wySwitchRow('◫', '边缘渐变模糊', '页面上下边缘柔化', S.edgeFades, v => { S.edgeFades = v; applyGlass(); }));
+    const brightNote = el('div','note');
+    brightNote.textContent = '深色模式：0 压暗至纯黑，50 原样';
+    brightNote.style.textAlign = 'left';
+    brightNote.style.padding = '2px 8px 4px';
+    g1.appendChild(brightNote);
+    g1.appendChild(wySwitchRow('◫', '边缘渐变模糊', '页面上下边缘柔化', S.edgeFades, v => { S.edgeFades = v; applyGlass(); renderSettings(col); }));
   }
 
   col.appendChild(g1);

@@ -478,10 +478,6 @@ a{color:var(--accent);text-decoration:none}
 [data-theme=dark] .wy-fade-top{background:linear-gradient(rgba(23,18,14,.55),transparent)}
 [data-theme=dark] .wy-fade-bottom{background:linear-gradient(transparent,rgba(23,18,14,.55))}
 
-/* ---------- 粒子鲸鱼 ---------- */
-.wy-whale{position:fixed;z-index:3;pointer-events:none;display:flex;align-items:center;justify-content:center}
-.wy-whale canvas{width:100%;height:100%}
-
 /* ---------- 开启后：玻璃参数可调 ---------- */
 [data-wy-glass="on"]{
   --glass:rgb(253 249 242 / var(--wy-glass-frost));
@@ -491,6 +487,15 @@ a{color:var(--accent);text-decoration:none}
   --glass:rgb(46 36 28 / var(--wy-glass-frost));
   --glass-strong:rgb(34 26 20 / calc(var(--wy-glass-frost) + 0.29));
 }
+
+/* 沉浸式：让流体背景穿透所有大容器，面板全部浮在流体上 */
+[data-wy-glass="on"] body{background:transparent}
+[data-wy-glass="on"] #app{background:transparent}
+[data-wy-glass="on"] .main{background:transparent}
+[data-wy-glass="on"] .chat-scroll{background:transparent}
+[data-wy-glass="on"] .page{background:transparent}
+[data-wy-glass="on"] .page-body{background:transparent}
+[data-wy-glass="on"] .empty-state{background:transparent}
 
 [data-wy-glass="on"] .glass,
 [data-wy-glass="on"] .glass-strong,
