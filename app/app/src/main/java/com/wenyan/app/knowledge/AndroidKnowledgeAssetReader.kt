@@ -18,4 +18,6 @@ class AndroidKnowledgeAssetReader(context: Context) : KnowledgeAssetReader {
     }
 
     override fun readRoutesJson(): String? = read("routes-v2.json")
+
+    override fun readQueryVariantsJson(): String? = read("route_query_variants.json")
 }

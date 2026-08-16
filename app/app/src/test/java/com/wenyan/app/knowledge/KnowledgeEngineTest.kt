@@ -12,10 +12,13 @@ class KnowledgeEngineTest {
     private class FakeReader : KnowledgeAssetReader {
         val docs = mutableMapOf<String, String>()
         var routesJson = "{}"
+        var variantsJson: String? = null
 
         override fun read(relativePath: String): String? = docs[relativePath]
 
         override fun readRoutesJson(): String? = routesJson
+
+        override fun readQueryVariantsJson(): String? = variantsJson
     }
 
     private fun makeEngine(reader: FakeReader): KnowledgeEngine = KnowledgeEngine(reader)
@@ -80,5 +83,24 @@ class KnowledgeEngineTest {
         val engine = makeEngine(reader)
         val (_, refs) = engine.buildInjection("我被他跟踪了")
         assertEquals(listOf("17-中国法律安全与危机转介.md"), refs)
+    }
+    @Test
+    fun `hybrid variant router covers doc not in routes`() {
+        val reader = FakeReader()
+        val routedPath = "practical/routed.md"
+        val variantOnlyPath = "practical/提高气场：从内到外的力量感塑造指南.md"
+        reader.routesJson = buildRoutesJson(
+            Triple(listOf("怎么回"), routedPath, "# 路由内\n\n## 内容\n回复。")
+        )
+        reader.docs[routedPath] = "# 路由内\n\n## 内容\n回复。"
+        reader.docs[variantOnlyPath] = "# 提高气场\n\n## 方法\n稳住自己。"
+        reader.variantsJson = org.json.JSONObject()
+            .put(variantOnlyPath, org.json.JSONArray(listOf("怎么提升气场", "气场弱怎么办")))
+            .toString()
+
+        val engine = makeEngine(reader)
+        val (injected, refs) = engine.buildInjection("怎么提升气场")
+        assertEquals(listOf("提高气场：从内到外的力量感塑造指南.md"), refs)
+        assertTrue(injected.startsWith("【知识文档 #1】《提高气场：从内到外的力量感塑造指南.md》"))
     }
 }

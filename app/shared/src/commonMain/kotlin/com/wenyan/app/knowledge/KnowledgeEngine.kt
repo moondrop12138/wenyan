@@ -1,5 +1,6 @@
 package com.wenyan.app.knowledge
 
+import com.wenyan.app.json.Json
 import com.wenyan.app.log.AppLogger
 
 /**
@@ -11,6 +12,9 @@ interface KnowledgeAssetReader {
 
     /** 读取 assets/knowledge/routes.json */
     fun readRoutesJson(): String?
+
+    /** 读取 assets/knowledge/route_query_variants.json；未提供时返回 null（生产使用混合路由补漏） */
+    fun readQueryVariantsJson(): String? = null
 }
 
 /**
@@ -27,6 +31,11 @@ class KnowledgeEngine(
 
     private val lazyIndex: KnowledgeIndex by lazy {
         index ?: KnowledgeIndex(reader.readRoutesJson() ?: "{}")
+    }
+
+    private val lazyHybrid: HybridVariantRouter? by lazy {
+        val variants = parseQueryVariants(reader.readQueryVariantsJson())
+        if (variants.isEmpty()) null else HybridVariantRouter(lazyIndex, variants)
     }
 
     // M3: 进程内文档 LRU 缓存（路径 → 内容），避免每次消息重复 assets IO
@@ -46,7 +55,7 @@ class KnowledgeEngine(
      * @return Pair(注入文本, 引用的文件名列表)
      */
     fun buildInjection(userInput: String): Pair<String, List<String>> {
-        val docPaths = lazyIndex.route(userInput).take(maxDocs)
+        val docPaths = route(userInput).take(maxDocs)
         if (docPaths.isEmpty()) {
             AppLogger.d("knowledge_route_empty")
             return "" to emptyList()
@@ -75,6 +84,21 @@ class KnowledgeEngine(
         // 只记录命中文档名（元数据），不记录用户输入原文
         AppLogger.i("knowledge_route_hit", "docs" to refs.joinToString(","))
         return injected.joinToString("\n\n") to refs
+    }
+
+    private fun route(input: String): List<String> = lazyHybrid?.route(input) ?: lazyIndex.route(input)
+
+    private fun parseQueryVariants(rawJson: String?): Map<String, List<String>> {
+        if (rawJson.isNullOrBlank()) return emptyMap()
+        return try {
+            val root = Json.obj(rawJson)
+            root.keys().associateWith { key ->
+                val arr = root.optJSONArray(key) ?: return@associateWith emptyList()
+                buildList { for (i in 0 until arr.length()) add(arr.getString(i)) }
+            }.filterValues { it.isNotEmpty() }
+        } catch (e: Exception) {
+            emptyMap()
+        }
     }
 
     private fun extractKeywords(input: String): List<String> {

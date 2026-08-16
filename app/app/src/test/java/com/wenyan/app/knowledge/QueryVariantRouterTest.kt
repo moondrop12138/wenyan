@@ -2,6 +2,7 @@ package com.wenyan.app.knowledge
 
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -37,12 +38,17 @@ class QueryVariantRouterTest {
             (0 until arr.length()).map { arr.getString(it) }
         }
 
+        val routesRoot = JSONObject(routesFile.readText(Charsets.UTF_8))
+        val allFileKeys = routesRoot.getJSONObject("files").keys().asSequence().toList()
+        assertEquals("query 变体库应覆盖全部 41 份文档", allFileKeys.size, variants.size)
+        assertTrue("query 变体库缺少文档", allFileKeys.all { variants.containsKey(it) })
+        assertTrue("每份文档应至少有 20 条变体", variants.values.all { it.size >= 20 })
+
         val root = JSONArray(queriesFile.readText(Charsets.UTF_8))
         val queries = (0 until root.length()).map { i ->
             val obj = root.getJSONObject(i)
-            val expected = (0 until obj.optJSONArray("expectedDocs").length()).map { j ->
-                obj.optJSONArray("expectedDocs").getString(j)
-            }
+            val expectedArr = obj.optJSONArray("expectedDocs") ?: JSONArray()
+            val expected = (0 until expectedArr.length()).map { j -> expectedArr.getString(j) }
             RouteEvaluator.EvalQuery(obj.getString("query"), expected)
         }
 
