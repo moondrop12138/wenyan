@@ -5,7 +5,7 @@
 'use strict';
 
 // L6: 版本号从 /api/health 拉取（避免与后端 DESKTOP_VERSION 漂移），此处为兜底默认
-let APP_VERSION = '1.9.1';
+let APP_VERSION = '1.9.3';
 async function loadVersion(){
   try { const h = await (await fetch('/api/health')).json(); if (h && h.version) APP_VERSION = h.version.replace('-desktop',''); } catch(e) {}
 }

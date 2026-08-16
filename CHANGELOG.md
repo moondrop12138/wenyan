@@ -2,6 +2,23 @@
 
 「温言」版本历史。版本命名：`vX.Y.Z`（功能）与 `vX.Y.Z-N`（同版本迭代构建）。
 
+## v1.9.3（2026-08-16）— 代码审查修复 + O7 知识路由最终落地
+
+**安全与正确性（H1–H7）**：
+- 流式重试新增 `LlmEvent.Restart`，预览不再重复拼接
+- `finish_reason=length` 识别为 `OUTPUT_TRUNCATED`，不再当作成功
+- 解析失败落库 `freetext` 展示原文，双端行为统一
+- 更新安装权限、CSRF Token/Host 校验、构建目录与 JDK 配置清理
+
+**健壮性与工程化（M1–M12 / L1–L15）**：
+- Room 统一 2.7.2 + version catalog
+- 双端编排抽到 `ChatOrchestrator` 共享
+- 知识引擎 LRU 缓存、分块截断、危机词库、token 估算、密钥/指纹/EXIF/更新校验、CI lint+APK artifact 等全部落地
+
+**优化项（O1–O10）**：
+- 数据导入恢复、记忆冲突检测 + 时间线、会话搜索、`:shared` KMP 模块、LLM 调用合并、用量指标、Baseline Profile、压缩透明提示、草稿恢复
+- **O7 知识路由最终落地**：BM25 评测 + 820 条 query 变体库 + `HybridVariantRouter` fill-one 生产上线（1098 条 / 41 文档：P=0.348 / R=0.649 / F1=0.453）
+
 ## v1.9.2（2026-08-13）— 等待/流式回复对齐桌面端 + styles 话术自主判断
 
 **① 等待/流式回复对齐桌面端**：

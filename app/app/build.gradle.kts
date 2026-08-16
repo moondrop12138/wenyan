@@ -28,8 +28,8 @@ android {
         minSdk = 26
         targetSdk = 36
         // 版本历史见根目录 CHANGELOG.md（L11 精简，不再在 build 脚本堆注释墙）
-        versionCode = 39
-        versionName = "1.9.2"
+        versionCode = 40
+        versionName = "1.9.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

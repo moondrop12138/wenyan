@@ -1,10 +1,10 @@
-# 温言桌面版打包脚本：installDist → 精简 JRE（jdeps+jlink）→ jpackage app-image → exe 安装包
+﻿# 温言桌面版打包脚本：installDist → 精简 JRE（jdeps+jlink）→ jpackage app-image → exe 安装包
 # 用法：powershell -File desktop/packaging/package.ps1 [-SkipInstaller]
 # 产物：desktop/dist-package/温言-1.8.2/（绿色版）+ desktop/dist-package/温言-1.8.2.exe（安装包）
 param([switch]$SkipInstaller)
 
 $ErrorActionPreference = 'Stop'
-$VERSION = '1.9.2'
+$VERSION = '1.9.3'
 $APP_NAME = '温言'
 $JDK = 'C:\Users\Khalil\Android\jdk-21.0.12+8'
 $ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # app/
@@ -16,10 +16,14 @@ Set-Location $ROOT
 Write-Host "==> [1/5] gradle installDist"
 & .\gradlew.bat :desktop:installDist --console=plain -q
 if ($LASTEXITCODE -ne 0) { throw 'gradle installDist failed' }
-$INSTALL = Get-ChildItem -Directory $DESKTOP | Where-Object Name -like 'build.*' |
-  Sort-Object LastWriteTime -Descending | Select-Object -First 1 |
-  ForEach-Object { Join-Path $_.FullName 'install\desktop' }
-if (-not (Test-Path "$INSTALL\bin\desktop.bat")) { throw "installDist not found under $DESKTOP\build.*" }
+$INSTALL = Join-Path $DESKTOP 'build\install\desktop'
+if (-not (Test-Path "$INSTALL\bin\desktop.bat")) {
+  # 兼容历史 timestamp 目录（H6 已移除 buildDir hack，仅旧构建残留）
+  $INSTALL = Get-ChildItem -Directory $DESKTOP | Where-Object Name -like 'build.*' |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1 |
+    ForEach-Object { Join-Path $_.FullName 'install\desktop' }
+}
+if (-not (Test-Path "$INSTALL\bin\desktop.bat")) { throw "installDist not found under $DESKTOP\build or build.*" }
 Write-Host "    installDist: $INSTALL"
 
 Write-Host "==> [2/5] jdeps 探测模块依赖"
