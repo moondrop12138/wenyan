@@ -444,3 +444,91 @@ a{color:var(--accent);text-decoration:none}
 
 .hidden{display:none!important}
 .loading-inline{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:12px;justify-content:center}
+
+/* ============================================================
+   Web 端玻璃主题增强（Aqua-like）
+   默认关闭：不改变现有 UI。开启后由 app.js 在 <html> 写入
+   data-wy-glass="on"，并设置 --wy-* 变量实现实时调节。
+   ============================================================ */
+
+:root{
+  --wy-glass-blur:20px;
+  --wy-glass-frost:0.55;
+  --wy-fluid-hue:0deg;
+  --wy-brightness-white:0;
+  --wy-brightness-black:0;
+  --wy-wallpaper-blur:0px;
+  --wy-wallpaper-frost:0;
+}
+
+/* ---------- 背景层 ---------- */
+.wy-ambient,.wy-wallpaper{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.wy-ambient canvas{position:absolute;inset:0;width:100%;height:100%;filter:hue-rotate(var(--wy-fluid-hue))}
+.wy-ambient-veil{position:absolute;inset:0;background-image:
+  linear-gradient(rgba(255,255,255,var(--wy-brightness-white)),rgba(255,255,255,var(--wy-brightness-white))),
+  linear-gradient(rgba(0,0,0,var(--wy-brightness-black)),rgba(0,0,0,var(--wy-brightness-black)))}
+.wy-wallpaper img{width:100%;height:100%;object-fit:cover;filter:blur(var(--wy-wallpaper-blur));transform:scale(1.02)}
+.wy-wallpaper-veil{position:absolute;inset:0;background:rgb(255 255 255 / var(--wy-wallpaper-frost))}
+[data-theme=dark] .wy-wallpaper-veil{background:rgb(12 18 27 / var(--wy-wallpaper-frost))}
+
+/* ---------- 边缘渐变模糊 ---------- */
+.wy-fade{position:fixed;left:0;right:0;height:22px;z-index:5;pointer-events:none;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.wy-fade-top{top:0;background:linear-gradient(rgba(246,240,230,.55),transparent)}
+.wy-fade-bottom{bottom:0;background:linear-gradient(transparent,rgba(246,240,230,.55))}
+[data-theme=dark] .wy-fade-top{background:linear-gradient(rgba(23,18,14,.55),transparent)}
+[data-theme=dark] .wy-fade-bottom{background:linear-gradient(transparent,rgba(23,18,14,.55))}
+
+/* ---------- 粒子鲸鱼 ---------- */
+.wy-whale{position:fixed;z-index:3;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.wy-whale canvas{width:100%;height:100%}
+
+/* ---------- 开启后：玻璃参数可调 ---------- */
+[data-wy-glass="on"]{
+  --glass:rgb(253 249 242 / var(--wy-glass-frost));
+  --glass-strong:rgb(253 248 240 / calc(var(--wy-glass-frost) + 0.17));
+}
+[data-wy-glass="on"][data-theme=dark]{
+  --glass:rgb(46 36 28 / var(--wy-glass-frost));
+  --glass-strong:rgb(34 26 20 / calc(var(--wy-glass-frost) + 0.29));
+}
+
+[data-wy-glass="on"] .glass,
+[data-wy-glass="on"] .glass-strong,
+[data-wy-glass="on"] .sidebar,
+[data-wy-glass="on"] .pill,
+[data-wy-glass="on"] .msg-user,
+[data-wy-glass="on"] .input-bar,
+[data-wy-glass="on"] .sheet,
+[data-wy-glass="on"] .toast{
+  backdrop-filter:blur(var(--wy-glass-blur)) saturate(170%);
+  -webkit-backdrop-filter:blur(var(--wy-glass-blur)) saturate(170%);
+}
+
+/* ---------- Mica 模式：悬浮玻璃卡片布局 ---------- */
+[data-wy-glass="on"][data-wy-glass-mode="mica"] #app{
+  padding:12px;
+  gap:12px;
+}
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .sidebar{
+  border-radius:24px;
+  border-right:1px solid var(--glass-border);
+  box-shadow:var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.45);
+}
+[data-wy-glass="on"][data-wy-glass-mode="mica"][data-theme=dark] .sidebar{
+  box-shadow:var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.08);
+}
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .main{
+  gap:12px;
+}
+[data-wy-glass="on"][data-wy-glass-mode="mica"] .chat-scroll{
+  padding-left:4px;
+  padding-right:4px;
+}
+
+/* ---------- Web 玻璃主题设置控件 ---------- */
+.wy-seg{display:inline-flex;gap:2px;background:var(--chip);border-radius:99px;padding:3px;flex-shrink:0}
+.wy-seg-btn{border:none;background:transparent;color:var(--muted);font-size:11.5px;padding:4px 10px;border-radius:99px;cursor:pointer;transition:all .15s}
+.wy-seg-btn.on{background:var(--surface-e);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.wy-btn{background:var(--chip);color:var(--accent);border:none;border-radius:99px;padding:6px 12px;font-size:12px;cursor:pointer;flex-shrink:0}
+.wy-btn:hover{background:var(--accent-soft)}
+input[type=range]{accent-color:var(--accent);height:22px;margin-left:6px}

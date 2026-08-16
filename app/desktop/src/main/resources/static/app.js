@@ -60,6 +60,19 @@ const S = {
   streamSessionId: null,      // 在途流所属的会话
   controller: null,           // 在途 fetch 的 AbortController（删除会话时 abort，取消后端 LLM 流）
   pendingImages: [],          // 已上传的 dataUrl 列表
+  // Web 端玻璃主题增强（默认关闭：现有 UI 为默认）
+  glassEnabled: localStorage.getItem('wenyan.glassEnabled') === '1',
+  glassMode: localStorage.getItem('wenyan.glassMode') || 'mica',
+  glassBlur: Number(localStorage.getItem('wenyan.glassBlur')) || 20,
+  glassFrost: localStorage.getItem('wenyan.glassFrost') === null ? 55 : Number(localStorage.getItem('wenyan.glassFrost')),
+  fluidHue: Number(localStorage.getItem('wenyan.fluidHue')) || 0,
+  bgBrightness: localStorage.getItem('wenyan.bgBrightness') === null ? 50 : Number(localStorage.getItem('wenyan.bgBrightness')),
+  bgSource: localStorage.getItem('wenyan.bgSource') || 'fluid',
+  wallpaper: localStorage.getItem('wenyan.wallpaper') || '',
+  wallpaperBlur: Number(localStorage.getItem('wenyan.wallpaperBlur')) || 0,
+  wallpaperFrost: Number(localStorage.getItem('wenyan.wallpaperFrost')) || 0,
+  whale: localStorage.getItem('wenyan.whale') !== '0',
+  edgeFades: localStorage.getItem('wenyan.edgeFades') !== '0',
   theme: localStorage.getItem('wenyan.theme') || 'light',
   route: 'chat',
   pendingTargetId: Number(localStorage.getItem('wenyan.pendingTargetId')) || null, // 未建会话时的待绑定档案
@@ -68,11 +81,191 @@ const S = {
   memoryAutoEnabled: true,      // v1.9.0 自动记忆开关（默认开；/api/settings 加载后覆盖）
 };
 
-// ===== 主题 =====
+// ===== 主题 & Web 玻璃主题增强 =====
+function persistGlassSettings(){
+  localStorage.setItem('wenyan.glassEnabled', S.glassEnabled ? '1' : '0');
+  localStorage.setItem('wenyan.glassMode', S.glassMode);
+  localStorage.setItem('wenyan.glassBlur', String(S.glassBlur));
+  localStorage.setItem('wenyan.glassFrost', String(S.glassFrost));
+  localStorage.setItem('wenyan.fluidHue', String(S.fluidHue));
+  localStorage.setItem('wenyan.bgBrightness', String(S.bgBrightness));
+  localStorage.setItem('wenyan.bgSource', S.bgSource);
+  if (localStorage.getItem('wenyan.wallpaper') !== S.wallpaper) localStorage.setItem('wenyan.wallpaper', S.wallpaper);
+  localStorage.setItem('wenyan.wallpaperBlur', String(S.wallpaperBlur));
+  localStorage.setItem('wenyan.wallpaperFrost', String(S.wallpaperFrost));
+  localStorage.setItem('wenyan.whale', S.whale ? '1' : '0');
+  localStorage.setItem('wenyan.edgeFades', S.edgeFades ? '1' : '0');
+}
+
+let fluidRaf = 0;
+let fluidResize = null;
+let whaleRaf = 0;
+let whaleResize = null;
+let whaleParticles = [];
+
 function applyTheme(){
   document.documentElement.dataset.theme = S.theme;
   localStorage.setItem('wenyan.theme', S.theme);
+  applyGlass();
 }
+
+function applyGlass(){
+  const root = document.documentElement;
+  if (S.glassEnabled) root.setAttribute('data-wy-glass', 'on');
+  else root.removeAttribute('data-wy-glass');
+  root.setAttribute('data-wy-glass-mode', S.glassMode);
+  root.setAttribute('data-wy-bg', S.bgSource);
+
+  root.style.setProperty('--wy-glass-blur', S.glassBlur + 'px');
+  root.style.setProperty('--wy-glass-frost', (S.glassFrost / 100).toFixed(3));
+  root.style.setProperty('--wy-fluid-hue', S.fluidHue + 'deg');
+  root.style.setProperty('--wy-wallpaper-blur', S.wallpaperBlur + 'px');
+  root.style.setProperty('--wy-wallpaper-frost', (S.wallpaperFrost / 100).toFixed(3));
+
+  const dark = S.theme === 'dark';
+  const bright = S.bgBrightness;
+  const white = dark ? 0 : Math.max(0, (bright - 50) / 50);
+  const black = dark ? Math.max(0, (50 - bright) / 50) : 0;
+  root.style.setProperty('--wy-brightness-white', white.toFixed(3));
+  root.style.setProperty('--wy-brightness-black', black.toFixed(3));
+
+  const ambient = $('wyAmbient');
+  const wallpaper = $('wyWallpaper');
+  const fadeTop = $('wyFadeTop');
+  const fadeBottom = $('wyFadeBottom');
+  const whale = $('wyWhale');
+  const useWallpaper = S.glassEnabled && S.bgSource === 'wallpaper' && !!S.wallpaper;
+  const useFluid = S.glassEnabled && (S.bgSource === 'fluid' || (S.bgSource === 'wallpaper' && !S.wallpaper));
+  if (ambient) ambient.hidden = !useFluid;
+  if (wallpaper){
+    wallpaper.hidden = !useWallpaper;
+    const img = $('wyWallpaperImg');
+    if (img && S.wallpaper) img.src = S.wallpaper;
+  }
+  if (fadeTop) fadeTop.hidden = !(S.glassEnabled && S.edgeFades);
+  if (fadeBottom) fadeBottom.hidden = !(S.glassEnabled && S.edgeFades);
+  if (whale) whale.hidden = !(S.glassEnabled && S.whale);
+
+  if (useFluid) startFluid();
+  else stopFluid();
+  if (S.glassEnabled && S.whale) startWhale();
+  else stopWhale();
+
+  persistGlassSettings();
+}
+
+// ---- 流体背景（Canvas 2D 轻量流体感，非 WebGL 完整模拟） ----
+function startFluid(){
+  const canvas = $('wyFluidCanvas');
+  const ambient = $('wyAmbient');
+  if (!canvas || !ambient || fluidRaf) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const resize = () => {
+    canvas.width = Math.max(1, ambient.clientWidth);
+    canvas.height = Math.max(1, ambient.clientHeight);
+  };
+  resize();
+  fluidResize = resize;
+  window.addEventListener('resize', fluidResize);
+  const blobs = Array.from({ length: 7 }, (_, i) => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: 0.18 + Math.random() * 0.22,
+    sx: (Math.random() - 0.5) * 0.0008,
+    sy: (Math.random() - 0.5) * 0.0008,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.0003 + Math.random() * 0.0006,
+    color: ['rgba(242,203,169,0.32)', 'rgba(223,166,120,0.28)', 'rgba(192,116,63,0.22)', 'rgba(206,138,86,0.22)'][i % 4],
+  }));
+  let start = performance.now();
+  const draw = (now) => {
+    if (!ambient || ambient.hidden) return;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const t = now - start;
+    blobs.forEach(b => {
+      const x = (b.x + b.sx * t + 0.5 * Math.sin(t * b.speed + b.phase) * 0.06) * w;
+      const y = (b.y + b.sy * t + 0.5 * Math.cos(t * b.speed * 0.7 + b.phase) * 0.06) * h;
+      const r = b.r * Math.min(w, h) * (1 + 0.08 * Math.sin(t * 0.0004 + b.phase));
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, b.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    });
+    fluidRaf = requestAnimationFrame(draw);
+  };
+  fluidRaf = requestAnimationFrame(draw);
+}
+
+function stopFluid(){
+  if (fluidRaf){ cancelAnimationFrame(fluidRaf); fluidRaf = 0; }
+  if (fluidResize){ window.removeEventListener('resize', fluidResize); fluidResize = null; }
+}
+
+// ---- 粒子鲸鱼（轻量 Canvas 粒子，仅作装饰） ----
+function startWhale(){
+  const host = $('wyWhale');
+  const canvas = $('wyWhaleCanvas');
+  if (!host || !canvas || whaleRaf) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const position = () => {
+    const main = document.querySelector('.main');
+    const r = main ? main.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+    const size = Math.round(Math.max(180, Math.min(420, r.height * 0.4)));
+    host.style.width = size + 'px';
+    host.style.height = size + 'px';
+    host.style.left = Math.round(r.left + r.width / 2 - size / 2) + 'px';
+    host.style.top = Math.round(r.top + r.height / 2 - size / 2) + 'px';
+  };
+  position();
+  whaleResize = position;
+  window.addEventListener('resize', whaleResize);
+  if (!whaleParticles.length){
+    // 简单鲸鱼剪影点阵（用少量粒子勾勒鱼形）
+    const pts = [];
+    for (let i = 0; i < 90; i++){
+      const a = i / 90 * Math.PI * 2;
+      const rx = 0.42 + 0.08 * Math.sin(a * 3);
+      const ry = 0.22 + 0.05 * Math.cos(a * 2);
+      const x = 0.5 + Math.cos(a) * rx;
+      const y = 0.5 + Math.sin(a) * ry * 0.7;
+      pts.push({ x, y, sx: 0.5 + Math.random() * 0.4 - 0.2, sy: 0.5 + Math.random() * 0.4 - 0.2, p: Math.random() * Math.PI * 2 });
+    }
+    whaleParticles = pts;
+  }
+  const dark = S.theme === 'dark';
+  const color = dark ? 'rgba(255,255,255,0.75)' : 'rgba(80,70,60,0.55)';
+  let start = performance.now();
+  const draw = (now) => {
+    if (!host || host.hidden) return;
+    const w = canvas.width = host.clientWidth || 300;
+    const h = canvas.height = host.clientHeight || 300;
+    ctx.clearRect(0, 0, w, h);
+    const t = (now - start) / 1000;
+    const assemble = Math.min(1, t / 2.5);
+    whaleParticles.forEach((p, i) => {
+      const px = p.sx + (p.x - p.sx) * assemble;
+      const py = p.sy + (p.y - p.sy) * assemble;
+      const jx = Math.sin(t * 0.8 + i + p.p) * 0.008;
+      const jy = Math.cos(t * 0.6 + i * 0.7 + p.p) * 0.008;
+      ctx.beginPath();
+      ctx.arc((px + jx) * w, (py + jy) * h, 1.4 + (i % 3) * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+    whaleRaf = requestAnimationFrame(draw);
+  };
+  whaleRaf = requestAnimationFrame(draw);
+}
+
+function stopWhale(){
+  if (whaleRaf){ cancelAnimationFrame(whaleRaf); whaleRaf = 0; }
+  if (whaleResize){ window.removeEventListener('resize', whaleResize); whaleResize = null; }
+}
+
 $('btnTheme').onclick = () => { S.theme = S.theme === 'light' ? 'dark' : 'light'; applyTheme(); };
 
 // ===== 路由 =====
@@ -853,6 +1046,100 @@ $('btnSettings').onclick = () => go('settings');
 
 // ===== 设置页 =====
 let settingsSeq = 0;  // 设置页渲染令牌：并发/重复触发时作废旧执行，防分组重复 append
+let wyWallpaperInput = null;
+
+// ---- 设置页通用小部件（仅 Web 玻璃主题使用） ----
+function wySettingRow(icon, title, desc){
+  const row = el('div','setrow glass edge');
+  row.appendChild(el('span','ic', icon));
+  const tx = el('span','tx');
+  tx.appendChild(el('span','t', title));
+  tx.appendChild(el('span','d', desc || ''));
+  row.appendChild(tx);
+  return row;
+}
+function wySwitchRow(icon, title, desc, checked, onChange){
+  const row = wySettingRow(icon, title, desc);
+  const sw = el('span','sw' + (checked ? ' on' : ''));
+  sw.onclick = e => { e.stopPropagation(); onChange(!checked); };
+  row.appendChild(sw);
+  row.onclick = () => onChange(!checked);
+  return row;
+}
+function wyRangeRow(icon, title, min, max, step, value, suffix, onChange){
+  const row = el('div','setrow glass edge');
+  row.appendChild(el('span','ic', icon));
+  const tx = el('span','tx');
+  tx.appendChild(el('span','t', title));
+  const val = el('span','d', value + (suffix || ''));
+  tx.appendChild(val);
+  row.appendChild(tx);
+  const input = el('input');
+  input.type = 'range';
+  input.min = min;
+  input.max = max;
+  input.step = step || 1;
+  input.value = value;
+  input.style.flex = '1';
+  input.style.minWidth = '80px';
+  input.oninput = () => {
+    const v = Number(input.value);
+    val.textContent = v + (suffix || '');
+    onChange(v);
+  };
+  row.appendChild(input);
+  return row;
+}
+function wyModeRow(){
+  const row = wySettingRow('▦', '玻璃模式', S.glassMode === 'mica' ? 'Mica · 悬浮玻璃卡片' : '兼容 · 保持原布局');
+  const seg = el('span','wy-seg');
+  const mica = el('button','wy-seg-btn' + (S.glassMode === 'mica' ? ' on' : ''), 'Mica');
+  const compat = el('button','wy-seg-btn' + (S.glassMode === 'compat' ? ' on' : ''), '兼容');
+  mica.onclick = e => { e.stopPropagation(); S.glassMode = 'mica'; applyGlass(); renderSettings($('pageCol')); };
+  compat.onclick = e => { e.stopPropagation(); S.glassMode = 'compat'; applyGlass(); renderSettings($('pageCol')); };
+  seg.appendChild(mica);
+  seg.appendChild(compat);
+  row.appendChild(seg);
+  return row;
+}
+function wyWallpaperPicker(){
+  const row = wySettingRow('▧', '壁纸', S.wallpaper ? '已选择图片' : '选择本地图片');
+  const btn = el('button','wy-btn', S.wallpaper ? '更换' : '选择');
+  if (!wyWallpaperInput){
+    wyWallpaperInput = el('input');
+    wyWallpaperInput.type = 'file';
+    wyWallpaperInput.accept = 'image/*';
+    wyWallpaperInput.style.display = 'none';
+    document.body.appendChild(wyWallpaperInput);
+  }
+  const input = wyWallpaperInput;
+  input.onchange = () => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1600;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        S.wallpaper = c.toDataURL('image/jpeg', 0.82);
+        applyGlass();
+        renderSettings($('pageCol'));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  btn.onclick = e => { e.stopPropagation(); input.click(); };
+  row.appendChild(btn);
+  return row;
+}
+
 async function renderSettings(col){
   const mySeq = ++settingsSeq;
   col.innerHTML = '';
@@ -873,6 +1160,51 @@ async function renderSettings(col){
   themeRow.appendChild(sw);
   themeRow.onclick = () => { S.theme = S.theme === 'light' ? 'dark' : 'light'; applyTheme(); renderSettings(col); };
   g1.appendChild(themeRow);
+
+  // 玻璃主题增强：默认关闭，现有 UI 为默认
+  const glassRow = wySwitchRow(
+    '❖',
+    '玻璃主题',
+    S.glassEnabled ? '已开启 · 可实时调节' : '默认关闭 · 开启后使用可调玻璃',
+    S.glassEnabled,
+    v => { S.glassEnabled = v; applyGlass(); renderSettings(col); }
+  );
+  g1.appendChild(glassRow);
+
+  if (S.glassEnabled){
+    g1.appendChild(wyModeRow());
+    g1.appendChild(wyRangeRow('◌', '模糊', 0, 60, 1, S.glassBlur, 'px', v => { S.glassBlur = v; applyGlass(); }));
+    g1.appendChild(wyRangeRow('▤', '磨砂', 0, 100, 1, S.glassFrost, '%', v => { S.glassFrost = v; applyGlass(); }));
+
+    const bgRow = el('div','setrow glass edge');
+    bgRow.appendChild(el('span','ic','◉'));
+    const btx = el('span','tx');
+    btx.appendChild(el('span','t','背景'));
+    btx.appendChild(el('span','d', S.bgSource === 'fluid' ? '流体背景' : '自定义壁纸'));
+    bgRow.appendChild(btx);
+    const seg = el('span','wy-seg');
+    const fluidBtn = el('button','wy-seg-btn' + (S.bgSource === 'fluid' ? ' on' : ''), '流体');
+    const wallBtn = el('button','wy-seg-btn' + (S.bgSource === 'wallpaper' ? ' on' : ''), '壁纸');
+    fluidBtn.onclick = e => { e.stopPropagation(); S.bgSource = 'fluid'; applyGlass(); renderSettings(col); };
+    wallBtn.onclick = e => { e.stopPropagation(); S.bgSource = 'wallpaper'; applyGlass(); renderSettings(col); };
+    seg.appendChild(fluidBtn);
+    seg.appendChild(wallBtn);
+    bgRow.appendChild(seg);
+    g1.appendChild(bgRow);
+
+    if (S.bgSource === 'fluid'){
+      g1.appendChild(wyRangeRow('◐', '流体色相', 0, 360, 1, S.fluidHue, '°', v => { S.fluidHue = v; applyGlass(); }));
+    } else {
+      g1.appendChild(wyWallpaperPicker());
+      g1.appendChild(wyRangeRow('▤', '壁纸模糊', 0, 40, 1, S.wallpaperBlur, 'px', v => { S.wallpaperBlur = v; applyGlass(); }));
+      g1.appendChild(wyRangeRow('▦', '壁纸磨砂', 0, 100, 1, S.wallpaperFrost, '%', v => { S.wallpaperFrost = v; applyGlass(); }));
+    }
+
+    g1.appendChild(wyRangeRow('☀', '背景亮度', 0, 100, 1, S.bgBrightness, '', v => { S.bgBrightness = v; applyGlass(); }));
+    g1.appendChild(wySwitchRow('✦', '粒子鲸鱼', '聊天区中央粒子装饰', S.whale, v => { S.whale = v; applyGlass(); }));
+    g1.appendChild(wySwitchRow('◫', '边缘渐变模糊', '页面上下边缘柔化', S.edgeFades, v => { S.edgeFades = v; applyGlass(); }));
+  }
+
   col.appendChild(g1);
 
   // 模型

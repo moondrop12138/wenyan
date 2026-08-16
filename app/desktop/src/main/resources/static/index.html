@@ -18,6 +18,19 @@
 </svg>
 <div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div>
 
+<!-- Web 端玻璃主题增强层（默认关闭，保持现有 UI 为默认） -->
+<div class="wy-ambient" id="wyAmbient" hidden>
+  <canvas id="wyFluidCanvas"></canvas>
+  <div class="wy-ambient-veil"></div>
+</div>
+<div class="wy-wallpaper" id="wyWallpaper" hidden>
+  <img id="wyWallpaperImg" alt="" />
+  <div class="wy-wallpaper-veil"></div>
+</div>
+<div class="wy-fade wy-fade-top" id="wyFadeTop" hidden></div>
+<div class="wy-fade wy-fade-bottom" id="wyFadeBottom" hidden></div>
+<div class="wy-whale" id="wyWhale" hidden><canvas id="wyWhaleCanvas"></canvas></div>
+
 <div id="app">
   <!-- 侧边栏：历史会话 -->
   <aside class="sidebar" id="sidebar">
