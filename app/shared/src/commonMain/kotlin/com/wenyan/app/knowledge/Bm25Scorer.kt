@@ -15,6 +15,18 @@ class Bm25Scorer(
 
     /** query 对文档集逐篇打分（BM25），返回与 docs 等长的分数列表 */
     fun score(query: String, docs: List<String>): List<Double> {
+        // L8 修复：单字查询与 bigram 索引口径不对称——清洗后剩 1 字的查询
+        // 对任何 bigram 分词的文档恒得 0 分。降级：单字查询改用「包含该字的
+        // bigram 命中数」计分（命中一个含该字的 bigram 即有分）。
+        val cleaned = query.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'‘’“”]"), "")
+        if (cleaned.length == 1) {
+            val c = cleaned[0]
+            val docTerms = docs.map { tokenize(it) }
+            return docTerms.map { terms ->
+                val hits = terms.count { it.contains(c) }.toDouble()
+                if (terms.isEmpty() || hits == 0.0) 0.0 else hits / terms.size
+            }
+        }
         val docTerms = docs.map { tokenize(it) }
         val n = docs.size
         if (n == 0) return emptyList()

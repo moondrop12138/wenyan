@@ -21,6 +21,8 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
     OUTPUT_TRUNCATED("回答已达长度上限被截断", false),
     // L2: context length exceeded 等 400/413/422 归一为上下文过长（不可重试，重试仍会超）
     CONTEXT_TOO_LONG("上下文过长，请缩短输入或更换模型", false),
+    // L11: 非「上下文过长」类 400（参数校验失败、图片格式错等）——不可重试，文案不误导
+    BAD_REQUEST("请求参数有误，请检查输入或更换模型", false),
     UNKNOWN("请求失败，请稍后重试", true),
     ;
 
@@ -33,13 +35,29 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
  */
 object ErrorMapper {
 
-    fun fromHttpStatus(status: Int): LlmErrorCode = when (status) {
-        400 -> LlmErrorCode.CONTEXT_TOO_LONG
+    /** L11: 判定响应体是否为上下文超长类错误（供 400 细分；大小写不敏感） */
+    fun looksLikeContextLength(bodyHint: String?): Boolean {
+        if (bodyHint.isNullOrBlank()) return false
+        val b = bodyHint.lowercase()
+        return b.contains("context length") ||
+            b.contains("maximum context") ||
+            b.contains("context_length_exceeded") ||
+            b.contains("too many tokens") ||
+            b.contains("reduce the length")
+    }
+
+    /**
+     * L11 修复：原所有 HTTP 400 一律映射「上下文过长」——图片 data url 格式错、
+     * 参数校验失败也提示「请缩短输入」。现按响应体关键词细分：
+     * 命中上下文类关键词才归 CONTEXT_TOO_LONG，否则归不可重试的 BAD_REQUEST。
+     */
+    fun fromHttpStatus(status: Int, bodyHint: String? = null): LlmErrorCode = when (status) {
+        400 -> if (looksLikeContextLength(bodyHint)) LlmErrorCode.CONTEXT_TOO_LONG else LlmErrorCode.BAD_REQUEST
         401 -> LlmErrorCode.UNAUTHORIZED
         403 -> LlmErrorCode.FORBIDDEN
         404 -> LlmErrorCode.MODEL_NOT_FOUND
         413 -> LlmErrorCode.CONTEXT_TOO_LONG
-        422 -> LlmErrorCode.CONTEXT_TOO_LONG
+        422 -> if (looksLikeContextLength(bodyHint)) LlmErrorCode.CONTEXT_TOO_LONG else LlmErrorCode.BAD_REQUEST
         429 -> LlmErrorCode.RATE_LIMITED
         in 500..599 -> LlmErrorCode.SERVER_ERROR
         else -> LlmErrorCode.UNKNOWN

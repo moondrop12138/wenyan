@@ -96,6 +96,10 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun testConnection(providerId: Long): LlmError? = null
     override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long = 0L
     override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) = Unit
+    override suspend fun deleteProviderApiKey(providerId: Long) = Unit
+    override suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String> = false to "test fake"
+    override fun usageMetrics(): com.wenyan.app.ui.contract.UsageMetricsUi =
+        com.wenyan.app.ui.contract.UsageMetricsUi(0, 0, 0, 0, emptyMap())
     override suspend fun deleteProvider(id: Long) = Unit
     override suspend fun getProviderApiKey(providerId: Long): String? = null
     override suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean) = Unit
@@ -123,16 +127,19 @@ class FakeAppContainer(
         override val currentSessionId: Flow<Long?> = MutableStateFlow(null)
         override val streamingState = MutableStateFlow(com.wenyan.app.ui.contract.StreamingState())
         override val currentModelName: Flow<String> = MutableStateFlow("未配置")
+        override val memoryReceiptEvents: Flow<String> = kotlinx.coroutines.flow.emptyFlow()
+        override val noticeEvents: Flow<String> = kotlinx.coroutines.flow.emptyFlow()
         override fun sendText(text: String, mode: com.wenyan.app.ui.contract.AnalysisMode) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
         override fun analyzeImages(uris: List<Uri>, text: String, mode: com.wenyan.app.ui.contract.AnalysisMode) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
-        override fun confirmTranscription(transcription: String) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
+        override fun confirmTranscription(transcription: String, sid: Long?) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
         override fun sendTextAsync(text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean) = Unit
         override fun analyzeImagesAsync(uris: List<Uri>, text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean) = Unit
-        override fun confirmTranscriptionAsync(transcription: String) = Unit
+        override fun confirmTranscriptionAsync(transcription: String, sid: Long?) = Unit
         override suspend fun deleteMessage(messageId: Long) = Unit
         override suspend fun switchSession(sessionId: Long) = Unit
         override suspend fun startNewSession() = Unit
         override suspend fun deleteSession(sessionId: Long) = Unit
+        override suspend fun searchSessions(query: String): List<Long> = emptyList()
         override fun cancel() = Unit
     }
 }

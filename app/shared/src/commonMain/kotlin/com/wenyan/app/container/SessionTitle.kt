@@ -7,16 +7,27 @@ package com.wenyan.app.container
 object SessionTitle {
 
     /**
+     * L14 修复：按码点截断——Kotlin String.take(n) 按 UTF-16 char 计数，
+     * 切在 emoji（代理对）中间会产生孤立低代理项持久化进标题/摘要。
+     */
+    fun takeCodePoints(text: String, max: Int): String {
+        if (text.length <= max) return text
+        var end = max
+        if (end < text.length && Character.isLowSurrogate(text[end])) end--
+        return text.substring(0, end)
+    }
+
+    /**
      * 抽屉标题三级回退：
      * DB 存储标题（非空）> 首条 USER 消息前 30 字 > "新会话"。
      * 旧会话迁移后 title 为空串，自动落到第二级，行为与 v1.2.0 一致。
      */
     fun resolveSessionTitle(sessionTitle: String?, firstUserText: String?): String {
         val stored = sessionTitle?.trim().orEmpty()
-        if (stored.isNotBlank()) return stored.take(30)
+        if (stored.isNotBlank()) return takeCodePoints(stored, 30)   // L14
         return firstUserText
             ?.replace(Regex("\\s+"), " ")
-            ?.take(30)
+            ?.let { takeCodePoints(it, 30) }   // L14
             ?.takeIf { it.isNotBlank() }
             ?: "新会话"
     }
@@ -26,8 +37,8 @@ object SessionTitle {
      * 结构化回复（五步法 JSON）时由调用方先取 reply 字段再传入。
      */
     fun buildTitleMaterial(userText: String, replyText: String): Pair<String, String> {
-        val userLine = userText.replace(Regex("\\s+"), " ").trim().take(30)
-        val replyLine = replyText.replace(Regex("\\s+"), " ").trim().take(40)
+        val userLine = userText.replace(Regex("\\s+"), " ").trim().let { takeCodePoints(it, 30) }   // L14
+        val replyLine = replyText.replace(Regex("\\s+"), " ").trim().let { takeCodePoints(it, 40) }   // L14
         return userLine to replyLine
     }
 
@@ -49,6 +60,6 @@ object SessionTitle {
             .replace(Regex("\\p{P}"), "")            // 标点
             .replace(Regex("[\\p{So}\\p{Cn}\\p{Sk}]"), "") // 符号/emoji
             .replace(Regex("\\s+"), "")
-            .take(12)
+            .let { takeCodePoints(it, 12) }   // L14
             .trim()
 }

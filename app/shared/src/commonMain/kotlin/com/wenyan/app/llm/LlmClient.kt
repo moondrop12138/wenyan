@@ -197,7 +197,20 @@ class LlmClient(
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                settle(classifyFailure(t, response))
+                // L10：已收到增量后断流（200 头之后连接中断）→ 传 midStream 提示，
+                // 归 READ_TIMEOUT 而非 UNKNOWN（两者都 retryable，但文案不再误导）
+                // 已收到正文增量（accumulator 非空）才视为「中途断流」
+                settle(classifyFailure(t, response, midStream = accumulator.isNotEmpty()))
+            }
+
+            // M10 修复：服务端/网关发完 200 响应头后干净关流且从未发 finish_reason——
+            // 原实现唯一收尾入口是 finish_reason != null，此时 flow 永不 close、
+            // readTimeout 不触发（连接已正常关闭）→ 双端聊天永久「思考中」。
+            // 未 settle 时按可重试的 EMPTY_CONTENT 收尾（与空回复同路径）。
+            override fun onClosed(eventSource: EventSource) {
+                if (!settled) {
+                    settle(SingleResult.Retryable(LlmErrorCode.EMPTY_CONTENT, "stream closed without finish_reason"))
+                }
             }
         }
 
@@ -211,9 +224,16 @@ class LlmClient(
         else -> SingleResult.Success(text)
     }
 
-    private fun classifyFailure(t: Throwable?, response: Response?): SingleResult {
+    private fun classifyFailure(t: Throwable?, response: Response?, midStream: Boolean = false): SingleResult {
         if (response != null) {
-            val code = ErrorMapper.fromHttpStatus(response.code)
+            // L10 修复：断流中途失败因 response != null 优先走状态码分支归 UNKNOWN（文案误导）；
+            // 已开始输出后的连接中断本质是读中断，归 READ_TIMEOUT。
+            if (midStream && response.code == 200) {
+                return SingleResult.Retryable(LlmErrorCode.READ_TIMEOUT, "stream broken after headers")
+            }
+            // L11: peek 响应体前 512 字符做 400/422 细分（peekBody 不消耗 body，可安全重试读取）
+            val bodyHint = runCatching { response.peekBody(512).string() }.getOrNull()
+            val code = ErrorMapper.fromHttpStatus(response.code, bodyHint)
             val retryAfter = response.header("Retry-After")?.toIntOrNull()
             return if (code.retryable) {
                 SingleResult.Retryable(code, "", retryAfter)

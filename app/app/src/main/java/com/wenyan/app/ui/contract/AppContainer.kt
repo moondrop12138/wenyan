@@ -32,6 +32,9 @@ interface SettingsRepository {
 
     suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long
     suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?)
+
+    /** L30: 清除已存 API Key（编辑页清空 Key 并保存 = 真删除密文，红绿灯随之红灯） */
+    suspend fun deleteProviderApiKey(providerId: Long)
     suspend fun deleteProvider(id: Long)
 
     /**

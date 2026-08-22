@@ -215,7 +215,13 @@ class RealSettingsRepository(
             ?: return false to "备份文件不是有效的 JSON"
         val (ok, error) = backupRepository.restore(json)
         if (ok) {
-            dataStore.clearAll()
+            // M16 修复：只清指向旧库行的失效 id 槽位——原 clearAll() 连带清掉
+            // onboarding_completed/privacy_ack/theme/active_target_id，恢复后激活档案丢失，
+            // 自动记忆（activeTargetId=null）无声失效、用户被迫重走问卷并插重复档案。
+            // 本地设置（主题/隐私确认/onboarding）与备份内容无关，保留。
+            dataStore.setCurrentModelId(null)
+            dataStore.setVisionModelId(null)
+            dataStore.setActiveTargetId(null)
             AppLogger.i("backup_restore_ok")
         } else {
             AppLogger.i("backup_restore_fail")
@@ -305,6 +311,11 @@ class RealSettingsRepository(
         if (!apiKey.isNullOrBlank()) {
             providerRepository.updateProviderApiKey(id, apiKey)
         }
+    }
+
+    /** L30: 清除已存 API Key（真删除密文；connectionStatus 一并清零回红灯） */
+    override suspend fun deleteProviderApiKey(providerId: Long) {
+        providerRepository.deleteApiKey(providerId)
     }
 
     override suspend fun deleteProvider(id: Long) {

@@ -15,6 +15,9 @@ import javax.crypto.SecretKey
 class KeystoreAesGcmCipher : AesGcmCipher(KeystoreKeyProvider()) {
 
     private class KeystoreKeyProvider : AesGcmCipher.SecretKeyProvider {
+
+        /** L24: 首次密钥生成的进程内互斥锁 */
+        private val keyGenLock = Any()
         private val keyStore: KeyStore =
             KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
@@ -25,28 +28,32 @@ class KeystoreAesGcmCipher : AesGcmCipher(KeystoreKeyProvider()) {
             null
         }
 
-        override fun getOrCreate(): SecretKey {
-            getExisting()?.let { return it }
-            return try {
-                val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-                generator.init(
-                    KeyGenParameterSpec.Builder(
-                        KEY_ALIAS,
-                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                override fun getOrCreate(): SecretKey {
+            // L24 修复：检查-生成两步无锁——并发生成同 alias 相互覆盖，
+            // 先落库的密文永久不可解（ProviderRepository 保存后即坏）。
+            // synchronized + 双检：等锁期间他人可能已完成生成。
+            synchronized(keyGenLock) {
+                getExisting()?.let { return it }
+                try {
+                    val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+                    generator.init(
+                        KeyGenParameterSpec.Builder(
+                            KEY_ALIAS,
+                            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                        )
+                            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                            .setKeySize(256)
+                            .build()
                     )
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(256)
-                        .build()
-                )
-                generator.generateKey()
-            } catch (e: Exception) {
-                // M7: 密钥生成异常归一，避免崩溃
-                throw AesGcmCipher.KeyUnavailableException("密钥不可用，请重新输入 API Key")
+                    return generator.generateKey()
+                } catch (e: Exception) {
+                    throw AesGcmCipher.KeyUnavailableException(e.message ?: "密钥不可用，请重新输入 API Key")
+                }
             }
         }
 
-        private companion object {
+private companion object {
             const val ANDROID_KEYSTORE = "AndroidKeyStore"
             const val KEY_ALIAS = "wenyan_api_key"
         }

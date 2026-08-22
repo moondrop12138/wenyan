@@ -62,6 +62,12 @@ class ProviderRepository(
         providerDao.update(current.copy(apiKeyEncrypted = cipher.encrypt(apiKey)))
     }
 
+    /** L30 修复：清除已存密文（编辑页清空 Key 输入框并保存 = 真删除，而非「null 不覆盖」） */
+    suspend fun deleteApiKey(providerId: Long) {
+        val current = providerDao.getById(providerId) ?: return
+        providerDao.update(current.copy(apiKeyEncrypted = null, connectionStatus = ""))
+    }
+
     suspend fun deleteProvider(id: Long) = providerDao.deleteById(id)
 
     /** 解密后的明文 API Key（仅供 LLM Client 出网时使用，不落 UI 状态） */

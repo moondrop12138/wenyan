@@ -76,13 +76,17 @@ object MemoryExtractor {
                     val item = array.opt(i)
                     when (item) {
                         is JsonObject -> {
-                            val text = item.optString("text", "").trim()
+                            // M7 修复：text/kind/expires_in 均为模型产出 JSON 的可选字段，
+                            // buildPrompt 契约主动示范 "expires_in":null —— Android 端
+                            // optString 对显式 null 返回字面量 "null"，内容为 "null" 的
+                            // 垃圾事实被持久化。改走 optStringOrNull（isNull 预检，双端一致）。
+                            val text = (item.optStringOrNull("text") ?: "").trim()
                             if (text.isNotEmpty()) {
-                                val kind = item.optString("kind", KIND_FACT).trim()
-                                val expiresIn = item.optString("expires_in", "").trim()
+                                val kind = (item.optStringOrNull("kind") ?: item.optString("kind", KIND_FACT)).trim()
+                                val expiresIn = (item.optStringOrNull("expires_in") ?: "").trim()
                                 add(
                                     ExtractedFact(
-                                        text = text.take(40),
+                                        text = takeCodePoints(text, 40),   // L5: 防切断代理对
                                         kind = if (kind == KIND_HYPOTHESIS) KIND_HYPOTHESIS else KIND_FACT,
                                         expiresIn = if (expiresIn == EXPIRES_TODAY || expiresIn == EXPIRES_WEEK) expiresIn else null,
                                     ),
@@ -91,7 +95,7 @@ object MemoryExtractor {
                         }
                         is String -> {
                             val text = item.trim()
-                            if (text.isNotEmpty()) add(ExtractedFact(text.take(40), KIND_FACT))
+                            if (text.isNotEmpty()) add(ExtractedFact(takeCodePoints(text, 40), KIND_FACT))   // L5
                         }
                     }
                 }
@@ -174,7 +178,7 @@ object MemoryExtractor {
      * 按 \n。；切分 + trim + 去空 + 单条 ≤40 字。原 splitSegments 提为 public 工具。
      */
     fun splitNoteToFacts(note: String): List<String> =
-        splitSegments(note).map { it.take(40) }
+        splitSegments(note).map { takeCodePoints(it, 40) }   // L5: 防切断代理对
 
     /** 重叠判定：整句互含 或 长度 ≥6 字片段包含（幂等兜底，确定性可测） */
     private fun overlaps(a: String, b: String): Boolean {
@@ -195,11 +199,24 @@ object MemoryExtractor {
     /** 去掉 ```json 围栏（对齐 AnalysisParser.stripFence） */
     private fun stripFence(raw: String): String {
         val trimmed = raw.trim()
-        if (!trimmed.startsWith("```")) return trimmed
-        return trimmed.removePrefix("```")
-            .removeSuffix("```")
-            .trim()
-            .removePrefix("json")
-            .trim()
+        if (!trimmed.contains("```")) return trimmed
+        // L6 修复：原只处理「整段以 ``` 开头 + 小写 json 标签」——```JSON（大写）/
+        // 围栏前有说明文字时整条有效 JSON 被静默丢弃，本轮全部新事实丢失。
+        // 现按行剥离围栏行（容忍 JSON/json 大小写），围栏外说明文字一并去除。
+        val lines = trimmed.lines().toMutableList()
+        // 去掉围栏前的说明文字：找到首行 ``` 围栏，丢弃其之前的所有内容
+        val openIdx = lines.indexOfFirst { it.trimStart().startsWith("```") }
+        if (openIdx < 0) return trimmed
+        // 只丢弃围栏【之前】的 openIdx 行（原 while 写法在围栏位于首行时会把整个列表清空）
+        repeat(openIdx) { lines.removeAt(0) }
+        if (lines.isNotEmpty()) {
+            lines[0] = lines[0].trimStart().removePrefix("```").removePrefix("JSON").removePrefix("json").trim()
+        }
+        // 去掉闭合围栏行及其后内容
+        val closeIdx = lines.indexOfLast { it.trim() == "```" }
+        if (closeIdx >= 0) {
+            while (lines.size > closeIdx) lines.removeAt(lines.lastIndex)
+        }
+        return lines.joinToString("\n").trim()
     }
 }

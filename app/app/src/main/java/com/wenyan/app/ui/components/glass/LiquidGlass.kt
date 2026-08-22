@@ -4,6 +4,14 @@ import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +34,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.wenyan.app.ui.theme.rememberReducedMotion
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.LocalGtjColors
 import com.wenyan.app.ui.theme.LocalGtjIsDark
@@ -53,7 +62,7 @@ import com.wenyan.app.ui.theme.LocalGtjIsDark
  * @param tint 叠加在 fill 之上、高光之下的渐变停靠点（用户气泡深棕 tint）
  * @param borderColor 覆盖描边色（null 用 glassBorder）
  * @param refractionStrength 折射强度 0.0~1.0（默认 0.5，仅 API 33+ 生效）
- * @param scrollVelocity 滚动速度 -1~1，驱动动态高光流动（默认 0）
+ * @param scrollVelocity 滚动速度 -1~1，由 liquidGlassScrollAware 转发供高光流动（直调时未消费）
  * @param enablePressAnimation 是否启用果冻按压效果（默认 true）
  *
  * v1.8.1 B4：移除 glowPositions/glowIntensities——dead path（接收后从未使用）且引发 60fps 重组。
@@ -76,7 +85,36 @@ fun Modifier.liquidGlass(
     val isDarkMode = LocalGtjIsDark.current
     val supportsRuntimeShader = LiquidGlassShaders.isRuntimeShaderSupported()
 
+    // L33 修复：enablePressAnimation 此前是死参数——KDoc 宣称「果冻按压」但函数体从未实现，
+    // 7 处调用点传 true 全部无效。现补真实实现：onPress 观察按下/抬起驱动 0.97 缩放
+    // （不消费事件，与外层 clickable/combinedClickable 共存）；reducedMotion 时禁用。
+    val pressEnabled = enablePressAnimation && !rememberReducedMotion()
+    var pressed by remember { mutableStateOf(false) }
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        label = "liquidGlassPressScale",
+    )
+
     return this
+        .graphicsLayer {
+            if (pressEnabled && pressScale != 1f) {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+        }
+        .pointerInput(pressEnabled) {
+            if (!pressEnabled) return@pointerInput
+            detectTapGestures(
+                onPress = {
+                    pressed = true
+                    try {
+                        tryAwaitRelease()
+                    } finally {
+                        pressed = false
+                    }
+                },
+            )
+        }
         .drawWithCache {
             // 组合期已解析 token；缓存块内仅依赖 size/density/layoutDirection，跨帧复用
             val fillPath: Path = when (val outline = shape.createOutline(size, layoutDirection, this)) {

@@ -1,6 +1,8 @@
 package com.wenyan.app.ui.navigation
 
 import android.app.Activity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -12,6 +14,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.wenyan.app.AppViewModel
 import com.wenyan.app.ui.chat.ChatScreen
@@ -31,6 +34,13 @@ fun AppRoot(
     appViewModel: AppViewModel,
 ) {
     val onboardingCompleted by appViewModel.onboardingCompleted.collectAsState()
+    // M21 修复：初始路由不再用「未加载的 false」决定——DataStore 首值到达前渲染空白占位，
+    // 防老用户每次冷启动闪现问卷页后被 replaceAll 纠正。
+    val onboardingLoaded by appViewModel.onboardingLoaded.collectAsState()
+    if (!onboardingLoaded) {
+        Box(modifier = Modifier.fillMaxSize())
+        return
+    }
     val navigator = remember {
         AppNavigator(if (onboardingCompleted) Route.Chat else Route.Onboarding)
     }

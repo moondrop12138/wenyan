@@ -55,6 +55,7 @@ ktor-server-core = { group = "io.ktor", name = "ktor-server-core-jvm", version.r
 ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio-jvm", version.ref = "ktor" }
 ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation-jvm", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json-jvm", version.ref = "ktor" }
+ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages-jvm", version.ref = "ktor" }
 ktor-server-host-common = { group = "io.ktor", name = "ktor-server-host-common-jvm", version.ref = "ktor" }
 sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqliteBundled" }
 twelvemonkeys-jpeg = { group = "com.twelvemonkeys.imageio", name = "imageio-jpeg", version.ref = "twelvemonkeys" }

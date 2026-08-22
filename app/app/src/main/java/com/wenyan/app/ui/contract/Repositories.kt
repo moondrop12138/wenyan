@@ -23,8 +23,15 @@ interface ChatRepository {
     /**
      * v1.3.1 流式状态中枢：async 发送族在应用级 scope 收集（Activity 销毁/息屏不中断），
      * 增量文本/思考/转述/错误经此推送；ViewModel 订阅后映射到 UI 态。
+     * H5/M18：状态带归属 sessionId，UI 按当前查看会话门控渲染。
      */
     val streamingState: StateFlow<StreamingState>
+
+    /** M22 修复：一次性回执改事件流（replay=0）——原 StateFlow 字段旋转后重放重复弹、相同文案被去重丢失 */
+    val memoryReceiptEvents: Flow<String>
+
+    /** M22 修复：一次性提示（解析失败兜底/历史压缩/冲突提示），同上 */
+    val noticeEvents: Flow<String>
 
     /** 发送文本分析（"这句怎么回"用 mode=REPLY，其余 FIVE_STEP） */
     fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent>
@@ -42,8 +49,11 @@ interface ChatRepository {
         mode: AnalysisMode = AnalysisMode.FIVE_STEP,
     ): Flow<StreamEvent>
 
-    /** 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析 */
-    fun confirmTranscription(transcription: String): Flow<StreamEvent>
+    /**
+     * 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析。
+     * H5 修复：[sid] = 转述卡来源会话 id（跨会话确认不再落错会话）；null 回退当前会话。
+     */
+    fun confirmTranscription(transcription: String, sid: Long? = null): Flow<StreamEvent>
 
     /** v1.3.1 后台续跑发送族：应用级 scope 内收集流式事件并推送 streamingState，返回即不阻塞 */
     fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true)
@@ -55,7 +65,7 @@ interface ChatRepository {
         persistUser: Boolean = true,
     )
 
-    fun confirmTranscriptionAsync(transcription: String)
+    fun confirmTranscriptionAsync(transcription: String, sid: Long? = null)
 
     /** 删除单条消息（长按菜单删除；Room Flow 自动刷新列表） */
     suspend fun deleteMessage(messageId: Long)
@@ -82,7 +92,7 @@ interface ChatRepository {
 /**
  * v1.3.1 流式状态（repo 层状态中枢，ViewModel 订阅映射）：
  * 与 ChatViewModel 原有的 streaming/streamingText/streamingThinking/transcription/transcribing/lastError 一一对应。
- * v1.9.0：memoryReceipt —— 自动记忆写入回执（非空表示本轮回复完成后记住了新事实，UI 提示一次后由 repo 清空）。
+ * v1.9.0：自动记忆写入回执改走 memoryReceiptEvents（M22：StateFlow 字段有重放/去重问题，已移除）。
  */
 data class StreamingState(
     val streaming: Boolean = false,
@@ -91,9 +101,12 @@ data class StreamingState(
     val transcription: String? = null,
     val transcribing: Boolean = false,
     val error: LlmError? = null,
-    val memoryReceipt: String? = null,
-    /** H3: 一次性提示（如解析失败兜底「已展示原文」），UI toast 后清空 */
-    val notice: String? = null,
+    /**
+     * H5/M18 修复：本状态归属的会话 id（null = 尚未落库的新会话）。
+     * 原全局单份流式状态跨会话共享：切会后假「思考中」、转述卡跨会话渲染、错误卡串场；
+     * UI 层按「sessionId == 当前查看会话」门控映射。
+     */
+    val sessionId: Long? = null,
 )
 
 /**

@@ -70,7 +70,10 @@ fun ImagePreviewOverlay(
             var offset by remember { mutableStateOf(Offset.Zero) }
             val bmp = bitmap.value
             if (bmp != null) {
-                val drawn = fitSize(bmp, viewport)
+                // M19 修复：首帧 onSizeChanged 未回调时 viewport=Zero，fitSize 返回 0 尺寸，
+                // 首次捏合的 clamp 边界全错（图片飞出屏幕）。Zero 期间跳过手势计算，
+                // 真实尺寸到达后由 LaunchedEffect(viewport) 复位偏移。
+                val drawn = if (viewport == IntSize.Zero) IntSize.Zero else fitSize(bmp, viewport)
                 Image(
                     bitmap = bmp.asImageBitmap(),
                     contentDescription = null,
@@ -80,6 +83,7 @@ fun ImagePreviewOverlay(
                         .onSizeChanged { viewport = it }
                         .pointerInput(Unit) {
                             detectTransformGestures { centroid, pan, zoom, _ ->
+                                if (viewport == IntSize.Zero || drawn == IntSize.Zero) return@detectTransformGestures
                                 val newScale = (scale * zoom).coerceIn(1f, 4f)
                                 val k = newScale / scale
                                 // 保持手势中心锚定：offset 为图片中心相对视口中心的偏移

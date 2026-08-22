@@ -24,6 +24,9 @@ private class AndroidJsonObject(internal val delegate: org.json.JSONObject) : Js
     override fun optJSONArray(key: String): JsonArray? = delegate.optJSONArray(key)?.let { AndroidJsonArray(it) }
     override fun getJSONObject(key: String): JsonObject = AndroidJsonObject(delegate.getJSONObject(key))
     override fun has(key: String): Boolean = delegate.has(key)
+    override fun optScalarString(key: String): String? =
+        if (delegate.isNull(key)) null else delegate.opt(key)?.toString()
+
     override fun isNull(key: String): Boolean = delegate.isNull(key)
     override fun getString(key: String): String = delegate.getString(key)
     override fun keys(): List<String> = delegate.keys().asSequence().toList()

@@ -98,6 +98,10 @@ class CrisisDetectorBoundaryTest {
         assertTrue(CrisisDetector.isCrisis("我吃了安眠药"))
         assertTrue(CrisisDetector.isCrisis("我想结束自己"))
         assertTrue(CrisisDetector.isCrisis("我快撑不住了"))
-        assertTrue(CrisisDetector.isCrisis("我真的受不了了"))
+        // M14：裸「受不了」误报多（如「这道题真的受不了」），已从短语表移除、
+        // 改为复合词判定（受不了 + 自伤意图连用才触发）
+        assertFalse(CrisisDetector.isCrisis("这题真的受不了了"))
+        assertTrue(CrisisDetector.isCrisis("我真的受不了了想死"))
+        assertTrue(CrisisDetector.isCrisis("天天被打，想结束一切"))   // M14: 复合词「被打+结束」
     }
 }

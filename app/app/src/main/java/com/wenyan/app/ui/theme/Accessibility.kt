@@ -3,6 +3,10 @@ package com.wenyan.app.ui.theme
 import android.content.Context
 import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
@@ -13,9 +17,34 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun rememberReducedMotion(): Boolean {
     val context = LocalContext.current
-    return remember(context) {
-        context.isAnimationsRemoved()
+    // L32 修复：原 remember(context) 进程内缓存永不刷新——用户开/关「移除动画」后
+    // 不重启则 UI 永远沿用旧值。改监听三个缩放键的 ContentObserver，变化即重组刷新。
+    var reduced by remember { mutableStateOf(context.isAnimationsRemoved()) }
+    DisposableEffect(context) {
+        val resolver = context.contentResolver
+        val observer = object : android.database.ContentObserver(
+            android.os.Handler(android.os.Looper.getMainLooper()),
+        ) {
+            override fun onChange(selfChange: Boolean) {
+                reduced = context.isAnimationsRemoved()
+            }
+        }
+        val keys = listOf(
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            android.provider.Settings.Global.TRANSITION_ANIMATION_SCALE,
+            android.provider.Settings.Global.WINDOW_ANIMATION_SCALE,
+        )
+        keys.forEach { key ->
+            resolver.registerContentObserver(
+                android.net.Uri.parse("content://settings/global/" + key),
+                false,
+                observer,
+            )
+        }
+        reduced = context.isAnimationsRemoved()
+        onDispose { resolver.unregisterContentObserver(observer) }
     }
+    return reduced
 }
 
 /** 纯函数：读取系统动画缩放设置（供 Compose 组合与单元测试复用）。 */

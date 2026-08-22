@@ -73,7 +73,7 @@ class ProviderEditViewModelTest {
 
         vm.save {}
         assertTrue(vm.showPrivacyDialog)
-        assertEquals(ProviderEditViewModel.PendingAction.Save, vm.pendingAction)
+        assertTrue(vm.pendingAction is ProviderEditViewModel.PendingAction.Save)  // M23: Save 为 data class（携带回调）
 
         vm.acceptPrivacy()
         advanceUntilIdle()
@@ -219,6 +219,8 @@ class ProviderEditViewModelTest {
             return testConnectionResult
         }
         override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long = 1L
+        override suspend fun deleteProviderApiKey(providerId: Long) = Unit
+
         override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) {
             providerUpdates.add(Triple(id, name, apiKey))
         }

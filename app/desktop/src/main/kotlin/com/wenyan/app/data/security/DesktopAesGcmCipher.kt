@@ -40,31 +40,40 @@ class KeystoreAesGcmCipher : AesGcmCipher(MachineFingerprintKeyProvider()) {
         private fun normalizedUsername(): String =
             (System.getProperty("user.name") ?: "wenyan").trim().lowercase()
 
-        /** 读 Windows MachineGuid；非 Windows / 读取失败回退到主机名+用户名（个人版可接受） */
+        /**
+         * 读 Windows MachineGuid。
+         * L17 修复：Windows 上 reg 失败/超时改为显式抛错——原静默回退 COMPUTERNAME 派生
+         * 导致密钥漂移，已存 Key 密文「时好时坏」且难排查；同时 waitFor 无超时，
+         * reg 挂起会永久阻塞并卡死外层 synchronized。非 Windows 平台维持主机名回退。
+         */
         private fun machineGuid(): String {
-            return try {
-                val proc = ProcessBuilder(
-                    "reg", "query",
-                    "HKLM\\SOFTWARE\\Microsoft\\Cryptography",
-                    "/v", "MachineGuid",
-                ).redirectErrorStream(true).start()
-                val out = proc.inputStream.bufferedReader().readText()
-                proc.waitFor()
-                out.lines()
-                    .firstOrNull { it.contains("MachineGuid") }
-                    ?.substringAfterLast(" ")
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-                    ?: fallback()
-            } catch (e: Exception) {
-                fallback()
+            val isWindows = System.getProperty("os.name")?.lowercase()?.contains("windows") == true
+            if (!isWindows) return fallback()
+            val proc = ProcessBuilder(
+                "reg", "query",
+                "HKLM\\SOFTWARE\\Microsoft\\Cryptography",
+                "/v", "MachineGuid",
+            ).redirectErrorStream(true).start()
+            // L17: 限时等待 + 强杀（原 waitFor 无超时，reg 挂起即永久阻塞）
+            if (!proc.waitFor(REG_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)) {
+                proc.destroyForcibly()
+                throw IllegalStateException("读取 MachineGuid 超时")
             }
+            val out = proc.inputStream.bufferedReader().readText()
+            return out.lines()
+                .firstOrNull { it.contains("MachineGuid") }
+                ?.substringAfterLast(" ")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("MachineGuid 解析失败")
         }
 
         private fun fallback(): String =
             (System.getenv("COMPUTERNAME") ?: "unknown-host")
 
         private companion object {
+            /** L17: reg 查询超时秒数 */
+            const val REG_TIMEOUT_SECONDS = 3L
             // M8: 固定盐（非机密，仅防彩虹表 + 增加派生成本）；保留「与 Android 端密文不互通」设计
             private val SALT = byteArrayOf(
                 0x57, 0x65, 0x6e, 0x79, 0x61, 0x6e, 0x2d, 0x70,

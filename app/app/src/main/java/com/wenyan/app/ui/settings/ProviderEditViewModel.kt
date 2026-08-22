@@ -10,6 +10,7 @@ import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.SettingsRepository
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** 测试连接结果三态（design-pages 页面3） */
@@ -54,7 +55,8 @@ class ProviderEditViewModel(
 
     /** 隐私确认后待执行的动作（AC-18：首次保存 Key 前必须确认） */
     sealed interface PendingAction {
-        data object Save : PendingAction
+        /** M23 修复：携带保存完成回调——原 data object 丢失 onDone，隐私确认后保存成功但不导航 */
+        data class Save(val onDone: () -> Unit = {}) : PendingAction
         data object Test : PendingAction
 
         /** 隐私确认后先存 provider 再续加模型（保存原始添加意图，避免确认后丢失） */
@@ -69,11 +71,12 @@ class ProviderEditViewModel(
         }
         if (!isNew) {
             viewModelScope.launch {
-                repo.providers.collect { providers ->
-                    providers.firstOrNull { it.id == providerId }?.let { p ->
-                        name = p.name
-                        baseUrl = p.baseUrl
-                    }
+                // M26 修复：仅取初值回填一次——原 collect 每次发射无条件覆盖 name/baseUrl，
+                // 进页立刻打字会被迟到的库值冲掉；providers 表任何变更也会覆盖未保存编辑。
+                val providers = repo.providers.first()
+                providers.firstOrNull { it.id == providerId }?.let { p ->
+                    name = p.name
+                    baseUrl = p.baseUrl
                 }
             }
             viewModelScope.launch {
@@ -97,6 +100,28 @@ class ProviderEditViewModel(
     private fun apiKeyToPersist(): String? =
         apiKey.takeIf { it.isNotBlank() && it != originalApiKey }
 
+    /** H2 修复：新建首次落库后记住返回 id；null = 尚未落库（原 isNew 为构造期常量永不翻转，
+     *  测试/加模型/保存四条路径各自 saveProvider 插新行 → 一次流程最多 3 条相同提供商） */
+    private var persistedId: Long? = null
+
+    /** H2: 已落库的 Key 明文（供后续 update 判断 Key 是否变化，避免每次重加密） */
+    private var persistedKey: String? = null
+
+    /**
+     * H2: 新建路径统一入口——首存返回 id 并记忆；之后一律 updateProvider。
+     * 编辑/预设路径（isNew=false）不走此函数，直接用 providerId。
+     */
+    private suspend fun ensurePersisted(): Long {
+        persistedId?.let { id ->
+            repo.updateProvider(id, name, baseUrl, apiKey.takeIf { it.isNotBlank() && it != persistedKey })
+            return id
+        }
+        val id = repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
+        persistedId = id
+        persistedKey = apiKey.takeIf { it.isNotBlank() }
+        return id
+    }
+
     fun toggleKeyVisibility() {
         showKey = !showKey
     }
@@ -117,9 +142,9 @@ class ProviderEditViewModel(
         testing = true
         testResult = null
         viewModelScope.launch {
-            // 新建时先保存返回 id 再测；预设/已有直接测
+            // H2 修复：新建走 ensurePersisted（首存后记住 id，后续 update）；已有直接 update 后测
             val id = if (isNew) {
-                repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
+                ensurePersisted()
             } else {
                 repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
                 providerId
@@ -140,7 +165,7 @@ class ProviderEditViewModel(
             privacyAck = true
             val action = pendingAction
             when (action) {
-                PendingAction.Save -> doSave()
+                is PendingAction.Save -> doSave(action.onDone)   // M23 修复：用携带的回调
                 PendingAction.Test -> doTestConnection()
                 is PendingAction.SaveAndAddModel -> doSaveAndAddModel(action.modelName)
                 null -> Unit
@@ -189,6 +214,8 @@ class ProviderEditViewModel(
     fun addModel() {
         val nameTrim = newModelName.trim()
         if (nameTrim.isEmpty()) return
+        // M27 修复：添加模型同样先 URL 预检，防非法 Base URL 随 saveProvider 静默落库
+        if (!normalizeOrReject()) return
         // AC-18：填写了 API Key 但未确认隐私声明 → 先弹确认（新建场景），确认后仍续加模型
         if (isNew && apiKey.isNotBlank() && !privacyAck) {
             pendingAction = PendingAction.SaveAndAddModel(nameTrim)
@@ -201,9 +228,7 @@ class ProviderEditViewModel(
     /** v1.6.3 新增模型默认非视觉（supportsVision=false），需要时在模型行第二行再开"视觉"开关 */
     private fun doAddModel(nameTrim: String) {
         viewModelScope.launch {
-            val id = if (isNew) {
-                repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
-            } else providerId
+            val id = if (isNew) ensurePersisted() else providerId   // H2 修复
             repo.addModel(id, nameTrim, supportsVision = false)
             newModelName = ""
         }
@@ -214,9 +239,7 @@ class ProviderEditViewModel(
         if (saving) return
         saving = true
         viewModelScope.launch {
-            val id = if (isNew) {
-                repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
-            } else providerId
+            val id = if (isNew) ensurePersisted() else providerId   // H2 修复
             repo.addModel(id, modelName, supportsVision = false)
             newModelName = ""
             saving = false
@@ -245,9 +268,12 @@ class ProviderEditViewModel(
     }
 
     fun save(onDone: () -> Unit) {
+        // M27 修复：保存入口同样先做 URL 预检（原仅测试连接路径预检，非法 Base URL 静默落库，
+        // 之后对话请求拼坏 URL 全部 404 且无提示指向根因）
+        if (!normalizeOrReject()) return
         // AC-18：填写了 API Key 但未确认隐私声明 → 先弹确认
         if (apiKey.isNotBlank() && !privacyAck) {
-            pendingAction = PendingAction.Save
+            pendingAction = PendingAction.Save(onDone)   // M23 修复：携带回调
             showPrivacyDialog = true
             return
         }
@@ -264,6 +290,11 @@ class ProviderEditViewModel(
                 repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
                 providerId
             }
+            // L30 修复：编辑页清空 Key = 真删除已存密文——原 apiKeyToPersist 的 null 语义是
+            // 「不覆盖」，清空输入框保存后旧 Key 仍在，测试连接继续用旧 Key 绿灯误导用户。
+            if (!isNew && originalApiKey != null && apiKey.isBlank()) {
+                repo.deleteProviderApiKey(id)
+            }
             // v1.6.3 保存后立即测试连接并写入红绿灯状态：成功绿灯，失败/未填 Key 红灯
             if (apiKey.isBlank()) {
                 repo.markConnectionStatus(id, ok = false)
@@ -279,6 +310,8 @@ class ProviderEditViewModel(
     fun deleteProvider(onDone: () -> Unit) {
         viewModelScope.launch {
             if (!isNew) repo.deleteProvider(providerId)
+            // H2 修复：新建中途已落库的半成品（persistedId 存在）也一并删除，不留孤儿行
+            else persistedId?.let { repo.deleteProvider(it) }
             onDone()
         }
     }

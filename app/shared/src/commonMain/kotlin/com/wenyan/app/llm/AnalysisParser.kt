@@ -244,14 +244,27 @@ object AnalysisParser {
                 return trimmed.substring(bodyStart, bodyEnd).trim()
             }
         }
-        // 场景 2：首个 '{' 与对应 '}' 之间的平衡子串
-        val open = trimmed.indexOf('{')
-        if (open < 0) return stripFence(trimmed)
+        // 场景 2：花括号平衡子串。
+        // L13 修复：原只从首个 '{' 起点配平——前置说明/思考内容先出现花括号时
+        // 截取到错误子串，真正的结果 JSON 被丢弃 → AnalysisParseException。
+        // 现逐个 '{' 候选起点尝试配平，取第一个能配平且可解析为 JSON 对象的子串；
+        // 全部失败再走旧 stripFence 兜底。
+        var from = trimmed.indexOf('{')
+        while (from >= 0) {
+            balancedAt(trimmed, from)?.let { return it }
+            from = trimmed.indexOf('{', from + 1)
+        }
+        // 兜底：仍走旧 stripFence
+        return stripFence(trimmed)
+    }
+
+    /** L13: 从 [start] 的 '{' 起做字符串感知的括号配平；成功且能解析为 JSON 对象才返回子串 */
+    private fun balancedAt(text: String, start: Int): String? {
         var depth = 0
         var inString = false
         var escape = false
-        for (i in open until trimmed.length) {
-            val c = trimmed[i]
+        for (i in start until text.length) {
+            val c = text[i]
             when {
                 escape -> escape = false
                 c == '\\' -> escape = true
@@ -261,15 +274,20 @@ object AnalysisParser {
                     '}' -> {
                         depth--
                         if (depth == 0) {
-                            return trimmed.substring(open, i + 1)
+                            val candidate = text.substring(start, i + 1)
+                            // 能解析才算有效起点（防「说明文字里的孤立 {...}」抢先截胡）
+                            return if (parses(candidate)) candidate else null
                         }
                     }
                 }
             }
         }
-        // 兜底：仍走旧 stripFence
-        return stripFence(trimmed)
+        return null
     }
+
+    private fun parses(candidate: String): Boolean = runCatching {
+        Json.obj(candidate)
+    }.isSuccess
 
     /**
      * strip ```json 围栏（prompt-architecture §6）

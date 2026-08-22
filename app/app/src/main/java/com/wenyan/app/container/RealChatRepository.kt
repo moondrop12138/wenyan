@@ -32,13 +32,16 @@ import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.contract.StreamEvent
 import com.wenyan.app.ui.contract.StreamingState
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
@@ -96,14 +99,35 @@ class RealChatRepository(
      * v1.3.1 应用级发送 scope：不随 Activity/ViewModel 销毁，息屏/退后台回答继续完成并落库。
      * 进程被杀则无法续跑（系统回收，除非前台服务——MVP 不做）。
      */
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val appScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default +
+            // M17 修复：发送链路无协程异常兜底——原 appScope 无 CoroutineExceptionHandler，
+            // sendTextFlow/analyzeImagesFlow 中任何未捕获异常（DB 写失败、解析异常等）
+            // 沿 appScope.launch 直接崩溃进程。兜底：记日志 + 复位流式状态。
+            CoroutineExceptionHandler { _, e ->
+                Log.e("RealChatRepository", "uncaught in appScope", e)
+                _streamingState.update { it.copy(streaming = false, transcribing = false) }
+            }
+    )
 
     /** v1.3.1 流式状态中枢：async 发送族在 appScope 收集后推送，ViewModel 订阅映射 */
     private val _streamingState = MutableStateFlow(StreamingState())
     override val streamingState: StateFlow<StreamingState> = _streamingState.asStateFlow()
 
-    /** v1.3.1 当前流式收集 job（stop 取消用；appScope 生命周期不受 UI 影响） */
-    private var streamJob: Job? = null
+    /**
+     * M18 修复：流式任务按会话维度注册（key = sessionId；PENDING_SESSION_KEY = 尚未落库的新会话）。
+     * 原单一 streamJob + 全局 _streaming 守卫：切会后新会话假「思考中」、发送被锁死、
+     * stop 取消的是旧会话流。现在同会话单飞、不同会话可并行后台跑。
+     */
+    private val streamJobs = ConcurrentHashMap<Long, Job>()
+
+    /** M22 修复：一次性回执/提示改 SharedFlow（replay=0）——原 StateFlow 字段
+     *  在 Activity 旋转后重放导致 toast 重复弹，且相同文案被 StateFlow 去重导致第二次丢失 */
+    private val _memoryReceiptEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    override val memoryReceiptEvents: Flow<String> = _memoryReceiptEvents.asSharedFlow()
+
+    private val _noticeEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    override val noticeEvents: Flow<String> = _noticeEvents.asSharedFlow()
 
     private val currentModelId = dataStore.currentModelId
     private val visionModelId = dataStore.visionModelId
@@ -160,6 +184,7 @@ class RealChatRepository(
         }
 
         val sid = ensureSession()
+        retagStreamingOwner(sid)   // H5/M18：新建会话首次落库后把流式状态归属改为真实 sid
         if (persistUser) {
             conversationRepository.addMessage(sid, "USER", "text", text)
         }
@@ -260,11 +285,11 @@ class RealChatRepository(
                         conversationRepository.updateSessionState(sid, newState.toJson())
                         val card = UiMappers.toCoachCard(analysis)
                         emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
-                        if (historyTruncated) _streamingState.update { it.copy(notice = HISTORY_TRUNCATED_NOTICE) }
+                        if (historyTruncated) _noticeEvents.tryEmit(HISTORY_TRUNCATED_NOTICE)   // M22
                     } else {
                         // H3: 解析失败不丢内容——原始回复以 freetext 落库展示，并提示
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        _streamingState.update { it.copy(notice = PARSE_FALLBACK_NOTICE) }
+                        _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
                     }
                     emit(StreamEvent.Done)
                 }
@@ -297,6 +322,11 @@ class RealChatRepository(
             }
         }
 
+        // H4 修复：发送开始即锁定会话——压缩最多 10 张图是秒级窗口，原实现压缩之后才
+        // ensureSession() 读共享 MutableStateFlow<Long?>，期间切会话/新建会话 →
+        // 用户消息、AI 回复、记忆提炼全部落错会话。现在 sid 先快照，后续全部用参数传递。
+        val sid = ensureSession()
+        retagStreamingOwner(sid)   // H5/M18
         // v1.6.1 多图：全部压缩成功才进入落库（任一失败 → 整体报错，未写任何消息，ViewModel 恢复整批待发送）
         val dataUrls = mutableListOf<String>()
         for (uri in uris) {
@@ -317,7 +347,6 @@ class RealChatRepository(
             dataUrls.add(dataUrl)
         }
 
-        val sid = ensureSession()
         // v1.3.1 图文同发：先图后文落库（Room Flow 顺序刷新，UI 显示相邻多条用户气泡）；重试跳过
         if (persistUser) {
             dataUrls.forEach { conversationRepository.addMessage(sid, "USER", "image", it) }
@@ -368,8 +397,19 @@ class RealChatRepository(
         }
     }
 
-    override fun confirmTranscription(transcription: String): Flow<StreamEvent> = flow {
-        val sid = ensureSession()
+    override fun confirmTranscription(transcription: String, sid: Long?): Flow<StreamEvent> = flow {
+        // M5 修复（双端）：转述通道第二步同样执行危机预检——原实现仅 sendMessage/analyzeImages
+        // 入口有 CrisisDetector 硬短路，截图里的危机表述（遗书/割腕等）经视觉模型转述后
+        // 直送主模型分析。落库前同样检测并走安全卡片（不落库、不调 LLM）。
+        val crisisHits = CrisisDetector.detect(transcription)
+        if (crisisHits.isNotEmpty()) {
+            emit(StreamEvent.Analysis(UiMappers.toCoachCard(parseSafety(crisisHits.first()))))
+            emit(StreamEvent.Done)
+            return@flow
+        }
+        // H5 修复：优先用转述卡来源会话（跨会话确认不再落错会话）；null 回退当前会话（旧语义）
+        @Suppress("NAME_SHADOWING") val sid = sid ?: ensureSession()
+        retagStreamingOwner(sid)   // H5/M18
         conversationRepository.addMessage(sid, "USER", "transcription", transcription)
 
         val (knowledge, _) = knowledgeEngine.buildInjection(transcription)
@@ -399,11 +439,11 @@ class RealChatRepository(
                             memoryScope.launch { extractMemoryOnce(sid, transcription, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
-                        if (historyTruncated) _streamingState.update { it.copy(notice = HISTORY_TRUNCATED_NOTICE) }
+                        if (historyTruncated) _noticeEvents.tryEmit(HISTORY_TRUNCATED_NOTICE)   // M22
                     } else {
                         // H3: 解析失败兜底——原始回复以 freetext 落库展示
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        _streamingState.update { it.copy(notice = PARSE_FALLBACK_NOTICE) }
+                        _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
                     }
                     emit(StreamEvent.Done)
                 }
@@ -428,6 +468,8 @@ class RealChatRepository(
     }
 
     override suspend fun deleteSession(sessionId: Long) {
+        // M18：删除会话时取消其进行中的流式任务（回复不再静默落已删除会话）
+        streamJobs.remove(sessionId)?.cancel()
         conversationRepository.deleteSession(sessionId)
         if (this.sessionId.value == sessionId) {
             this.sessionId.value = null
@@ -435,63 +477,75 @@ class RealChatRepository(
     }
 
     override fun cancel() {
-        // v1.3.1 取消应用级流式收集 job；用户消息已落库（persistUser=true）的不受影响
-        streamJob?.cancel()
-        streamJob = null
-        _streamingState.update { it.copy(streaming = false) }
+        // M18 修复：只取消当前查看会话的流（其他会话的后台续跑不受影响）——
+        // 原实现取消的是唯一 streamJob，stop 掉的可能是旧会话的流。
+        // M15 修复：状态机完整复位——原仅 streaming=false，残留 transcribing 与 error：
+        // 转述中断后状态机残留；错误卡「取消」按钮点击无效（错误码不清、再 cancel 是 no-op）。
+        val key = sessionId.value ?: PENDING_SESSION_KEY
+        streamJobs.remove(key)?.cancel()
+        _streamingState.update {
+            if ((it.sessionId ?: PENDING_SESSION_KEY) == key) {
+                it.copy(streaming = false, transcribing = false, error = null)
+            } else {
+                it
+            }
+        }
     }
 
     // ===== v1.3.1 后台续跑 async 发送族 =====
 
-    override fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean) {
-        if (_streamingState.value.streaming) return
-        _streamingState.value = StreamingState(streaming = true)
-        streamJob = appScope.launch {
-            sendTextFlow(text, mode, persistUser).collect { event ->
-                applyStreamEvent(event)
-            }
-        }
-    }
+    override fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean) =
+        launchStream { sendTextFlow(text, mode, persistUser) }
 
     override fun analyzeImagesAsync(
         uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
         persistUser: Boolean,
-    ) {
-        if (_streamingState.value.streaming) return
-        _streamingState.value = StreamingState(streaming = true)
-        streamJob = appScope.launch {
-            analyzeImagesFlow(uris, text, mode, persistUser).collect { event ->
-                applyStreamEvent(event)
-            }
+    ) = launchStream { analyzeImagesFlow(uris, text, mode, persistUser) }
+
+    override fun confirmTranscriptionAsync(transcription: String, sid: Long?) =
+        launchStream { confirmTranscription(transcription, sid) }
+
+    /**
+     * M18/H5 统一异步流入口：
+     * - 任务按「当前会话 key」注册，同会话已有流在跑则忽略（原全局 _streaming 守卫把
+     *   切会后的新会话发送也锁死）；不同会话可并行后台跑。
+     * - 流式状态初始化即带归属 sessionId；事件应用时校验归属，旧会话流的迟到事件
+     *   不再污染新会话的状态（打字增量/错误/转述卡均不串场）。
+     */
+    private fun launchStream(flowFactory: () -> Flow<StreamEvent>) {
+        val viewSid = sessionId.value
+        val key = viewSid ?: PENDING_SESSION_KEY
+        if (streamJobs[key]?.isActive == true) return
+        _streamingState.value = StreamingState(streaming = true, sessionId = viewSid)
+        val job = appScope.launch {
+            flowFactory().collect { event -> applyStreamEvent(event, key) }
         }
+        job.invokeOnCompletion { streamJobs.remove(key, job) }
+        streamJobs[key] = job
     }
 
-    override fun confirmTranscriptionAsync(transcription: String) {
-        if (_streamingState.value.streaming) return
-        _streamingState.value = StreamingState(streaming = true)
-        streamJob = appScope.launch {
-            confirmTranscription(transcription).collect { event ->
-                applyStreamEvent(event)
-            }
-        }
+    /** H5/M18：新建会话首次落库后，把 PENDING（null）归属的流式状态重打标为真实 sid */
+    private fun retagStreamingOwner(sid: Long) {
+        _streamingState.update { if (it.sessionId == null) it.copy(sessionId = sid) else it }
     }
 
-    /** 流式事件 → streamingState 中枢（与 ChatViewModel 原 collect 分支一一对应） */
-    private fun applyStreamEvent(event: StreamEvent) {
+    /** 流式事件 → streamingState 中枢（带归属校验：非本会话事件丢弃，防跨会话串状态） */
+    private fun applyStreamEvent(event: StreamEvent, ownerKey: Long) {
+        fun owned(st: StreamingState) = (st.sessionId ?: PENDING_SESSION_KEY) == ownerKey
         when (event) {
-            is StreamEvent.Delta -> _streamingState.update { it.copy(text = it.text + event.text) }
-            is StreamEvent.Thinking -> _streamingState.update { it.copy(thinking = it.thinking + event.text) }
-            is StreamEvent.Analysis -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+            is StreamEvent.Delta -> _streamingState.update { if (owned(it)) it.copy(text = it.text + event.text) else it }
+            is StreamEvent.Thinking -> _streamingState.update { if (owned(it)) it.copy(thinking = it.thinking + event.text) else it }
+            is StreamEvent.Analysis -> _streamingState.update { if (owned(it)) it.copy(streaming = false, text = "", thinking = "") else it }
             is StreamEvent.Transcription -> _streamingState.update {
-                it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false)
+                if (owned(it)) it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false) else it
             }
             is StreamEvent.Error -> _streamingState.update {
-                it.copy(streaming = false, error = event.error, transcribing = false)
+                if (owned(it)) it.copy(streaming = false, error = event.error, transcribing = false) else it
             }
-            StreamEvent.Restart -> _streamingState.update { it.copy(text = "", thinking = "") }
-            StreamEvent.Done -> _streamingState.update { it.copy(streaming = false, text = "", thinking = "") }
+            StreamEvent.Restart -> _streamingState.update { if (owned(it)) it.copy(text = "", thinking = "") else it }
+            StreamEvent.Done -> _streamingState.update { if (owned(it)) it.copy(streaming = false, text = "", thinking = "") else it }
         }
     }
 
@@ -651,11 +705,11 @@ class RealChatRepository(
                             memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
-                        if (historyTruncated) _streamingState.update { it.copy(notice = HISTORY_TRUNCATED_NOTICE) }
+                        if (historyTruncated) _noticeEvents.tryEmit(HISTORY_TRUNCATED_NOTICE)   // M22
                     } else {
                         // H3: 解析失败兜底——原始回复以 freetext 落库展示
                         conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        _streamingState.update { it.copy(notice = PARSE_FALLBACK_NOTICE) }
+                        _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
                     }
                     emit(StreamEvent.Done)
                 }
@@ -665,7 +719,36 @@ class RealChatRepository(
     }
 
     private fun parseSafety(hit: String) = AnalysisParser.parseAny(
-        """{"input_kind":"user_question","empathy":"","reply":"","reply_timing":"","facts":{"known":[],"assumed":[],"unknown":[]},"advice":{"tag":"","core":"","reasons":[],"styles":[]},"actions":[],"citations":[],"safety_override":true,"safety_message":"检测到可能涉及安全风险的表述（$hit）。请优先确保自己的人身安全：离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。","token_estimate":0}"""
+        // L1 修复：hit 用 JSONObject 构造并转义——原 $hit 直接插值进 JSON 字符串模板，
+        // 词表一旦含引号即产生非法 JSON/注入点（脆弱实现，双端各一份副本）。
+        org.json.JSONObject()
+            .put("input_kind", "user_question")
+            .put("empathy", "")
+            .put("reply", "")
+            .put("reply_timing", "")
+            .put(
+                "facts", org.json.JSONObject()
+                    .put("known", org.json.JSONArray())
+                    .put("assumed", org.json.JSONArray())
+                    .put("unknown", org.json.JSONArray())
+            )
+            .put(
+                "advice", org.json.JSONObject()
+                    .put("tag", "")
+                    .put("core", "")
+                    .put("reasons", org.json.JSONArray())
+                    .put("styles", org.json.JSONArray())
+            )
+            .put("actions", org.json.JSONArray())
+            .put("citations", org.json.JSONArray())
+            .put("safety_override", true)
+            .put(
+                "safety_message",
+                "检测到可能涉及安全风险的表述（${hit}）。请优先确保自己的人身安全：" +
+                    "离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。",
+            )
+            .put("token_estimate", 0)
+            .toString()
     )
 
     private fun noConfigError(): LlmError =
@@ -806,12 +889,14 @@ class RealChatRepository(
     ) {
         val existing = profileRepository.getFacts(targetId).map { it.text }
         val merged = MemoryExtractor.mergeFacts(existing, facts.map { it.text })
-        val toAdd = merged.drop(existing.size)
+        // L2 修复：mergeFacts 内部先清洗空白条目，返回列表的「旧事实段」比原始 existing 短——
+        // 按原始 size drop 会把新事实错位跳过（库里有空白事实即触发）。以清洗后数量为准。
+        val toAdd = merged.drop(existing.count { it.isNotBlank() })
         if (toAdd.isEmpty()) return
         // O2: 冲突检测——新事实与既有事实矛盾时提示（记忆页裁决）
         val conflictCount = toAdd.sumOf { MemoryConflictDetector.findConflicts(it, existing).size }
         if (conflictCount > 0) {
-            _streamingState.update { it.copy(notice = "发现 $conflictCount 条与已记住事实可能矛盾，请到记忆页确认") }
+            _noticeEvents.tryEmit("发现 $conflictCount 条与已记住事实可能矛盾，请到记忆页确认")   // M22
         }
         if (existing.size >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
             Log.w("RealChatRepository", "memory facts cap reached for target $targetId")
@@ -831,9 +916,7 @@ class RealChatRepository(
         }
         if (addedIds.isNotEmpty()) {
             dataStore.recordMemoryWrite(targetId, addedIds, userInput.take(20))
-            _streamingState.update {
-                it.copy(memoryReceipt = "已记住 ${addedIds.size} 条事实，可在设置中查看或撤销")
-            }
+            _memoryReceiptEvents.tryEmit("已记住 ${addedIds.size} 条事实，可在设置中查看或撤销")   // M22
         }
         Log.i("RealChatRepository", "memory extracted: +${toAdd.size} facts for target $targetId")
     }
@@ -844,6 +927,9 @@ class RealChatRepository(
         /** v1.9.1 历史消息超长兜底统一走共享 HistoryCompactor（domain 包） */
         /** 历史中的图片消息占位文本 */
         const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
+
+        /** H5/M18：尚未落库的新会话在 streamJobs/归属比较里的哨兵 key（Room 自增 id 恒 >=1） */
+        const val PENDING_SESSION_KEY = -1L
 
         /** v1.2.1：标题生成超时（毫秒），超时静默回退首句截断 */
         const val TITLE_TIMEOUT_MS = 20_000L

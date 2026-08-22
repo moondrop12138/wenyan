@@ -1,6 +1,7 @@
 package com.wenyan.app.container
 
 import android.content.Context
+import kotlinx.coroutines.launch
 import com.wenyan.app.BuildConfig
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
 import com.wenyan.app.data.db.AppDatabase
@@ -52,7 +53,15 @@ class RealAppContainer(
     private val metricsStore = MetricsFileStore(java.io.File(appContext.filesDir, "metrics.json"))
 
     init {
-        UsageMetrics.attachStore(metricsStore)
+        // L26 修复：attachStore 内的 load() 是同步文件 IO——原在主线程构造容器时执行。
+        // 移到应用级协程（RealChatRepository.appScope 同款模式不可达，这里用 GlobalScope
+        // 语义的应用级作用域：容器与进程同生命周期）。
+        val scope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+        )
+        scope.launch {
+            UsageMetrics.attachStore(metricsStore)
+        }
     }
 
     /** v1.7.3 T4 更新检查（GitHub Releases 直连 + OkHttp 下载）；v1.7.3-fix：只传 versionName，不传本地刻度 versionCode */

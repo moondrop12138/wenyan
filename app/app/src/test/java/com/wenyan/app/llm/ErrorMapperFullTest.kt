@@ -42,11 +42,18 @@ class ErrorMapperFullTest {
 
     @Test
     fun `context length statuses map to non retryable context too long`() {
-        // L2: 400/413/422 → CONTEXT_TOO_LONG（不可重试，重试仍会超上下文）
-        assertEquals(LlmErrorCode.CONTEXT_TOO_LONG, ErrorMapper.fromHttpStatus(400))
+        // L2/L11: 400/422 按响应体细分；413 恒为上下文过长（不可重试，重试仍会超）
+        assertEquals(
+            LlmErrorCode.CONTEXT_TOO_LONG,
+            ErrorMapper.fromHttpStatus(400, "This model's maximum context length is 8192 tokens"),
+        )
+        assertEquals(LlmErrorCode.BAD_REQUEST, ErrorMapper.fromHttpStatus(400, "invalid image data url"))
+        assertEquals(LlmErrorCode.BAD_REQUEST, ErrorMapper.fromHttpStatus(400))
         assertEquals(LlmErrorCode.CONTEXT_TOO_LONG, ErrorMapper.fromHttpStatus(413))
-        assertEquals(LlmErrorCode.CONTEXT_TOO_LONG, ErrorMapper.fromHttpStatus(422))
+        assertEquals(LlmErrorCode.CONTEXT_TOO_LONG, ErrorMapper.fromHttpStatus(422, "context_length_exceeded"))
+        assertEquals(LlmErrorCode.BAD_REQUEST, ErrorMapper.fromHttpStatus(422, "validation failed"))
         assertFalse(LlmErrorCode.CONTEXT_TOO_LONG.retryable)
+        assertFalse(LlmErrorCode.BAD_REQUEST.retryable)
     }
 
     // ---- 超时/断流语义（通过 LlmErrorCode 的文案与可重试标记表达） ----
@@ -62,16 +69,17 @@ class ErrorMapperFullTest {
     // ---- 12 个错误码齐全 ----
 
     @Test
-    fun `all 14 error codes exist with non empty user message`() {
+    fun `all error codes exist with non empty user message`() {   // L11: 14→15（新增 BAD_REQUEST）
         val codes = LlmErrorCode.entries
         // v1.7.1 终检：新增 UNSUPPORTED_URL（公网明文地址被网络安全策略拦截，提示改 https/localhost）
         // H2：新增 OUTPUT_TRUNCATED（finish_reason=length 截断）；L2：新增 CONTEXT_TOO_LONG（400/413/422）
-        assertEquals("应有 14 个错误码", 14, codes.size)
+        assertEquals("应有 15 个错误码", 15, codes.size)
 
         val expected = setOf(
             "UNAUTHORIZED", "FORBIDDEN", "MODEL_NOT_FOUND", "RATE_LIMITED",
             "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "UNSUPPORTED_URL",
-            "STREAM_ERROR", "EMPTY_CONTENT", "PARSE_ERROR", "OUTPUT_TRUNCATED", "CONTEXT_TOO_LONG", "UNKNOWN",
+            "STREAM_ERROR", "EMPTY_CONTENT", "PARSE_ERROR", "OUTPUT_TRUNCATED", "CONTEXT_TOO_LONG",
+            "BAD_REQUEST", "UNKNOWN",
         )
         assertEquals(expected, codes.map { it.name }.toSet())
 

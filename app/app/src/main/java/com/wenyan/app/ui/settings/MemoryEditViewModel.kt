@@ -69,6 +69,9 @@ class MemoryEditViewModel(
     var selectedConflict by mutableStateOf<ConflictPairUi?>(null)
         private set
 
+    /** H3 修复：表单字段只做一次库值加载（true 后流重发射不再覆盖未保存编辑） */
+    private var fieldsLoaded = false
+
     init {
         // v1.7.4：打开详情页先搬移老 note（merge 幂等）——防「先手工加事实、再首访」时老数据永不搬移；
         // 搬移插入的 facts 会经 observeFacts Flow 自动刷新展示
@@ -78,7 +81,13 @@ class MemoryEditViewModel(
         viewModelScope.launch {
             repo.targets.collectLatest { list ->
                 target = list.firstOrNull { it.id == targetId }
-                if (target != null) loadFields()
+                // H3 修复：仅首次加载用库值填充表单——原每次发射都 loadFields() 无条件覆盖
+                // name/mbti/score/relationStatus/timeline，用户改名/调滑块未保存时
+                // 增删一条事实 → 编辑内容丢失。
+                if (!fieldsLoaded && target != null) {
+                    loadFields()
+                    fieldsLoaded = true
+                }
                 loading = false
             }
         }

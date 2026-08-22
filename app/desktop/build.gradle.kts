@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.server.host.common)  // staticResources
+    implementation(libs.ktor.server.status.pages)  // L18: 客户端错误统一 400/404（原一律 500）
 
     // Room KMP（2.7.x 起官方支持 JVM desktop；entity/DAO/Migration 代码共享）
     // 注：room-ktx 是 Android-only，KMP 版 Flow/协程支持已并入 room-runtime，不再单独引

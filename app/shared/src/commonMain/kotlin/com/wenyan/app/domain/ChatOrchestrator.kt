@@ -31,15 +31,15 @@ object ChatOrchestrator {
      * empathy 首句（空则 advice.core）关键词追加在后面，总长控制在 40 字内。
      */
     fun summarizeTopic(userInput: String, analysis: CoachAnalysis): String {
-        val base = userInput.replace(Regex("\\s+"), " ").take(24)
+        val base = userInput.replace(Regex("\\s+"), " ").let { SessionTitle.takeCodePoints(it, 24) }   // L14
         val firstSentence = analysis.empathy.ifBlank { analysis.advice.core }
             .replace(Regex("[#*>`\\-]"), "")
             .split(Regex("[。！？\n]"))
             .firstOrNull { it.isNotBlank() }
             ?.trim()
-            ?.take(16)
+            ?.let { SessionTitle.takeCodePoints(it, 16) }   // L14
             .orEmpty()
-        return if (firstSentence.isBlank()) base else "$base｜$firstSentence".take(40)
+        return if (firstSentence.isBlank()) base else SessionTitle.takeCodePoints("$base｜$firstSentence", 40)   // L14
     }
 
     /**
@@ -48,7 +48,7 @@ object ChatOrchestrator {
     fun summarizeConclusion(analysis: CoachAnalysis): String =
         analysis.advice.core.ifBlank {
             analysis.empathy.split(Regex("[。！？\n]")).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-        }.replace(Regex("[#*>`\\-]"), "").take(40)
+        }.replace(Regex("[#*>`\\-]"), "").let { SessionTitle.takeCodePoints(it, 40) }   // L14
 
     /** M2: 两端统一的标题素材/prompt 构建 */
     fun buildTitleMaterial(userText: String, replyText: String): Pair<String, String> =

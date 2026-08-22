@@ -283,6 +283,16 @@ class ChatEngine(
             return
         }
 
+        // M5 修复（双端）：转述通道第二步同样执行危机预检——原仅 sendMessage 入口有
+        // CrisisDetector 硬短路，截图里的危机表述（遗书/割腕等）经视觉模型转述后
+        // 直送主模型分析。落库前检测并走安全卡片（不落库、不调 LLM），与手机端一致。
+        val crisisHits = com.wenyan.app.knowledge.CrisisDetector.detect(transcription)
+        if (crisisHits.isNotEmpty()) {
+            onEvent(JSONObject().put("type", "card").put("card", parseSafety(crisisHits.first()).toJson()))
+            onEvent(JSONObject().put("type", "done"))
+            return
+        }
+
         service.addMessage(sessionId, "USER", "transcription", transcription)
 
         // 状态机推进（转述即用户素材，同题判定与状态前缀与文本链路一致）
@@ -463,7 +473,8 @@ class ChatEngine(
             if (target.note.isBlank()) return
             val existing = service.listFacts(targetId).map { it.text }
             val segments = MemoryExtractor.splitNoteToFacts(target.note).take(MemoryExtractor.DEFAULT_FACT_LIMIT)
-            val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.size)
+            // L2 修复：以清洗空白后的数量 drop（库里有空白事实即错位跳过新事实，双端同修）
+            val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.count { it.isNotBlank() })
             toAdd.forEach { service.addFact(targetId, it) }
             service.clearTargetNote(targetId)
         }
@@ -488,8 +499,12 @@ class ChatEngine(
                 else -> null
             }
         }.toMutableList()
-        // 剔除末尾与本轮重复的 USER（本轮已落库，user 模板会再带一次）
-        if (mapped.isNotEmpty() && mapped.last().role == "user" && mapped.last().content == currentText) {
+        // 剔除末尾与本轮重复的 USER（本轮已落库，user 模板会再带一次）。
+        // L15 修复：transcription 类型映射后是「[截图转述] 前缀 + 全文」，原去重只匹配
+        // content == currentText → 转述确认链路去重失效，同一次请求注入两次。
+        if (mapped.isNotEmpty() && mapped.last().role == "user" &&
+            (mapped.last().content == currentText || mapped.last().content == "[截图转述] $currentText")
+        ) {
             mapped.removeAt(mapped.size - 1)
         }
         // v1.9.1 预算选择式压缩（共享 HistoryCompactor：先裁剪早期消息保头，仍超再从最早成对丢弃）
@@ -518,7 +533,35 @@ class ChatEngine(
         ChatOrchestrator.summarizeConclusion(analysis)
 
     private fun parseSafety(hit: String): CoachAnalysis = AnalysisParser.parseAny(
-        """{"input_kind":"user_question","empathy":"","reply":"","reply_timing":"","facts":{"known":[],"assumed":[],"unknown":[]},"advice":{"tag":"","core":"","reasons":[],"styles":[]},"actions":[],"citations":[],"safety_override":true,"safety_message":"检测到可能涉及安全风险的表述（$hit）。请优先确保自己的人身安全：离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。","token_estimate":0}"""
+        // L1 修复：hit 用 JSONObject 构造并转义（原 $hit 直接插值，词表含引号即碎；与手机端同修）
+        JSONObject()
+            .put("input_kind", "user_question")
+            .put("empathy", "")
+            .put("reply", "")
+            .put("reply_timing", "")
+            .put(
+                "facts", JSONObject()
+                    .put("known", JSONArray())
+                    .put("assumed", JSONArray())
+                    .put("unknown", JSONArray())
+            )
+            .put(
+                "advice", JSONObject()
+                    .put("tag", "")
+                    .put("core", "")
+                    .put("reasons", JSONArray())
+                    .put("styles", JSONArray())
+            )
+            .put("actions", JSONArray())
+            .put("citations", JSONArray())
+            .put("safety_override", true)
+            .put(
+                "safety_message",
+                "检测到可能涉及安全风险的表述（${hit}）。请优先确保自己的人身安全：" +
+                    "离开危险环境，联系可信的人或当地紧急服务。我们无法在危机中提供恋爱建议。",
+            )
+            .put("token_estimate", 0)
+            .toString()
     )
 
     /** 首轮回复完成后异步拟题（幂等：已有标题跳过；失败静默） */

@@ -142,7 +142,8 @@ class ProfileRepository(
         if (target.note.isBlank()) return
         val existing = getFacts(targetId).map { it.text }
         val segments = MemoryExtractor.splitNoteToFacts(target.note).take(MemoryExtractor.DEFAULT_FACT_LIMIT)
-        val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.size)
+        // L2 修复：以清洗空白后的数量 drop（同 RealChatRepository.persistFactsOnce）
+        val toAdd = MemoryExtractor.mergeFacts(existing, segments).drop(existing.count { it.isNotBlank() })
         toAdd.forEach { memoryFactDao.insert(MemoryFactEntity(targetId = targetId, text = it)) }
         targetDao.clearNote(targetId)
     }

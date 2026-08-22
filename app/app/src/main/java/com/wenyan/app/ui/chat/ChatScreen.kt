@@ -172,6 +172,12 @@ fun ChatScreen(
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
 
+    // M20 修复：会话切换复位滚动位置——原整表换列表后按索引保留滚动位置，
+    // 新会话停在中部且 isAtBottom=false 使自动跟随永久失效。
+    LaunchedEffect(currentSessionId) {
+        listState.scrollToItem(0)
+    }
+
     // v1.9.0 自动记忆写入回执 → 一次性 toast（消费后清空，避免重复弹）
     val memoryReceipt by vm.memoryReceipt.collectAsState()
     LaunchedEffect(memoryReceipt) {

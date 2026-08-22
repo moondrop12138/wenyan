@@ -2,6 +2,8 @@ package com.wenyan.app.knowledge
 
 import com.wenyan.app.json.Json
 import com.wenyan.app.log.AppLogger
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 知识文档读取抽象（Android assets 实现由生产代码提供，测试注入内存实现）
@@ -38,23 +40,27 @@ class KnowledgeEngine(
         if (variants.isEmpty()) null else HybridVariantRouter(lazyIndex, variants)
     }
 
-    // M3: 进程内文档 LRU 缓存（路径 → 内容），避免每次消息重复 assets IO
+    // M3/M11: 进程内文档 LRU 缓存（路径 → 内容）。access-order 模式下连 get 都会改链表结构——
+    // Android 有 _streamingState 单流守卫基本串行；桌面每 HTTP 请求独立 IO 协程，
+    // 并发访问存在真实数据竞争（条目丢失/脏读）。M11 修复：所有访问包进同一把 Mutex。
     private val docCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 64
     }
 
-    private fun readCached(path: String): String? {
-        docCache[path]?.let { return it }
-        val content = reader.read(path) ?: return null
+    private val cacheMutex = Mutex()
+
+    private suspend fun readCached(path: String): String? = cacheMutex.withLock {
+        docCache[path]?.let { return@withLock it }
+        val content = reader.read(path) ?: return@withLock null
         docCache[path] = content
-        return content
+        content
     }
 
     /**
      * 路由 + 注入：返回按 prompt-architecture §2.3 格式拼装的 system-知识文本
      * @return Pair(注入文本, 引用的文件名列表)
      */
-    fun buildInjection(userInput: String): Pair<String, List<String>> {
+    suspend fun buildInjection(userInput: String): Pair<String, List<String>> {
         val docPaths = route(userInput).take(maxDocs)
         if (docPaths.isEmpty()) {
             AppLogger.d("knowledge_route_empty")
@@ -107,12 +113,21 @@ class KnowledgeEngine(
         if (cleaned.isEmpty()) return emptyList()
         // M3: 仅对前 N 字符生成 n-gram，避免长输入 O(n²) 子串爆炸
         val head = cleaned.take(KEYWORD_SCAN_CHAR_LIMIT)
+        // M12 修复：原「4-gram 全量 → 3-gram → 2-gram」拼接后 distinct().take(12)——
+        // 输入 ≥15 字时前 12 个全是 4 字窗口，2/3 字词永远选不中且只覆盖前 15 字符，
+        // 含关键词的知识块拿不到命中分。改为按长度轮转交错（各长度最多取配额内位置），
+        // 保证三种粒度都能入选且覆盖更长的输入前缀。
+        val g4 = nGrams(head, 4).distinct()
+        val g3 = nGrams(head, 3).distinct()
+        val g2 = nGrams(head, 2).distinct()
         return buildList {
-            // 4 字、3 字、2 字窗口
-            addAll(nGrams(head, 4))
-            addAll(nGrams(head, 3))
-            addAll(nGrams(head, 2))
-        }.distinct().take(12)
+            val maxLen = maxOf(g4.size, g3.size, g2.size)
+            for (i in 0 until maxLen) {
+                if (i < g4.size) add(g4[i])
+                if (i < g3.size) add(g3[i])
+                if (i < g2.size) add(g2[i])
+            }
+        }.take(KEYWORD_LIMIT)
     }
 
     private fun nGrams(text: String, size: Int): List<String> {
@@ -125,5 +140,8 @@ class KnowledgeEngine(
     private companion object {
         /** M3: n-gram 只对输入前 N 字符生成，限制关键词扫描窗口 */
         const val KEYWORD_SCAN_CHAR_LIMIT = 200
+
+        /** M12: 关键词上限（与原 take(12) 一致） */
+        const val KEYWORD_LIMIT = 12
     }
 }

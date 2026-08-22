@@ -81,7 +81,8 @@ class ConversationStateTracker {
      * - 追问/指代词：那、还有、然后呢、所以、该、要不要、是不是、怎么办
      * - 与话题摘要共享关键词（"她/他/我们"等关系代词延续）
      *
-     * 明确新话题信号（命中即新题）：完整的另一段聊天记录粘贴、明显的换题开场。
+     * 明确新话题信号（命中即新题）：完整的另一段聊天记录粘贴、明显的换题开场、
+     * 长输入且与话题摘要无共享实义词（M6 修复）。
      * 拿不准时默认同题（连续对话里追问远多于硬切题），交给模型在 prompt 里纠正。
      */
     fun isSameTopic(state: ConversationState, userInput: String): Boolean {
@@ -90,10 +91,15 @@ class ConversationStateTracker {
         if (t.isEmpty()) return true
         // 完整聊天记录粘贴 = 新分析任务，换题
         if (t.contains('\n') && (t.contains("：") || t.contains(":"))) return false
+        // M6: 显式换题开场白 = 新话题（原实现该信号无代码，记忆提炼首轮后停摆）
+        if (NEW_TOPIC_PATTERN.containsMatchIn(t)) return false
         // 追问/指代开场 = 强同题信号
         if (FOLLOW_UP_PATTERN.containsMatchIn(t)) return true
         // 与话题摘要共享实义词 = 同题
         if (sharesKeyword(state.topicSummary, t)) return true
+        // M6: 长输入（≥30 字）且与摘要无共享实义词 → 判新话题；
+        // 短输入拿不准仍默认同题（「嗯嗯」「后来呢」不误判），模型可纠正
+        if (t.length >= NEW_TOPIC_MIN_LENGTH) return false
         // 默认同题（追问多于硬切题），模型可纠正
         return true
     }
@@ -114,6 +120,13 @@ class ConversationStateTracker {
     }
 
     private companion object {
+
+        /** M6: 显式换题开场白（命中即新话题；「对了」属跳转语气保留在追问表） */
+        val NEW_TOPIC_PATTERN = Regex("^(换个?话题|聊点?别的|说点?(别的|其他)|不聊(这个|它)了|新问题[：:]?)")
+
+        /** M6: 长输入判新题的最小长度（字）；低于此值拿不准时默认同题 */
+        const val NEW_TOPIC_MIN_LENGTH = 30
+
         val FOLLOW_UP_PATTERN = Regex(
             "^(那|然后|所以|那我还|我还|要不要|该不该|是不是|怎么办|接下来|后来|对了|那现在)"
         )

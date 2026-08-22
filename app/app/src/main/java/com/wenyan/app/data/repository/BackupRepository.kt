@@ -13,6 +13,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
+ * L27 修复：runCatching 会吞掉 CancellationException——协程取消后代码继续跑完并返回
+ * 「失败」，取消语义被破坏（结构化并发泄漏/重复下载）。此变体把 CE 原样重抛。
+ */
+internal inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (e: kotlinx.coroutines.CancellationException) {
+    throw e
+} catch (e: Throwable) {
+    Result.failure(e)
+}
+
+/**
  * O1: Android 端「从备份恢复」数据层。
  * 复用桌面端导出 JSON schema（app/version/providers/models/targets/facts/sessions/messages/profile）。
  * 导入策略：清空后重建（与桌面端 importAllJson 对齐）；FK 逐表重映射；API Key 脱敏，导入后需重新输入。
@@ -28,7 +40,7 @@ class BackupRepository(private val db: AppDatabase) {
         if (json.optInt("version", -1) < 1) {
             return false to "备份文件版本无效或过低"
         }
-        return runCatching {
+        return runCatchingCancellable {
             db.withTransaction {
                 // 先清空（顺序：消息→会话→事实→档案→模型→提供商→画像）
                 db.messageDao().clear()
@@ -140,6 +152,8 @@ class BackupRepository(private val db: AppDatabase) {
                 if (profile != null && profile !== JSONObject.NULL) {
                     db.profileDao().insert(
                         ProfileEntity(
+                            // L28 修复：回传备份中的 createdAt（原用 now() → 恢复后画像时间漂移）
+                            createdAt = profile.optLong("createdAt", System.currentTimeMillis()),
                             mbti = if (profile.isNull("mbti")) null else profile.optString("mbti"),
                             score = if (profile.isNull("score")) null else profile.optInt("score"),
                             strengths = if (profile.isNull("strengths")) null else profile.optString("strengths"),

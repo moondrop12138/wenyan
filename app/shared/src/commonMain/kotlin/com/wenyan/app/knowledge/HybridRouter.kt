@@ -17,7 +17,6 @@ class HybridRouter(
     private val fillThreshold: Double = 0.0,
 ) {
     private val docs: List<String> = index.allDocs()
-    private val negationWords = setOf("不", "没", "没有", "从未", "不想", "拒绝", "否认", "不是", "从不")
 
     fun route(query: String, topK: Int = 3): List<String> {
         if (query.isBlank() || docs.isEmpty()) return emptyList()
@@ -51,7 +50,8 @@ class HybridRouter(
 
     private fun negated(query: String, doc: String): Boolean {
         val profile = reranker.profileFor(doc) ?: return false
-        val hasNegation = negationWords.any { query.contains(it) }
-        return hasNegation && profile.keywords.any { query.contains(it) }
+        // M13 修复：改关键词位置前缀检查——原单字「不/没」子串匹配把
+        // 「不错/要不要/不好意思」全判成否定查询，文档被错误过滤。
+        return QueryNegation.anyNegated(query, profile.keywords)
     }
 }

@@ -10,6 +10,18 @@ import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
+ * L27 修复：runCatching 会吞掉 CancellationException——协程取消后代码继续跑完并返回
+ * 「失败」，取消语义被破坏（结构化并发泄漏/重复下载）。此变体把 CE 原样重抛。
+ */
+internal inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (e: kotlinx.coroutines.CancellationException) {
+    throw e
+} catch (e: Throwable) {
+    Result.failure(e)
+}
+
+/**
  * 更新检查与下载（v1.7.3 T4）：
  * - check()：版本比较统一 versionName 段比较（不再混用 versionCode 两套刻度）；
  * - download()：OkHttp 下载 APK 到 cacheDir/downloads/wenyan-{version}.apk，返回 File/null。
@@ -69,7 +81,7 @@ class UpdateChecker(
      * 失败返回 null（Log.w + 静默），由上层 Toast。
      */
     suspend fun download(info: UpdateInfo, filesDir: File): File? = withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingCancellable {
             val dir = File(filesDir, "downloads").apply { mkdirs() }
             val target = File(dir, "wenyan-${sanitizeFileName(info.versionName)}.apk")
             val client = okHttp.newBuilder()
@@ -78,35 +90,49 @@ class UpdateChecker(
                 .build()
             val request = Request.Builder().url(info.apkUrl).build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@runCatching null
-                val body = response.body ?: return@runCatching null
+                if (!response.isSuccessful) return@runCatchingCancellable null
+                val body = response.body ?: return@runCatchingCancellable null
                 // M9: Content-Length 与 GitHub asset size 对齐（防截断/半包）
                 val contentLength = body.contentLength()
                 if (info.size > 0 && contentLength >= 0 && contentLength != info.size) {
                     Log.w("UpdateChecker", "apk size mismatch: expected ${info.size} bytes, got $contentLength")
-                    return@runCatching null
+                    return@runCatchingCancellable null
                 }
-                // M9: 流式写盘 + 同步计算 SHA-256（防内容被篡改）
+                // M9/L25: 流式写盘 + 同步计算 SHA-256。
+                // L25 修复：直接写目标文件——中途被杀留下半截 APK，FileProvider 安装失败且
+                // 下次可能误用。改写 .tmp，校验通过后 renameTo 原子落位；异常路径清 .tmp。
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                 val buffer = ByteArray(8192)
-                body.byteStream().use { input ->
-                    FileOutputStream(target).use { output ->
-                        while (true) {
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            output.write(buffer, 0, n)
-                            digest.update(buffer, 0, n)
+                val tmp = java.io.File(target.parentFile, target.name + ".tmp")
+                try {
+                    body.byteStream().use { input ->
+                        FileOutputStream(tmp).use { output ->
+                            while (true) {
+                                val n = input.read(buffer)
+                                if (n < 0) break
+                                output.write(buffer, 0, n)
+                                digest.update(buffer, 0, n)
+                            }
                         }
                     }
-                }
-                val expectedDigest = info.digest?.removePrefix("sha256:")?.lowercase()
-                if (expectedDigest != null) {
-                    val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-                    if (actual != expectedDigest) {
-                        target.delete()
-                        Log.w("UpdateChecker", "apk digest mismatch")
-                        return@runCatching null
+                    val expectedDigest = info.digest?.removePrefix("sha256:")?.lowercase()
+                    if (expectedDigest != null) {
+                        val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                        if (actual != expectedDigest) {
+                            tmp.delete()
+                            Log.w("UpdateChecker", "apk digest mismatch")
+                            return@runCatchingCancellable null
+                        }
                     }
+                    if (target.exists()) target.delete()
+                    if (!tmp.renameTo(target)) {
+                        tmp.delete()
+                        Log.w("UpdateChecker", "apk rename failed")
+                        return@runCatchingCancellable null
+                    }
+                } catch (e: Exception) {
+                    tmp.delete()
+                    throw e
                 }
             }
             target

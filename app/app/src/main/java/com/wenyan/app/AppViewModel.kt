@@ -21,6 +21,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _onboardingCompleted = MutableStateFlow(false)
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
 
+    /** M21 修复：首值是否已从 DataStore 加载（false 期间路由不可信，UI 渲染空白占位防闪现问卷页） */
+    private val _onboardingLoaded = MutableStateFlow(false)
+    val onboardingLoaded: StateFlow<Boolean> = _onboardingLoaded.asStateFlow()
+
     init {
         viewModelScope.launch {
             container.settingsRepository.themeMode.collect { key ->
@@ -30,6 +34,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.onboardingRepository.onboardingCompleted.collect { done ->
                 _onboardingCompleted.value = done
+                _onboardingLoaded.value = true
             }
         }
     }

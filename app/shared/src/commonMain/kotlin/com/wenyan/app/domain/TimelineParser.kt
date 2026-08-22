@@ -24,7 +24,21 @@ object TimelineParser {
         }.getOrDefault(emptyList())
     }
 
-    /** 按时间升序（时间格式为 "yyyy-MM" 之类可比字符串；非法时间排后） */
+    /**
+     * 按时间升序。L4 修复：原纯字典序——「2026-7」排在「2026-10」之后、
+     * 「1999年」「abc」等非格式串按首字符乱排；注释承诺的「非法时间排后」未实现。
+     * 现解析为可比较数值（年*10000+月*100+日，缺省段补 1/01），非法串排到最后。
+     */
     fun sorted(timelineJson: String): List<Event> =
-        parse(timelineJson).sortedWith(compareBy { it.time })
+        parse(timelineJson).sortedWith(compareBy { sortKey(it.time) })
+
+    /** 时间 → 可比较数值 key：提取年/月/日数字，非法串返回 Long.MAX_VALUE 排尾 */
+    private fun sortKey(time: String): Long {
+        val nums = Regex("\\d+").findAll(time).map { it.value.toLongOrNull() ?: Long.MAX_VALUE }.toList()
+        if (nums.isEmpty() || nums.any { it == Long.MAX_VALUE }) return Long.MAX_VALUE
+        val year = nums.getOrNull(0) ?: 0L
+        val month = (nums.getOrNull(1) ?: 1L)
+        val day = (nums.getOrNull(2) ?: 1L)
+        return year * 10000 + month * 100 + day
+    }
 }

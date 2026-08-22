@@ -32,7 +32,9 @@ fun SliderField(
     step: Int = 5,
 ) {
     val p = LocalGtjColors.current
-    val stepsCount = ((range.last - range.first) / step).coerceAtLeast(0)
+    // M24 修复：Material3 的 steps = 端点之间的中间刻度数（总落点 = steps + 2）。
+    // 原 (range/step) 对 0-100/step5 传 20 → 实际 22 个落点，15/20/25…50 全部选不到。
+    val stepsCount = (((range.last - range.first) / step) - 1).coerceAtLeast(0)
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = GtjType.Label, color = p.muted)

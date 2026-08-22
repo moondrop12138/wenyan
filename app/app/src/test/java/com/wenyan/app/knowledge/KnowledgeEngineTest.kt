@@ -1,5 +1,6 @@
 package com.wenyan.app.knowledge
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -52,7 +53,7 @@ class KnowledgeEngineTest {
         reader.docs[docPath] = "# 实战话术编排器\n\n## 时机\n回复要快。"
 
         val engine = makeEngine(reader)
-        val (injected, refs) = engine.buildInjection("这句怎么回")
+        val (injected, refs) = runBlocking { engine.buildInjection("这句怎么回") }
 
         assertTrue(injected.startsWith("【知识文档 #1】《实战话术编排器：从一句回复到后续分支.md》"))
         assertTrue(injected.contains("【知识文档结束 #1】"))
@@ -67,7 +68,7 @@ class KnowledgeEngineTest {
         )
         reader.docs["practical/x.md"] = "# x\n\n## a\nb"
         val engine = makeEngine(reader)
-        val (injected, refs) = engine.buildInjection("完全无关的话题内容")
+        val (injected, refs) = runBlocking { engine.buildInjection("完全无关的话题内容") }
         assertEquals("", injected)
         assertTrue(refs.isEmpty())
     }
@@ -81,7 +82,7 @@ class KnowledgeEngineTest {
         )
         reader.docs[safetyPath] = "# 安全\n\n## 危机\n先安全。"
         val engine = makeEngine(reader)
-        val (_, refs) = engine.buildInjection("我被他跟踪了")
+        val (_, refs) = runBlocking { engine.buildInjection("我被他跟踪了") }
         assertEquals(listOf("17-中国法律安全与危机转介.md"), refs)
     }
     @Test
@@ -99,7 +100,7 @@ class KnowledgeEngineTest {
             .toString()
 
         val engine = makeEngine(reader)
-        val (injected, refs) = engine.buildInjection("怎么提升气场")
+        val (injected, refs) = runBlocking { engine.buildInjection("怎么提升气场") }
         assertEquals(listOf("提高气场：从内到外的力量感塑造指南.md"), refs)
         assertTrue(injected.startsWith("【知识文档 #1】《提高气场：从内到外的力量感塑造指南.md》"))
     }

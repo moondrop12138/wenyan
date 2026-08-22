@@ -25,7 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
-private val RELATION_OPTIONS = listOf("暧昧", "追求中", "热恋", "冷淡", "冲突", "已分手", "其他")
+private val RELATION_OPTIONS = com.wenyan.app.domain.RELATION_STATUS_OPTIONS  // L31: 与记忆编辑页共用
 private val MEET_OPTIONS = listOf("朋友介绍", "社交软件", "同学同事", "偶遇", "其他")
 private val DURATION_OPTIONS = listOf("刚认识", "1-3 个月", "3-6 个月", "半年以上")
 private val INVEST_OPTIONS = listOf("我主动多", "对方主动多", "差不多")

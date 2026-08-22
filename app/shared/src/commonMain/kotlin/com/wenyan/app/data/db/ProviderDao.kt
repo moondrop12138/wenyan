@@ -26,6 +26,10 @@ interface ProviderDao {
     @Query("SELECT * FROM provider WHERE id = :id")
     suspend fun getById(id: Long): ProviderEntity?
 
+    /** L23: 按名称查（预设种子幂等判据用） */
+    @Query("SELECT * FROM provider WHERE name = :name LIMIT 1")
+    suspend fun getByName(name: String): ProviderEntity?
+
     @Query("DELETE FROM provider WHERE id = :id")
     suspend fun deleteById(id: Long)
 

@@ -108,16 +108,25 @@ class SettingsRepository(private val context: Context) {
     suspend fun lastMemoryWrite(): MemoryWriteLogEntry? =
         readMemoryWriteLog().firstOrNull()
 
-    /** 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志可撤销） */
+    /**
+     * 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志可撤销）。
+     * L22 修复：读取原在 edit 事务外——与 recordMemoryWrite（edit 内读）并发时 TOCTOU：
+     * 撤销日志条目丢失，对应事实永远无法撤销。现把读移进 edit 内，读-改-写原子化。
+     */
     suspend fun undoLastMemoryWrite(): List<Long> {
-        val log = readMemoryWriteLog()
-        val last = log.firstOrNull() ?: return emptyList()
+        var undoneFactIds: List<Long> = emptyList()
         context.settingsDataStore.edit { prefs ->
-            val rest = log.drop(1)
-            if (rest.isEmpty()) prefs.remove(Keys.MEMORY_WRITE_LOG)
-            else prefs[Keys.MEMORY_WRITE_LOG] = MemoryWriteLogCodec.encode(rest)
+            val raw = prefs[Keys.MEMORY_WRITE_LOG] ?: ""
+            val log = MemoryWriteLogCodec.decode(raw)
+            val last = log.firstOrNull()
+            if (last != null) {
+                undoneFactIds = last.factIds
+                val rest = log.drop(1)
+                if (rest.isEmpty()) prefs.remove(Keys.MEMORY_WRITE_LOG)
+                else prefs[Keys.MEMORY_WRITE_LOG] = MemoryWriteLogCodec.encode(rest)
+            }
         }
-        return last.factIds
+        return undoneFactIds
     }
 
     /** 记录一次自动写入（最近在前，截断保留 5 条） */

@@ -82,7 +82,9 @@ object KnowledgeChunker {
             if (used + size > maxChars) {
                 if (selected.isEmpty()) {
                     // M4: 首个块就超预算时也截断到预算 + 省略标记（防单份文档 token 预算失效）
-                    val budget = (maxChars - chunk.heading.length - 4).coerceAtLeast(0)
+                    // L9 修复：原预算漏算 TRUNCATED_MARK 的 6 字符，注入长度超 maxChars+6；
+                    // 现把标记计入预算（测试容差同步收紧）。
+                    val budget = (maxChars - chunk.heading.length - TRUNCATED_MARK.length - 4).coerceAtLeast(0)
                     selected.add(chunk.copy(body = chunk.body.take(budget) + TRUNCATED_MARK))
                 }
                 break

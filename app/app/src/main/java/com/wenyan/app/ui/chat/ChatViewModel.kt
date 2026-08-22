@@ -11,6 +11,7 @@ import com.wenyan.app.ui.contract.SessionSummaryUi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -92,35 +93,40 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         viewModelScope.launch {
             repo.currentSessionId.collect { _currentSessionId.value = it }
         }
-        // v1.3.1 流式状态中枢订阅：repo 在应用级 scope 收集（息屏/退后台不中断），
-        // Activity 重建后新 VM 订阅即恢复进行中的流式状态
+        // v1.3.1 流式状态中枢订阅（H5/M18 门控版）：repo 在应用级 scope 收集（息屏/退后台不中断），
+        // Activity 重建后新 VM 订阅即恢复进行中的流式状态。
+        // 状态带归属 sessionId——仅当归属会话 == 当前查看会话才映射到 UI 态：
+        // 其他会话的后台流不再产生假「思考中」、跨会话转述卡与错误卡；
+        // combine 保证切会话瞬间立即重新求值（而非等下一次状态发射才纠正）。
         viewModelScope.launch {
-            repo.streamingState.collect { st ->
-                _streaming.value = st.streaming
-                _transcription.value = st.transcription
-                _transcribing.value = st.transcribing
-                _lastError.value = st.error
-                // v1.9.2 确认转述后的分析结束（done/error/transcription 后 streaming=false）→ 复位 confirming
-                if (!st.streaming) {
-                    _confirming.value = false
-                }
-                // v1.9.0 自动记忆写入回执 → UI toast 提示一次
-                if (st.memoryReceipt != null) {
-                    _memoryReceipt.value = st.memoryReceipt
-                }
-                // H3: 一次性提示 → UI toast 提示一次
-                if (st.notice != null) {
-                    _notice.value = st.notice
-                }
-                // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
-                if (!st.streaming && st.error != null) {
-                    val last = lastSend
-                    if (last?.uris?.isNotEmpty() == true && st.error.code in RESTORE_PENDING_CODES) {
-                        _pendingImages.value = last.uris
-                        _input.value = last.text
+            combine(repo.streamingState, repo.currentSessionId) { st, viewSid -> st to viewSid }
+                .collect { (st, viewSid) ->
+                    val mine = st.sessionId == viewSid
+                    _streaming.value = mine && st.streaming
+                    _transcribing.value = mine && st.transcribing
+                    _transcription.value = if (mine) st.transcription else null
+                    _lastError.value = if (mine) st.error else null
+                    // v1.9.2 确认转述后的分析结束（done/error/transcription 后本会话视角空闲）→ 复位 confirming
+                    if (!_streaming.value) {
+                        _confirming.value = false
+                    }
+                    // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
+                    if (!st.streaming && st.error != null && mine) {
+                        val last = lastSend
+                        if (last?.uris?.isNotEmpty() == true && st.error.code in RESTORE_PENDING_CODES) {
+                            _pendingImages.value = last.uris
+                            _input.value = last.text
+                        }
                     }
                 }
-            }
+        }
+        // M22 修复：回执/提示改事件订阅（repo SharedFlow replay=0）——原 StateFlow 字段
+        // 旋转后重放导致 toast 重复弹，且相同文案被去重导致第二次丢失。
+        viewModelScope.launch {
+            repo.memoryReceiptEvents.collect { _memoryReceipt.value = it }
+        }
+        viewModelScope.launch {
+            repo.noticeEvents.collect { _notice.value = it }
         }
     }
 
@@ -128,14 +134,20 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         _input.value = text
     }
 
-    /** O3: 全文搜索（空白清空结果） */
+    /** O3: 全文搜索（空白清空结果）。
+     *  L21 修复：原每次按键独立 launch 无取消/去抖——慢的旧查询结果覆盖新结果
+     *  （显示与输入不一致）。改 debounce(300) + collectLatest：新查询自动取消旧查询。 */
+    private var searchJobs: kotlinx.coroutines.Job? = null
+
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
+        searchJobs?.cancel()
         if (query.isBlank()) {
             _searchResults.value = emptyList()
             return
         }
-        viewModelScope.launch {
+        searchJobs = viewModelScope.launch {
+            kotlinx.coroutines.delay(300)   // 去抖：停顿 300ms 才发起
             _searchResults.value = repo.searchSessions(query)
         }
     }
@@ -256,7 +268,9 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         if (t.isEmpty() || _streaming.value) return
         // v1.9.2 等待文案三档：确认转述后进入主模型分析 → 「军师分析中…」
         _confirming.value = true
-        repo.confirmTranscriptionAsync(t)
+        // H5 修复：携带转述卡来源会话 id（渲染门控保证卡只在归属会话可见，
+        // repo 落库以该 sid 为准，快速切会话不再把 A 会话的转述写进 B）
+        repo.confirmTranscriptionAsync(t, _currentSessionId.value)
     }
 
     fun retry() {

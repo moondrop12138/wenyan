@@ -32,7 +32,7 @@ class CrashLogStore(private val context: Context) {
         }
     }
 
-    /** 缓冲全文快照（时间倒序：新→旧，崩溃落盘可读） */
+    /** 缓冲全文快照（时间正序：旧→新；L29 修复 KDoc 与实现一致——append 为 addLast 追加，崩溃落盘按发生顺序可读） */
     fun snapshot(): String = synchronized(lock) { buffer.joinToString("\n") }
 
     /** 崩溃回调：写 last_crash.txt（时间戳 + 线程 + 堆栈 + 缓冲全文）；返回文件/null */
@@ -46,7 +46,7 @@ class CrashLogStore(private val context: Context) {
         sb.append("exception: ").append(throwable.javaClass.name).append(": ").append(throwable.message ?: "").append("\n")
         sb.append("stack:\n")
         throwable.stackTrace?.take(40)?.forEach { sb.append("  at ").append(it.toString()).append("\n") }
-        sb.append("\n--- recent log buffer (newest first) ---\n")
+        sb.append("\n--- recent log buffer (oldest first) ---\n")   // L29: 与实际顺序一致
         sb.append(snapshot())
         file.writeText(sb.toString())
         file

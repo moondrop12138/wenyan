@@ -80,6 +80,7 @@ private class FakeSettingsRepoForMemoryEdit : SettingsRepository {
     override suspend fun testConnection(providerId: Long): LlmError? = null
     override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long = 0L
     override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) = Unit
+    override suspend fun deleteProviderApiKey(providerId: Long) = Unit
     override suspend fun deleteProvider(id: Long) = Unit
     override suspend fun getProviderApiKey(providerId: Long): String? = null
     override suspend fun addModel(providerId: Long, name: String, supportsVision: Boolean) = Unit

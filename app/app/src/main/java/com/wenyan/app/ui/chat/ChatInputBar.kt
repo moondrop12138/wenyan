@@ -105,11 +105,19 @@ fun ChatInputBar(
     var menuExpanded by remember { mutableStateOf(false) }
     // v1.3.1 全屏输入弹层（输入大量文字时展开编辑）
     var showFullScreen by remember { mutableStateOf(false) }
-    // v1.6.1 多图选择器：剩余名额 = 上限 - 已选（已选 0 张时至少允许选 1）
-    val remainingSlots = (ChatViewModel.MAX_PENDING_IMAGES - pendingImages.size).coerceAtLeast(1)
+    // v1.6.1 多图选择器。
+    // L34 修复：原 contract 的 maxItems 用动态 remainingSlots——rememberLauncherForActivityResult
+    // 以 contract 为 key，remainingSlots 变化即销毁重建 launcher（已注册回调丢失风险）；
+    // 且系统选择器按「当时上限」放行后回调无二次截断，仍可超选。改固定上限注册，
+    // 回调内按剩余名额截断。
+    val remainingSlots = (ChatViewModel.MAX_PENDING_IMAGES - pendingImages.size).coerceAtLeast(0)
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = remainingSlots),
-        onResult = { uris -> if (uris.isNotEmpty()) onPendingImagesPicked(uris) },
+        contract = ActivityResultContracts.PickMultipleVisualMedia(ChatViewModel.MAX_PENDING_IMAGES),
+        onResult = { uris ->
+            if (uris.isNotEmpty()) {
+                onPendingImagesPicked(uris.take(remainingSlots))
+            }
+        },
     )
     val canSend = input.isNotBlank() || pendingImages.isNotEmpty()
 

@@ -1,5 +1,6 @@
 package com.wenyan.desktop
 
+import androidx.room.useWriterConnection
 import com.wenyan.app.data.db.AppDatabase
 import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.MessageEntity
@@ -329,6 +330,12 @@ class WenyanService(
             return false to "备份文件版本无效或过低"
         }
         runCatching {
+            // M3 修复：清空+重建包进 Room 事务——任一记录损坏整体回滚。
+            // 原实现无事务：原数据已清空、新数据只导一半，不可恢复（体保持原缩进以最小化 diff）。
+            // JVM 侧 Room KMP 无 RoomDatabase.withTransaction 扩展（room-ktx 是 Android-only），
+        // 用 useWriterConnection + Transactor.withTransaction（DAO 挂起调用经协程元素加入同一事务）
+        db.useWriterConnection { transactor ->
+            transactor.withTransaction(androidx.room.Transactor.SQLiteTransactionType.DEFERRED) {
             clearAll()
             val providerIdMap = mutableMapOf<Long, Long>()
             val providers = json.optJSONArray("providers") ?: JSONArray()
@@ -432,6 +439,8 @@ class WenyanService(
                     )
                 )
             }
+        }
+        } // M3: end useWriterConnection/withTransaction
         }.onFailure {
             return false to "导入失败：${it.message ?: "数据损坏"}"
         }

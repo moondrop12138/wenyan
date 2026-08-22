@@ -8,6 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+// runCatchingCancellable 定义于同包 UpdateChecker.kt（L27），此处直接复用
+
 /**
  * GitHub Releases 最新版本信息（v1.7.3 T4 更新检查）。
  * GET https://api.github.com/repos/moondrop12138/wenyan/releases?per_page=100
@@ -46,7 +48,7 @@ class UpdateClient(
 ) {
     /** 拉取最新手机版 Release（tag 以 "v" 开头且非 desktop- 前缀）；网络/解析失败返回 null */
     suspend fun fetchLatest(): UpdateInfo? = withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingCancellable {
             val client = okHttp.newBuilder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.SECONDS)
@@ -58,8 +60,8 @@ class UpdateClient(
                 .header("User-Agent", "wenyan-update-checker")
                 .build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@runCatching null
-                val body = response.body?.string() ?: return@runCatching null
+                if (!response.isSuccessful) return@runCatchingCancellable null
+                val body = response.body?.string() ?: return@runCatchingCancellable null
                 // releases 列表按发布时间降序；取第一个手机版 Release（tag 以 v 开头）
                 val releases = JSONArray(body)
                 for (i in 0 until releases.length()) {
@@ -67,7 +69,7 @@ class UpdateClient(
                     val tag = obj.optString("tag_name", "").trim()
                     if (tag.startsWith("v") && !tag.startsWith("desktop-")) {
                         val info = parseRelease(obj)
-                        if (info != null) return@runCatching info
+                        if (info != null) return@runCatchingCancellable info
                     }
                 }
                 null

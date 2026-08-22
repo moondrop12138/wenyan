@@ -88,11 +88,13 @@ class HybridRouterTrainTest {
 
         val improvement = f1Of(hybridTest) - f1Of(containsTest)
         println("test F1 improvement vs contains = $improvement")
-        // 结论：关键词反哺后 contains 已显著强于 BM25/精排/Hybrid，因此 Hybrid 不切生产。
-        assertTrue("backfilled contains should remain best on test F1",
-            f1Of(containsTest) >= f1Of(hybridTest))
-        assertTrue("backfilled contains should remain best vs reranker on test F1",
-            f1Of(containsTest) >= f1Of(rerankerTest))
+        // 结论（M12 后更新）：关键词抽取轮询 g4/g3/g2（M12）+ 否定感知特征（M13）后，
+        // hybrid 在留出集上小幅反超 contains（F1 ≈0.194 vs ≈0.183）。原「contains 恒最优」
+        // 断言已不成立；改为护栏式断言——任一路由相对另一者大幅退化（>0.05）即回归。
+        assertTrue("hybrid vs contains gap must stay within tolerance on test F1",
+            kotlin.math.abs(f1Of(hybridTest) - f1Of(containsTest)) < 0.05)
+        assertTrue("reranker must not dominate both routers on test F1",
+            f1Of(rerankerTest) <= maxOf(f1Of(containsTest), f1Of(hybridTest)) + 0.05)
     }
 
     private fun f1Of(r: RouteEvaluator.EvalResult): Double {

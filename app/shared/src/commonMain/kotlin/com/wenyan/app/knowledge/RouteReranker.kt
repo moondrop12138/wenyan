@@ -21,7 +21,6 @@ class RouteReranker(
 ) {
     private val docs: List<String> = index.allDocs().filter { docTexts[it] != null && profiles[it] != null }
 
-    private val negationWords = setOf("不", "没", "没有", "从未", "不想", "拒绝", "否认", "不是", "从不")
 
     fun rank(query: String, topK: Int = 3): List<String> {
         if (query.isBlank() || docs.isEmpty()) return emptyList()
@@ -56,8 +55,9 @@ class RouteReranker(
         val keywordHits = profile.keywords.count { query.contains(it) }
         val titleOverlap = DocProfile.overlap(query, profile.title)
         val headingOverlap = DocProfile.overlap(query, profile.headings.joinToString(" "))
-        val hasNegation = negationWords.any { query.contains(it) }
-        val negationPenalty = if (hasNegation && keywordHits > 0) 1.0 else 0.0
+        // M13 修复：罚分只对「被否定的关键词」生效——原单字「不/没」子串匹配整句，
+        // 「不错/要不要」也吃罚分。与 HybridRouter 共用 QueryNegation。
+        val negationPenalty = if (QueryNegation.anyNegated(query, profile.keywords)) 1.0 else 0.0
         return doubleArrayOf(
             keywordHits.toDouble(),
             titleOverlap,

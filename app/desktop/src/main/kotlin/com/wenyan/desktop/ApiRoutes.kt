@@ -8,6 +8,7 @@ import com.wenyan.app.data.db.SessionEntity
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.image.DesktopImageCompressor
 import com.wenyan.app.llm.MAX_IMAGES_PER_REQUEST
+import io.ktor.utils.io.core.readAvailable
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -26,12 +27,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.core.readBytes
 import io.ktor.utils.io.writeStringUtf8
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -102,17 +101,77 @@ private fun <T> JSONArray.of(items: List<T>, mapper: (T) -> JSONObject): JSONArr
 /** L7: 图片上传总大小上限（50MB，防全量读内存） */
 private const val MAX_UPLOAD_TOTAL_BYTES = 50L * 1024 * 1024
 
+/** H1: CSRF 允许的 Host 白名单（剥端口后全等比较） */
+private val ALLOWED_HOSTS = setOf("127.0.0.1", "localhost", "::1")
+
+/**
+ * H1: Host 头取主机名："127.0.0.1:18923" → "127.0.0.1"；"[::1]:18923" → "::1"。
+ * 前缀匹配可被 127.0.0.1.evil.com 绕过（DNS 重绑定），必须全等比较。
+ */
+private fun hostName(hostHeader: String): String {
+    val h = hostHeader.trim().lowercase()
+    return if (h.startsWith("[")) h.substringBefore(']').removePrefix("[")
+    else h.substringBefore(':')
+}
+
+/**
+ * M2: SSE 桥——生产者与写循环都挂 call 所属作用域。
+ * 客户端断开 → call 协程取消 → 写循环取消 → producer.cancel() → 内部 LLM flow
+ * 经 awaitClose 取消 EventSource（停止白烧 token）；不再 runBlocking 占死 IO 线程。
+ */
+private fun kotlinx.coroutines.CoroutineScope.launchSseBridge(
+    channel: ByteChannel,
+    produce: suspend (send: (JSONObject) -> Unit) -> Unit,
+) {
+    // 有界缓冲：解耦 LLM 回调线程与网络写入；写端挂掉时 trySend 静默丢弃（对端已不存在）
+    val events = Channel<JSONObject>(capacity = Channel.BUFFERED)
+    val producer = launch(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            produce { events.trySend(it) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val err = JSONObject().put("type", "error")
+                .put("code", "STREAM_BROKEN").put("message", (e.message ?: "流中断").take(200))
+            events.trySend(err)
+        } finally {
+            events.close()
+        }
+    }
+    launch(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            for (event in events) {
+                channel.writeStringUtf8("data: $event\n\n")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // M2: 对端断开/写失败——取消内部流即可；channel 在 finally 关闭，无需再写错误帧
+        } finally {
+            producer.cancel()
+            channel.close(null)
+        }
+    }
+}
+
 /** API 路由（/api 前缀）。token 为启动时生成的随机 CSRF token。 */
 fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: String) {
 
     // H5: CSRF 防护——所有写请求（POST/PUT/DELETE）校验 X-Wenyan-Token + Host（127.0.0.1/localhost）
+    // H1/M1 修复：全部 /api 请求精确校验 Host（剥端口后与白名单全等比较，防 127.0.0.1.evil.com 绕过），
+    // 写请求额外校验 X-Wenyan-Token；GET 接口（export/search 等）不再裸奔。
+    // 合法前端本身就跑在 127.0.0.1:port，Host 校验恒过；token 校验仍仅对写请求。
     intercept(ApplicationCallPipeline.Call) {
+        val host = call.request.headers["Host"] ?: ""
+        val hostOk = host.isBlank() || hostName(host) in ALLOWED_HOSTS
+        if (!hostOk) {
+            call.respond(HttpStatusCode.Forbidden, mapOf("error" to "forbidden"))
+            finish()
+            return@intercept
+        }
         val method = call.request.local.method
         if (method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Delete) {
-            val tokenOk = call.request.headers["X-Wenyan-Token"] == token
-            val host = call.request.headers["Host"] ?: ""
-            val hostOk = host.isBlank() || host.startsWith("127.0.0.1") || host.startsWith("localhost")
-            if (!tokenOk || !hostOk) {
+            if (call.request.headers["X-Wenyan-Token"] != token) {
                 call.respond(HttpStatusCode.Forbidden, mapOf("error" to "forbidden"))
                 finish()
             }
@@ -243,7 +302,8 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
             current.copy(
                 codeName = body.optString("codeName", current.codeName),
                 mbti = if (body.has("mbti")) body.optString("mbti", null) else current.mbti,
-                score = if (body.has("score")) body.optInt("score") else current.score,
+                // L20 修复：{"score":null} 应清空而非写 0（与 mbti/relationStatus 的 optString(...,null) 对称）
+                score = if (body.has("score")) (if (body.isNull("score")) null else body.optInt("score")) else current.score,
                 relationStatus = if (body.has("relationStatus")) body.optString("relationStatus", null) else current.relationStatus,
                 timeline = body.optString("timeline", current.timeline),
                 note = body.optString("note", current.note),
@@ -349,18 +409,10 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
 
         // 挂起管道：手动写入 SSE 帧（autoFlush 保证逐 token 实时到达）
         val channel = ByteChannel(autoFlush = true)
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                chatEngine.sendMessage(sessionId, modelId, text, imageDataUrls) { event ->
-                    runBlocking { channel.writeStringUtf8("data: $event\n\n") }
-                }
-            } catch (e: Exception) {
-                val err = JSONObject().put("type", "error")
-                    .put("code", "STREAM_BROKEN").put("message", (e.message ?: "流中断").take(200))
-                runCatching { runBlocking { channel.writeStringUtf8("data: $err\n\n") } }
-            } finally {
-                channel.close(null)
-            }
+        // M2: 生产者挂 call 作用域（原 CoroutineScope(Dispatchers.IO).launch + runBlocking 写入：
+        // 客户端断开后无人读 channel，缓冲填满 → runBlocking 永久阻塞一个 IO 线程且内部流不取消）
+        launchSseBridge(channel) { send ->
+            chatEngine.sendMessage(sessionId, modelId, text, imageDataUrls) { event -> send(event) }
         }
 
         call.respond(object : io.ktor.http.content.OutgoingContent.ReadChannelContent() {
@@ -418,18 +470,9 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         call.response.headers.append("X-Accel-Buffering", "no")
 
         val channel = ByteChannel(autoFlush = true)
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                chatEngine.confirmTranscription(sessionId, modelId, transcription) { event ->
-                    runBlocking { channel.writeStringUtf8("data: $event\n\n") }
-                }
-            } catch (e: Exception) {
-                val err = JSONObject().put("type", "error")
-                    .put("code", "STREAM_BROKEN").put("message", (e.message ?: "流中断").take(200))
-                runCatching { runBlocking { channel.writeStringUtf8("data: $err\n\n") } }
-            } finally {
-                channel.close(null)
-            }
+        // M2: 同 /api/chat/stream——生产者挂 call 作用域，断开即取消内部流
+        launchSseBridge(channel) { send ->
+            chatEngine.confirmTranscription(sessionId, modelId, transcription) { event -> send(event) }
         }
 
         call.respond(object : io.ktor.http.content.OutgoingContent.ReadChannelContent() {
@@ -446,21 +489,42 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         val multipart = call.receiveMultipart()
         // 关键：PartData.FileItem 的字节必须在 forEachPart 回调内（part 存活期间）读出——
         // part.dispose() 后 provider() 返回的 Input 立即失效，延迟读取只会得到 0 字节。
-        // forEachPart 是普通 lambda 不能 suspend，但 provider() 返回的 Input.readBytes() 是同步阻塞读，可直接用。
+        // forEachPart 是普通 lambda 不能 suspend，但 provider() 返回的 Input 同步阻塞读可直接用
+        // （M4: 分块边读边累计，超限立即中断，不整段载入内存）。
         val imagesBytes = mutableListOf<ByteArray>()
         var totalBytes = 0L
+        var tooLarge = false
         multipart.forEachPart { part ->
-            if (part is PartData.FileItem) {
-                val bytes = part.provider().readBytes()
-                totalBytes += bytes.size
-                imagesBytes.add(bytes)
+            // M4 修复：边读边累计、超限立即中断读取——原 provider().readBytes() 先全量读进内存
+            // 再检查上限，数 GB 请求在检查前就 OOM。超限后置位，由下方统一返回错误文案。
+            if (!tooLarge && part is PartData.FileItem) {
+                val buf = java.io.ByteArrayOutputStream()
+                // Ktor 2.x：FileItem.provider() 给 kotlinx-io Input；
+                // readAvailable 是 io.ktor.utils.io.core 包级扩展（文件头已导入）
+                val input = part.provider()
+                try {
+                    val chunk = ByteArray(64 * 1024)
+                    while (!input.endOfInput) {
+                        val n = input.readAvailable(chunk, 0, chunk.size)
+                        if (n <= 0) break
+                        if (totalBytes + n > MAX_UPLOAD_TOTAL_BYTES) {
+                            tooLarge = true
+                            break
+                        }
+                        buf.write(chunk, 0, n)
+                        totalBytes += n
+                    }
+                } finally {
+                    input.close()
+                }
+                imagesBytes.add(buf.toByteArray())
             }
             part.dispose()
         }
 
         val dataUrls = mutableListOf<String>()
         var error: String? = null
-        if (totalBytes > MAX_UPLOAD_TOTAL_BYTES) {
+        if (tooLarge || totalBytes > MAX_UPLOAD_TOTAL_BYTES) {
             error = "上传总大小超过 50MB 限制"
         } else if (imagesBytes.isEmpty()) {
             error = "未收到图片"

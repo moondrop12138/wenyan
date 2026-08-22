@@ -60,7 +60,7 @@ import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 
 /** 关系状态分段选项（PRD R2，与 onboarding 语义对齐） */
-private val RELATION_OPTIONS = listOf("暧昧中", "约会", "确定关系", "前任", "同事", "单恋", "其他")
+private val RELATION_OPTIONS = com.wenyan.app.domain.RELATION_STATUS_OPTIONS  // L31: 与引导页共用
 
 /**
  * v1.7.3 档案详情页（/settings/memory/:id，仿 ProviderEditScreen 二级页范式）：
@@ -254,13 +254,10 @@ private fun TimelineEditor(vm: MemoryEditViewModel) {
             if (vm.timeline.isEmpty()) {
                 Text("还没有关键事件，点击 ➕ 添加（时间 + 事件）", style = GtjType.BodySm, color = p.meta)
             } else {
-                // O2: 按时间排序渲染为纵向时间轴（圆点 + 连接线 + 时间 + 事件），编辑能力保留
-                val sortedTimeline = remember(vm.timeline) {
-                    vm.timeline.withIndex().sortedBy { it.value.time.ifBlank { "9999" } }
-                }
-                sortedTimeline.forEach { indexed ->
-                    val index = indexed.index
-                    val item = indexed.value
+                // M25 修复：编辑态按原始顺序渲染（forEachIndexed）——原按时间实时重排，
+                // 输入「时间」时行跳动、焦点错位，捕获的 index 变为另一项 → 字符写进
+                // 另一条事件。顺序固定后捕获索引恒指向本行；初始顺序由 loadFields 排好。
+                vm.timeline.forEachIndexed { index, item ->
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         // 时间轴节点 + 连接线
                         Column(
