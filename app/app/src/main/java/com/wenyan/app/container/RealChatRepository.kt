@@ -65,6 +65,8 @@ import java.util.concurrent.ConcurrentHashMap
  * analyzeImages 双通道（v1.6.1 多图）：主模型 supportsVision=true 走通道 A 直读，否则走通道 B 视觉转述。
  * v1.3.1：async 发送族在应用级 appScope 收集（Activity 销毁/息屏不中断），
  * 流式增量经 streamingState 推送；persistUser=false 供失败重试（用户消息不重复落库）。
+ * v1.9.4：当前会话 id 持久化到 DataStore 并写穿，冷启动自动恢复上次打开的对话
+ * （修复澎湃OS 等夜间杀进程后聊天页空态、历史抽屉无「当前会话」高亮的问题）。
  */
 class RealChatRepository(
     private val context: Context,
@@ -78,6 +80,14 @@ class RealChatRepository(
 ) : ChatRepository {
 
     private val sessionId = MutableStateFlow<Long?>(null)
+
+    /**
+     * v1.9.4 隔夜冷启动恢复竞态标记：恢复是异步的，若用户在恢复完成前已主动
+     * 切换/新建会话（包括 startNewSession 回到空态这种「当前值为 null」的选择），
+     * 恢复流程不得用持久化的旧 id 覆盖较新的选择。
+     */
+    @Volatile
+    private var sessionChosenByUser = false
 
     /** v1.3 对话状态机：本地结构化跟踪，驱动同题追问不复读 */
     private val stateTracker = ConversationStateTracker()
@@ -131,6 +141,52 @@ class RealChatRepository(
 
     private val currentModelId = dataStore.currentModelId
     private val visionModelId = dataStore.visionModelId
+
+    init {
+        // v1.9.4 隔夜冷启动恢复：进程被杀（澎湃OS 夜间清理等）后 sessionId 归零，
+        // 聊天页空态、历史抽屉无「当前会话」高亮。构造后异步读持久化的上次会话 id
+        // 并恢复；失败静默，绝不阻塞 UI（详情见 restoreLastSessionId）。
+        appScope.launch { restoreLastSessionId() }
+    }
+
+    /**
+     * v1.9.4 冷启动恢复上次会话：读 current_session_id → 校验该会话仍存在
+     * （不存在则清键并保持空态，如隐私清空后键残留）→ 赋值 sessionId。
+     * 竞态护栏：赋值前后都复核用户是否已手动切换/新建（见 sessionChosenByUser），
+     * 不覆盖较新选择。全程 runCatching 静默。
+     */
+    private suspend fun restoreLastSessionId() {
+        runCatching {
+            val saved = dataStore.getCurrentSessionId() ?: return@runCatching
+            if (sessionId.value != null || sessionChosenByUser) return@runCatching
+            // 校验会话仍存在（Room 现有查询）；不存在说明键已残留，清键回到空态
+            //（若期间用户已手动选择，其写穿已更新键，跳过清理不覆盖）
+            if (conversationRepository.getSession(saved) == null) {
+                if (!sessionChosenByUser) dataStore.setCurrentSessionId(null)
+                Log.i("RealChatRepository", "stale session id $saved cleared, keep empty state")
+                return@runCatching
+            }
+            // DB 校验期间用户可能已做出选择，二次复核后再赋值
+            if (sessionId.value != null || sessionChosenByUser) return@runCatching
+            sessionId.value = saved
+            Log.i("RealChatRepository", "restored last session $saved")
+        }.onFailure { Log.w("RealChatRepository", "restore last session failed", it) }
+    }
+
+    /**
+     * v1.9.4 写穿：把当前会话 id 异步持久化到 DataStore（null = 清键）。
+     * runCatching 静默，绝不影响主流程；写前复核 in-memory 当前值未被再次更新，
+     * 防快速连续切换/删除时后到的写覆盖较新选择（乱序写收敛为最新值）。
+     */
+    private fun persistSessionIdAsync(id: Long?) {
+        appScope.launch {
+            runCatching {
+                if (sessionId.value == id) {
+                    dataStore.setCurrentSessionId(id)
+                }
+            }.onFailure { Log.w("RealChatRepository", "persist session id failed", it) }
+        }
+    }
 
     override val messages: Flow<List<ChatMessageUi>> =
         sessionId.flatMapLatest { id ->
@@ -461,18 +517,30 @@ class RealChatRepository(
 
     override suspend fun switchSession(sessionId: Long) {
         this.sessionId.value = sessionId
+        // v1.9.4 用户主动选择会话：标记竞态 + 写穿持久化（冷启动可恢复）
+        sessionChosenByUser = true
+        persistSessionIdAsync(sessionId)
     }
 
     override suspend fun startNewSession() {
         this.sessionId.value = null
+        // v1.9.4 新建空会话也是较新选择：标记竞态并清键，冷启动回到空态与杀进程时一致
+        //（首条消息发出后 ensureSession 会写入新 id）
+        sessionChosenByUser = true
+        persistSessionIdAsync(null)
     }
 
     override suspend fun deleteSession(sessionId: Long) {
+        // v1.9.4 删除也是用户主动选择：先置竞态标记，防止冷启动恢复流程在 DB 校验窗口内
+        // 把刚被删除的会话 id 赋回内存（FK 约束下会导致该条消息静默丢失）
+        sessionChosenByUser = true
         // M18：删除会话时取消其进行中的流式任务（回复不再静默落已删除会话）
         streamJobs.remove(sessionId)?.cancel()
         conversationRepository.deleteSession(sessionId)
         if (this.sessionId.value == sessionId) {
             this.sessionId.value = null
+            // v1.9.4 删除的是当前会话 → 清持久化键，冷启动不再恢复已删除会话
+            persistSessionIdAsync(null)
         }
     }
 
@@ -611,6 +679,9 @@ class RealChatRepository(
             targetId = dataStore.getActiveTargetId(),
         )
         sessionId.value = id
+        // v1.9.4 新会话拿到 id 后写穿持久化（冷启动可恢复），并视为用户较新选择
+        sessionChosenByUser = true
+        persistSessionIdAsync(id)
         return id
     }
 

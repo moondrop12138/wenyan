@@ -360,6 +360,9 @@ private class FakeTargetDao : TargetDao {
 
     override fun observeAll(): Flow<List<TargetEntity>> = _flow
 
+    /** v1.9.4：DAO 新增全量拉取（id 升序，与生产 SQL 排序一致） */
+    override suspend fun listAll(): List<TargetEntity> = store.sortedBy { it.id }
+
     override suspend fun getById(id: Long): TargetEntity? = store.firstOrNull { it.id == id }
 
     override suspend fun insert(entity: TargetEntity): Long {
@@ -428,6 +431,10 @@ private class FakeMemoryFactDao : MemoryFactDao {
         MutableStateFlow(store.filter { it.targetId == targetId }.sortedByDescending { it.id })
 
     override fun observeAll(): Flow<List<MemoryFactEntity>> = _flow
+
+    /** v1.9.4：DAO 新增全量拉取（targetId+createdAt+id 升序，与生产 SQL 排序一致） */
+    override suspend fun listAll(): List<MemoryFactEntity> =
+        store.sortedWith(compareBy({ it.targetId }, { it.createdAt }, { it.id }))
 
     override suspend fun listByTarget(targetId: Long): List<MemoryFactEntity> =
         store.filter { it.targetId == targetId }.sortedByDescending { it.id }

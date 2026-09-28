@@ -247,6 +247,19 @@ private class FakeSettingsRepository : SettingsRepository {
     override suspend fun markConnectionStatus(providerId: Long, ok: Boolean) = Unit
     override suspend fun wipeAll() = Unit
     override suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String> = false to "测试未实现"
+    // v1.9.4 记忆导出/导入桩（可记录调用，供新用例断言）
+    val writtenMemoryExports = mutableListOf<Pair<android.net.Uri, String>>()
+    val importedMemoryUris = mutableListOf<android.net.Uri>()
+    var fakeImportMemoryResult: Pair<Boolean, String> = true to "导入 0 个档案、0 条记忆"
+    override suspend fun exportMemoryJson(): String? = "{\"app\":\"wenyan-android\",\"version\":1}"
+    override suspend fun writeMemoryExport(uri: android.net.Uri, json: String): Boolean {
+        writtenMemoryExports.add(uri to json)
+        return true
+    }
+    override suspend fun importMemoryMerge(uri: android.net.Uri): Pair<Boolean, String> {
+        importedMemoryUris.add(uri)
+        return fakeImportMemoryResult
+    }
     override fun usageMetrics(): UsageMetricsUi = UsageMetricsUi(0L, 0L, 0L, 0L, emptyMap())
     override suspend fun setPrivacyAck(ack: Boolean) = Unit
 }

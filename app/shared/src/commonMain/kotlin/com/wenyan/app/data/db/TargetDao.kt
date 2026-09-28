@@ -16,6 +16,10 @@ interface TargetDao {
     @Query("SELECT * FROM target ORDER BY id DESC")
     fun observeAll(): Flow<List<TargetEntity>>
 
+    /** v1.9.4 记忆导出/合并导入用一次性全量拉取（id 升序：导出顺序稳定，与建档顺序一致） */
+    @Query("SELECT * FROM target ORDER BY id ASC")
+    suspend fun listAll(): List<TargetEntity>
+
     /** v1.7.2 按 id 取单个档案（会话归属注入用） */
     @Query("SELECT * FROM target WHERE id = :id")
     suspend fun getById(id: Long): TargetEntity?

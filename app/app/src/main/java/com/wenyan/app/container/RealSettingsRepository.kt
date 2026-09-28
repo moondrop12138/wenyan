@@ -9,6 +9,7 @@ import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
 import com.wenyan.app.data.repository.ProviderUrlNormalizer
+import com.wenyan.app.data.repository.runCatchingCancellable
 import com.wenyan.app.data.update.UpdateCheckResult
 import com.wenyan.app.data.update.UpdateChecker
 import com.wenyan.app.llm.ChatRequest
@@ -227,6 +228,39 @@ class RealSettingsRepository(
             AppLogger.i("backup_restore_fail")
         }
         return ok to error
+    }
+
+    // ===== v1.9.4 记忆导出/导入（换机迁移）=====
+
+    /** v1.9.4 生成记忆导出 JSON（DB 异常 → null，UI Toast 提示）；runCatchingCancellable 不吞取消 */
+    override suspend fun exportMemoryJson(): String? =
+        runCatchingCancellable { backupRepository.exportMemoryJson() }.getOrNull()
+
+    /** v1.9.4 将导出 JSON 写入所选 uri 的 OutputStream（SAF 文件）；打开/写入失败 → false */
+    override suspend fun writeMemoryExport(uri: Uri, json: String): Boolean =
+        runCatchingCancellable {
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(json.toByteArray(Charsets.UTF_8))
+            } != null
+        }.getOrDefault(false).also { ok ->
+            // 埋点：只记事件，不记录导出内容
+            if (ok) AppLogger.i("memory_export_ok")
+        }
+
+    /** v1.9.4 读取所选记忆 JSON → 合并导入（绝不清表，现有激活档案继续有效，无需清 DataStore 槽位） */
+    override suspend fun importMemoryMerge(uri: Uri): Pair<Boolean, String> {
+        // 分层与 importBackup 对齐：contentResolver 读文件在本层，JSON 解析/合并入库在 BackupRepository
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (text.isNullOrBlank()) {
+            return false to "无法读取所选记忆文件"
+        }
+        val json = runCatching { org.json.JSONObject(text) }.getOrNull()
+            ?: return false to "记忆文件不是有效的 JSON"
+        val (ok, message) = backupRepository.importMemoryMerge(json)
+        AppLogger.i(if (ok) "memory_import_ok" else "memory_import_fail")
+        return ok to message
     }
 
     override suspend fun installApk(file: java.io.File): Boolean = runCatching {

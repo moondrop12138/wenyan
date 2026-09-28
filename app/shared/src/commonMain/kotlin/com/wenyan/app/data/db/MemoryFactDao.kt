@@ -20,6 +20,10 @@ interface MemoryFactDao {
     @Query("SELECT * FROM memory_fact")
     fun observeAll(): Flow<List<MemoryFactEntity>>
 
+    /** v1.9.4 记忆导出/合并导入用一次性全表拉取（targetId+时间升序：与桌面端逐档案导出顺序一致） */
+    @Query("SELECT * FROM memory_fact ORDER BY targetId ASC, createdAt ASC, id ASC")
+    suspend fun listAll(): List<MemoryFactEntity>
+
     @Query("SELECT * FROM memory_fact WHERE targetId = :targetId ORDER BY createdAt DESC, id DESC")
     suspend fun listByTarget(targetId: Long): List<MemoryFactEntity>
 

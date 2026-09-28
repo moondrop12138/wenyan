@@ -98,6 +98,31 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) = Unit
     override suspend fun deleteProviderApiKey(providerId: Long) = Unit
     override suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String> = false to "test fake"
+
+    // ===== v1.9.4 记忆导出/导入桩（记录调用，结果可由用例改写）=====
+
+    /** exportMemoryJson 返回值（用例可改写） */
+    var fakeMemoryJson: String? = "{\"app\":\"wenyan-android\",\"version\":1}"
+
+    /** writeMemoryExport 调用记录（uri to json）与返回值 */
+    val writtenMemoryExports = mutableListOf<Pair<Uri, String>>()
+    var fakeWriteMemoryResult = true
+
+    /** importMemoryMerge 调用记录（uri）与返回值 */
+    val importedMemoryUris = mutableListOf<Uri>()
+    var fakeImportMemoryResult: Pair<Boolean, String> = true to "导入 0 个档案、0 条记忆"
+
+    override suspend fun exportMemoryJson(): String? = fakeMemoryJson
+
+    override suspend fun writeMemoryExport(uri: Uri, json: String): Boolean {
+        writtenMemoryExports.add(uri to json)
+        return fakeWriteMemoryResult
+    }
+
+    override suspend fun importMemoryMerge(uri: Uri): Pair<Boolean, String> {
+        importedMemoryUris.add(uri)
+        return fakeImportMemoryResult
+    }
     override fun usageMetrics(): com.wenyan.app.ui.contract.UsageMetricsUi =
         com.wenyan.app.ui.contract.UsageMetricsUi(0, 0, 0, 0, emptyMap())
     override suspend fun deleteProvider(id: Long) = Unit

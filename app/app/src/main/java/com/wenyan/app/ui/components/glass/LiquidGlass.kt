@@ -5,12 +5,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -86,8 +87,14 @@ fun Modifier.liquidGlass(
     val supportsRuntimeShader = LiquidGlassShaders.isRuntimeShaderSupported()
 
     // L33 修复：enablePressAnimation 此前是死参数——KDoc 宣称「果冻按压」但函数体从未实现，
-    // 7 处调用点传 true 全部无效。现补真实实现：onPress 观察按下/抬起驱动 0.97 缩放
-    // （不消费事件，与外层 clickable/combinedClickable 共存）；reducedMotion 时禁用。
+    // 7 处调用点传 true 全部无效。现补真实实现：观察按下/抬起驱动 0.97 缩放。
+    // v1.9.4 修复：旧实现用 detectTapGestures(onPress)，它会消费 DOWN/UP——GlassSurface 在
+    // onClick==null 时把本修饰符放在内层（调用方的 combinedClickable 在外层），内层先于外层
+    // 收到事件并把 DOWN 消费掉，外层 awaitFirstDown(requireUnconsumed = true) 拿不到未消费的
+    // DOWN，点击/长按静默失效（历史会话行、CrisisCard 长按均中招）。
+    // 现改用 awaitEachGesture 纯观察器：全程不调用 consume()，真正不消费任何事件，
+    // 可与外层 clickable/combinedClickable 共存；即使他人消费了 UP，
+    // 我们仍能凭 changes.pressed 观察到抬起并复位。reducedMotion 时禁用。
     val pressEnabled = enablePressAnimation && !rememberReducedMotion()
     var pressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
@@ -104,16 +111,20 @@ fun Modifier.liquidGlass(
         }
         .pointerInput(pressEnabled) {
             if (!pressEnabled) return@pointerInput
-            detectTapGestures(
-                onPress = {
-                    pressed = true
-                    try {
-                        tryAwaitRelease()
-                    } finally {
-                        pressed = false
+            // v1.9.4：纯手势观察器，不消费任何事件（全程无 consume()）。
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                pressed = true
+                try {
+                    // 循环等待直到所有指针抬起（他人消费 UP 也不影响观察）→ finally 复位
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.changes.all { !it.pressed }) break
                     }
-                },
-            )
+                } finally {
+                    pressed = false
+                }
+            }
         }
         .drawWithCache {
             // 组合期已解析 token；缓存块内仅依赖 size/density/layoutDirection，跨帧复用

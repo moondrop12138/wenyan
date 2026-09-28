@@ -135,6 +135,23 @@ interface SettingsRepository {
     /** O1: 从备份 JSON 恢复（Android 设置页选文件）；成功返回 (true, "")，失败返回 (false, 错误信息) */
     suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String>
 
+    // ===== v1.9.4 记忆导出/导入（换机迁移；只含记忆数据，不含聊天记录与 API Key）=====
+
+    /**
+     * v1.9.4 生成记忆导出 JSON 字符串（profile/targets/facts，字段对齐桌面端导出格式）。
+     * 生成失败（DB 异常等）返回 null，由 UI Toast 提示。
+     */
+    suspend fun exportMemoryJson(): String?
+
+    /** v1.9.4 将导出 JSON 写入所选 uri 的 OutputStream（CreateDocument 目标文件）；返回是否写入成功 */
+    suspend fun writeMemoryExport(uri: android.net.Uri, json: String): Boolean
+
+    /**
+     * v1.9.4 从所选 uri 读取记忆 JSON 并合并导入（合并式：按 codeName 匹配档案 + text 去重，
+     * 绝不清表、绝不删除现有数据）；返回 (是否成功, 中文结果描述)。
+     */
+    suspend fun importMemoryMerge(uri: android.net.Uri): Pair<Boolean, String>
+
     /** O6: 读取当前进程内的用量快照（已在启动时从本地文件恢复） */
     fun usageMetrics(): UsageMetricsUi
 }

@@ -169,6 +169,42 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         }
     }
 
+    // ===== v1.9.4 记忆导出/导入（换机迁移）=====
+
+    /** v1.9.4 记忆导出进行中（行内「导出中…」+ 防重复点击） */
+    var exportingMemory by mutableStateOf(false)
+        private set
+
+    /** v1.9.4 记忆合并导入进行中 */
+    var importingMemory by mutableStateOf(false)
+        private set
+
+    /**
+     * v1.9.4 导出记忆到所选文件（CreateDocument 回调 uri）：
+     * 生成 JSON 与写入 uri 均走 Repository 分层（与 importBackup 对齐）；成功/失败均 Toast。
+     */
+    fun exportMemoryTo(uri: Uri) {
+        if (exportingMemory) return
+        exportingMemory = true
+        viewModelScope.launch {
+            val json = repo.exportMemoryJson()
+            val ok = json != null && repo.writeMemoryExport(uri, json)
+            exportingMemory = false
+            _toastMessage.value = if (ok) "记忆已导出" else "导出失败，请重试"
+        }
+    }
+
+    /** v1.9.4 合并导入记忆（确认弹窗后调用）：结果描述（含新建/跳过条数）直接 Toast 反馈 */
+    fun confirmMemoryImport(uri: Uri) {
+        if (importingMemory) return
+        importingMemory = true
+        viewModelScope.launch {
+            val (_, message) = repo.importMemoryMerge(uri)
+            importingMemory = false
+            _toastMessage.value = message
+        }
+    }
+
     fun requestWipe() {
         _showWipeDialog.value = true
     }

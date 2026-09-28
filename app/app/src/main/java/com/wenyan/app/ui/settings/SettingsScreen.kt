@@ -115,9 +115,22 @@ fun SettingsScreen(
     val context = LocalContext.current
     var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
 
+    // v1.9.4 记忆导入待确认文件（选中后弹合并导入确认弹窗，确认才入库；null = 无待导入）
+    var pendingMemoryImportUri by remember { mutableStateOf<Uri?>(null) }
+
     // O1: 备份文件选择器（JSON / 文本 / 任意二进制，系统按 MIME 过滤）
     val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let { vm.confirmImport(it) }
+    }
+
+    // v1.9.4 记忆导出保存位置选择器（CreateDocument，固定 JSON 类型；uri 为 null = 用户取消，静默）
+    val exportMemoryPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        uri?.let { vm.exportMemoryTo(it) }
+    }
+
+    // v1.9.4 记忆导入文件选择器（MIME 过滤对齐备份导入；选中后不直接入库，先弹合并确认弹窗）
+    val memoryImportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) pendingMemoryImportUri = uri
     }
 
     // v1.7.2 切换激活档案 Toast（一次性事件，消费后清空）
@@ -351,6 +364,30 @@ fun SettingsScreen(
                 )
             }
             item {
+                // v1.9.4 记忆导出（换机迁移）：CreateDocument 选保存位置；文件名在点击回调里生成（不随重组重建）
+                SettingsRow(
+                    label = "导出记忆",
+                    value = if (vm.exportingMemory) "导出中…" else "导出 JSON 文件",
+                    icon = null,
+                    onClick = {
+                        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+                            .format(java.util.Date())
+                        exportMemoryPicker.launch("wenyan-memory-$stamp.json")
+                    },
+                )
+            }
+            item {
+                // v1.9.4 记忆合并导入（换机迁移）：选文件 → 确认弹窗（合并语义）→ 导入
+                SettingsRow(
+                    label = "导入记忆",
+                    value = if (vm.importingMemory) "导入中…" else "合并导入 JSON 文件",
+                    icon = null,
+                    onClick = {
+                        memoryImportPicker.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+                    },
+                )
+            }
+            item {
                 // O6: 用量/诊断面板（TTFT/token/失败分类，本地存储，不含消息原文）
                 SettingsRow(
                     label = "用量 / 诊断",
@@ -429,6 +466,17 @@ fun SettingsScreen(
             onConfirm = {
                 vm.dismissImport()
                 importPicker.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+            },
+        )
+    }
+    // v1.9.4 记忆合并导入确认弹窗（选中文件后弹出；取消 = 丢弃待导入 uri，静默返回）
+    pendingMemoryImportUri?.let { uri ->
+        ImportMemoryDialog(
+            importing = vm.importingMemory,
+            onDismiss = { pendingMemoryImportUri = null },
+            onConfirm = {
+                pendingMemoryImportUri = null
+                vm.confirmMemoryImport(uri)
             },
         )
     }

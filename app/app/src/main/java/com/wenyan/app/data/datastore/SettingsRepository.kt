@@ -33,6 +33,8 @@ class SettingsRepository(private val context: Context) {
         val MEMORY_AUTO_ENABLED = booleanPreferencesKey("memory_auto_enabled")
         /** v1.9.0 自动记忆写入日志（JSON 数组字符串，最近在前，≤5 条） */
         val MEMORY_WRITE_LOG = stringPreferencesKey("memory_write_log")
+        /** v1.9.4 上次打开的会话 id（隔夜冷启动恢复上次对话；不存在 = 无） */
+        val CURRENT_SESSION_ID = longPreferencesKey("current_session_id")
     }
 
     val currentModelId: Flow<Long?> =
@@ -92,6 +94,19 @@ class SettingsRepository(private val context: Context) {
     /** v1.7.2 自动记忆开关 */
     suspend fun setMemoryAutoEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.MEMORY_AUTO_ENABLED] = enabled }
+    }
+
+    // ===== v1.9.4 当前会话 id 持久化（隔夜冷启动恢复上次对话） =====
+
+    /** v1.9.4 读取上次持久化的会话 id（不存在 = 无，冷启动保持空态） */
+    suspend fun getCurrentSessionId(): Long? =
+        context.settingsDataStore.data.map { it[Keys.CURRENT_SESSION_ID] }.first()
+
+    /** v1.9.4 写穿当前会话 id（null = 清键：新建空会话 / 删除当前会话 / 残留键清理） */
+    suspend fun setCurrentSessionId(id: Long?) {
+        context.settingsDataStore.edit { prefs ->
+            if (id != null) prefs[Keys.CURRENT_SESSION_ID] = id else prefs.remove(Keys.CURRENT_SESSION_ID)
+        }
     }
 
     // ===== v1.9.0 自动记忆写入日志（撤销最近一次） =====
@@ -188,7 +203,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun isMemoryAutoEnabled(): Boolean = memoryAutoEnabled.first()
 
     /**
-     * 一键清除全部设置（AC-12 隐私清除；自动覆盖 v1.7.2 新 key）
+     * 一键清除全部设置（AC-12 隐私清除；自动覆盖 v1.7.2/v1.9.4 新 key，
+     * 含 current_session_id —— 清空数据后冷启动不再恢复已删除会话）
      */
     suspend fun clearAll() {
         context.settingsDataStore.edit { it.clear() }

@@ -239,6 +239,10 @@ class ProviderEditViewModelTest {
         }
         override suspend fun wipeAll() = Unit
     override suspend fun importBackup(uri: android.net.Uri): Pair<Boolean, String> = false to "测试未实现"
+    // v1.9.4 记忆导出/导入桩（本测试不使用，空实现）
+    override suspend fun exportMemoryJson(): String? = null
+    override suspend fun writeMemoryExport(uri: android.net.Uri, json: String): Boolean = true
+    override suspend fun importMemoryMerge(uri: android.net.Uri): Pair<Boolean, String> = true to "导入 0 个档案、0 条记忆"
     override fun usageMetrics(): UsageMetricsUi = UsageMetricsUi(0L, 0L, 0L, 0L, emptyMap())
         override suspend fun setPrivacyAck(ack: Boolean) {
             privacyAckValue = ack

@@ -30,9 +30,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.components.Tag
@@ -119,12 +121,22 @@ fun SessionDrawerContent(
         Spacer(Modifier.height(8.dp))
 
         // O3: 全文搜索（命中 sessionId 或标题包含关键词）
+        // v1.9.4：搜索框对齐全 App 输入框规范（GtjShape.input 20dp 圆角 + 内凹 surface 底 + 指示线透明），
+        // 修复默认 M3 TextField 直角 + 底部横线与抽屉玻璃风格割裂的问题（用户反馈）
         TextField(
             value = searchQuery,
             onValueChange = onSearchQueryChange,
             placeholder = { Text("搜索会话 / 消息", style = GtjType.Caption, color = p.muted) },
             singleLine = true,
             textStyle = GtjType.BodySm,
+            shape = GtjShape.input,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = p.surface,
+                unfocusedContainerColor = p.surface,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                cursorColor = p.accent,
+            ),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         )
         Spacer(Modifier.height(8.dp))

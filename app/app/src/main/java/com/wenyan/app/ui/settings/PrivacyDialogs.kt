@@ -70,6 +70,38 @@ fun ImportBackupDialog(
 }
 
 /**
+ * v1.9.4 记忆合并导入二次确认（换机迁移）——与「从备份恢复」相反：合并式导入，
+ * 同名档案合并、重复记忆去重，绝不删除现有数据（样式对齐 ImportBackupDialog）。
+ */
+@Composable
+fun ImportMemoryDialog(
+    importing: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = GtjShape.lg,
+        containerColor = p.surfaceElevated,
+        titleContentColor = p.fg,
+        textContentColor = p.fgSecondary,
+        title = { Text("导入记忆", style = GtjType.Title) },
+        text = { Text("将以合并方式导入所选文件中的记忆数据：同名档案合并、重复记忆去重，不会删除现有数据。仅导入记忆（用户画像与对象档案），不含聊天记录与 API Key。", style = GtjType.BodySm) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !importing) {
+                Text(if (importing) "导入中…" else "确认导入", style = GtjType.Label, color = p.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !importing) {
+                Text("取消", style = GtjType.Label, color = p.muted)
+            }
+        },
+    )
+}
+
+/**
  * 清除全部档案二次确认（AC-12，design-pages 页面3）：删除 Key/档案/会话全部本地数据。
  */
 @Composable
