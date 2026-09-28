@@ -31,6 +31,9 @@ compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling
 compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+# v1.9.4：createComposeRule() 的宿主 ComponentActivity 声明（exported + LAUNCHER），
+# 缺失时真机/模拟器上全部 Compose 用例报 Unable to resolve activity
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }

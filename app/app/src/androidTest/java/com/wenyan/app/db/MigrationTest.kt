@@ -110,10 +110,16 @@ class MigrationTest {
     @Test
     fun migrate1To8_stepwise_retainsData() {
         // v1.9.1：全链路 v1→v8（含 v7→v8 expiresAt/source），数据保留 + 新列默认值正确
+        // v1.9.4 修：v1 库没有 memory_fact 表（v6 才建），迁移后必为空表，原断言对空表
+        // moveToFirst() 必失败（真机首跑暴露；仪器测试此前从未实跑过）。改为迁移后按
+        // 老式列集插入一行，验证 v7→v8 DDL 的列默认值（expiresAt=NULL、source='manual'）。
         seedV1()
         val db = helper.runMigrationsAndValidate(testDb, 8, true, *AppDatabase.MIGRATIONS)
         assertRetainedData(db)
-        db.query("SELECT expiresAt, source FROM memory_fact").use { c ->
+        db.execSQL(
+            "INSERT INTO memory_fact (targetId, text, kind, createdAt) VALUES (1, '她喜欢猫', 'fact', 1000)"
+        )
+        db.query("SELECT expiresAt, source FROM memory_fact WHERE id = 1").use { c ->
             assertTrue(c.moveToFirst())
             assertTrue(c.isNull(0)) // 老数据无到期时间 = 永久
             assertEquals("manual", c.getString(1)) // 老数据来源统一 manual

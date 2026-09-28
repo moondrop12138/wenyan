@@ -1,6 +1,9 @@
 package com.wenyan.app.ui.settings
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -63,11 +66,18 @@ class MemorySettingsFlowTest {
         assertEquals(listOf(1L), fake.activated)
 
         // 编辑图标 → 跳 MemoryEdit 页（替代 v1.7.2 改名弹窗）
-        compose.onNodeWithContentDescription("编辑记忆").performClick()
+        // v1.9.4 修：FakeSettingsRepository.createTarget 现在会真实追加 targetsFlow，创建小B后
+        // 列表有两行、两个同名「编辑记忆/删除记忆」按钮——选择器限定到「小A 所在行」（行是
+        // GlassSurface(onClick) 合并语义节点，hasText("小A") 在其自身 Text 集合里）
+        compose.onNode(
+            hasContentDescription("编辑记忆") and hasAnyAncestor(hasText("小A")),
+        ).performClick()
         assertEquals(1L, editTargetId)
 
-        // 删除图标 → 二次确认弹窗 → 确认删除
-        compose.onNodeWithContentDescription("删除记忆").performClick()
+        // 删除图标 → 二次确认弹窗 → 确认删除（同样限定小A 行）
+        compose.onNode(
+            hasContentDescription("删除记忆") and hasAnyAncestor(hasText("小A")),
+        ).performClick()
         compose.onNodeWithText("删除记忆", substring = true).assertIsDisplayed()
         compose.onNodeWithText("删除").performClick()
         assertTrue(fake.deleted.contains(1L))

@@ -150,6 +150,11 @@ dependencies {
     // Kotlin coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // v1.9.4：createComposeRule() 的宿主 ComponentActivity 声明（exported + LAUNCHER）。
+    // 必须放 debugImplementation 合入被测 App 的 debug 变体（同进程）；放 androidTest 会
+    // 合入测试 APK 导致 "resolved to different process com.wenyan.app.test" 而全部失败
+    debugImplementation(libs.compose.ui.test.manifest)
+
     // 测试
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
