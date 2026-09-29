@@ -40,9 +40,20 @@ data class GtjPalette(
     val glassBorder: Color,        // 玻璃描边 1dp
     val glassEdgeHighlight: Color, // 顶部高光线（1.5dp 渐隐）
     val glassShadow: Color,        // 柔和外投影
+    // ── v1.9.4 玻璃材质升级（唯一来源 docs/design-tokens.json color.light/dark.glass.*）──
+    val glassHairlineOuter: Color, // 双发丝描边·外圈深线（玻璃边缘的物理厚度感）
+    val glassHairlineInner: Color, // 双发丝描边·内圈亮线（对应桌面 inset 0 1px 内高光）
+    val glassSpecular: Color,      // 顶部方向性 specular 高光基色（多停靠渐变）
+    val glassInnerShade: Color,    // 底部内阴影
+    val glassGrainLight: Color,    // 磨砂颗粒·亮噪色
+    val glassGrainDark: Color,     // 磨砂颗粒·暗噪色
     val glowA: Color,              // 光斑 A（径向渐变中心色）
     val glowB: Color,              // 光斑 B
     val glowC: Color,              // 光斑 C
+    // ── v1.9.4 流光背景（唯一来源 docs/design-tokens.json color.light/dark.fluid.*，与桌面 aqua-fluid.js paletteForTheme 完全一致）──
+    val fluidA: Color,             // 流光基色 1：浅色陶土棕 / 深色深棕
+    val fluidB: Color,             // 流光基色 2：浅色暖米白 / 深色暖黑
+    val fluidC: Color,             // 流光基色 3：浅色白 / 深色近黑
     val dotConnected: Color,       // 状态点·已连接（橄榄绿）
     val dotConnecting: Color,      // 状态点·连接中（杏棕呼吸）
     val dotThinking: Color,        // 状态点·思考中（赭石呼吸）
@@ -82,10 +93,21 @@ val LightPalette = GtjPalette(
     glassBorder = Color(0xBFFFFFFF),
     glassEdgeHighlight = Color(0xF2FFFFFF),
     glassShadow = Color(0x2E6E461E),
+    // v1.9.4 材质升级（浅色）：外深内浅双发丝 + 多停靠 specular + 底部内阴影 + 磨砂颗粒
+    glassHairlineOuter = Color(0x406E461E), // rgba(110,70,30,0.25) 陶土深棕细线
+    glassHairlineInner = Color(0xB3FFFFFF), // rgba(255,255,255,0.70)（对齐桌面 inset 高光 .5 提亮）
+    glassSpecular = Color(0x4DFFFFFF),      // rgba(255,255,255,0.30) 基色，停靠点在组件内展开
+    glassInnerShade = Color(0x1A6E461E),    // rgba(110,70,30,0.10) 底部内阴影
+    glassGrainLight = Color(0xFFFFFFFF),    // 颗粒亮噪（白）
+    glassGrainDark = Color(0xFF6E461E),     // 颗粒暗噪（陶土深棕）
     // 光斑（v1.7.1 调柔：浅色浓度下调，避免径向渐变边缘生硬成色块；原型值 .85/.75/.55）
     glowA = Color(0x80F2CBA9), // rgba(242,203,169,.50)
     glowB = Color(0x6BDFA678), // rgba(223,166,120,.42)
     glowC = Color(0x4DC0743F), // rgba(192,116,63,.30)
+    // 流光（v1.9.4：桌面 paletteForTheme 浅色 #C0743F/#F6F0E6/#FFFFFF）
+    fluidA = Color(0xFFC0743F),
+    fluidB = Color(0xFFF6F0E6),
+    fluidC = Color(0xFFFFFFFF),
     // 状态点四态（跨主题恒定，原型 sdot）
     dotConnected = Color(0xFF7FA65A),
     dotConnecting = Color(0xFFDFA678),
@@ -126,10 +148,21 @@ val DarkPalette = GtjPalette(
     glassBorder = Color(0x1FFFFFFF),
     glassEdgeHighlight = Color(0x59FFFFFF),
     glassShadow = Color(0x80000000),
+    // v1.9.4 材质升级（深色）：外深内浅双发丝 + 多停靠 specular + 底部内阴影 + 磨砂颗粒
+    glassHairlineOuter = Color(0x73000000), // rgba(0,0,0,0.45) 近黑细线
+    glassHairlineInner = Color(0x1AFFFFFF), // rgba(255,255,255,0.10)（对齐桌面深色 inset .07 微调）
+    glassSpecular = Color(0x1AFFFFFF),      // rgba(255,255,255,0.10) 基色
+    glassInnerShade = Color(0x47000000),    // rgba(0,0,0,0.28) 底部内阴影
+    glassGrainLight = Color(0xFFFFFFFF),    // 颗粒亮噪（白）
+    glassGrainDark = Color(0xFF000000),     // 颗粒暗噪（黑）
     // 光斑（v1.7.1 微调：深色稍提亮保持暖氛围）
     glowA = Color(0x73CE8A56), // rgba(206,138,86,.45)
     glowB = Color(0x4DDFA678), // rgba(223,166,120,.30)
     glowC = Color(0xBF3A2A1C), // rgba(58,42,28,.75)
+    // 流光（v1.9.4：桌面 paletteForTheme 深色 #5C3F28/#211A13/#0B0705）
+    fluidA = Color(0xFF5C3F28),
+    fluidB = Color(0xFF211A13),
+    fluidC = Color(0xFF0B0705),
     // 状态点四态（跨主题恒定）
     dotConnected = Color(0xFF7FA65A),
     dotConnecting = Color(0xFFDFA678),
@@ -139,6 +172,9 @@ val DarkPalette = GtjPalette(
 
 /** 供组件读取扩展色（warm/warn/dangerSoft/meta/accentSoft 等非 M3 槽位） */
 val LocalGtjColors = staticCompositionLocalOf { LightPalette }
+
+/** v1.9.4 流光背景总开关（默认开启；设置页可 provides false，关闭后 FluidBackground 不绘制、露出主题底色） */
+val LocalFluidBackground = staticCompositionLocalOf { true }
 
 /** M3 ColorScheme 映射（浅色）。映射关系固定：accent→primary 等，勿随意改。 */
 fun lightColorScheme(p: GtjPalette = LightPalette): ColorScheme = ColorScheme(

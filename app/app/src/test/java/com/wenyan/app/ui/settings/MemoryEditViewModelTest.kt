@@ -67,6 +67,7 @@ private class FakeSettingsRepoForMemoryEdit : SettingsRepository {
     override val targets: Flow<List<TargetUi>> = targetsFlow
     override val activeTargetId = MutableStateFlow<Long?>(null)
     override val memoryAutoEnabled = MutableStateFlow(true)
+    override val fluidBackgroundEnabled = MutableStateFlow(true)
 
     override fun observeFacts(targetId: Long): Flow<List<MemoryFactUi>> = MutableStateFlow(emptyList())
 
@@ -101,6 +102,7 @@ private class FakeSettingsRepoForMemoryEdit : SettingsRepository {
     override suspend fun deleteTarget(id: Long) = Unit
     override suspend fun setActiveTarget(id: Long) = Unit
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) = Unit
+    override suspend fun setFluidBackgroundEnabled(enabled: Boolean) = Unit
     override suspend fun addFact(targetId: Long, text: String) = Unit
     override suspend fun updateFact(factId: Long, text: String) = Unit
     override suspend fun deleteFact(factId: Long) = Unit

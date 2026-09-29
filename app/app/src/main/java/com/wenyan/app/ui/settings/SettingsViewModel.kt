@@ -75,6 +75,10 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _memoryAutoEnabled = MutableStateFlow(true)
     val memoryAutoEnabled: StateFlow<Boolean> = _memoryAutoEnabled.asStateFlow()
 
+    /** v1.9.4 流光背景开关（默认 true；init 从 DataStore collect） */
+    private val _fluidBackgroundEnabled = MutableStateFlow(true)
+    val fluidBackgroundEnabled: StateFlow<Boolean> = _fluidBackgroundEnabled.asStateFlow()
+
     /** v1.7.2 一次性 Toast（消费后清空，防重组重复弹） */
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -112,6 +116,7 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.targets.collect { _targets.value = it } }
         viewModelScope.launch { repo.activeTargetId.collect { _activeTargetId.value = it } }
         viewModelScope.launch { repo.memoryAutoEnabled.collect { _memoryAutoEnabled.value = it } }
+        viewModelScope.launch { repo.fluidBackgroundEnabled.collect { _fluidBackgroundEnabled.value = it } }
     }
 
     fun setTheme(mode: String) {
@@ -252,6 +257,11 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     fun setMemoryAutoEnabled(enabled: Boolean) {
         viewModelScope.launch { repo.setMemoryAutoEnabled(enabled) }
+    }
+
+    /** v1.9.4 流光背景开关 */
+    fun setFluidBackgroundEnabled(enabled: Boolean) {
+        viewModelScope.launch { repo.setFluidBackgroundEnabled(enabled) }
     }
 
     /** v1.9.0 撤销最近一次自动写入（无日志 → Toast 提示；有 → 删除对应事实） */

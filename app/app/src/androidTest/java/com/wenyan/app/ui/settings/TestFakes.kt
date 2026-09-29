@@ -21,6 +21,7 @@ class FakeSettingsRepository : SettingsRepository {
     val targetsFlow = MutableStateFlow<List<TargetUi>>(emptyList())
     val activeFlow = MutableStateFlow<Long?>(null)
     val memoryAutoFlow = MutableStateFlow(true)
+    val fluidBackgroundFlow = MutableStateFlow(true)
     val factsFlow = MutableStateFlow<List<MemoryFactUi>>(emptyList())
     val created = mutableListOf<String>()
     val activated = mutableListOf<Long>()
@@ -36,6 +37,7 @@ class FakeSettingsRepository : SettingsRepository {
     override val targets: Flow<List<TargetUi>> = targetsFlow
     override val activeTargetId: Flow<Long?> = activeFlow
     override val memoryAutoEnabled: Flow<Boolean> = memoryAutoFlow
+    override val fluidBackgroundEnabled: Flow<Boolean> = fluidBackgroundFlow
 
     override fun observeFacts(targetId: Long): Flow<List<MemoryFactUi>> = factsFlow
 
@@ -75,6 +77,11 @@ class FakeSettingsRepository : SettingsRepository {
 
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) {
         memoryAutoFlow.value = enabled
+    }
+
+    /** v1.9.4 流光背景开关桩 */
+    override suspend fun setFluidBackgroundEnabled(enabled: Boolean) {
+        fluidBackgroundFlow.value = enabled
     }
 
     override suspend fun addFact(targetId: Long, text: String) = Unit

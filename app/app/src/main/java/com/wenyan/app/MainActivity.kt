@@ -6,11 +6,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import com.wenyan.app.ui.navigation.AppRoot
 import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.GtjTheme
+import com.wenyan.app.ui.theme.LocalFluidBackground
 
 /**
  * 入口：只装配 Navigation/主题，零业务逻辑（code-organization 硬规则 4）。
@@ -35,8 +37,13 @@ class MainActivity : ComponentActivity() {
                 AppViewModel(container)
             }
             val themeMode by appViewModel.themeMode.collectAsState()
+            // v1.9.4 流光背景开关：AppViewModel 统一收集后全局下发（GtjTheme 块内包 AppRoot，
+            // FluidBackground 组件读 LocalFluidBackground，默认 true；关闭 = 不绘制露出主题底色）
+            val fluidBackground by appViewModel.fluidBackground.collectAsState()
             GtjTheme(themeMode = themeMode) {
-                AppRoot(container = container, appViewModel = appViewModel)
+                CompositionLocalProvider(LocalFluidBackground provides fluidBackground) {
+                    AppRoot(container = container, appViewModel = appViewModel)
+                }
             }
         }
     }

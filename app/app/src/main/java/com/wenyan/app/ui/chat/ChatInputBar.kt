@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -69,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.wenyan.app.ui.components.GtjIconButton
+import com.wenyan.app.ui.components.glass.GlassBackdropLayer
+import com.wenyan.app.ui.components.glass.glassBackdropLayer
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -99,6 +104,8 @@ fun ChatInputBar(
     modifier: Modifier = Modifier,
     // v1.8.2-fix（审查 P3-10）：空状态索引点击填入后聚焦输入框（对齐桌面端行为）
     inputFocusRequester: FocusRequester? = null,
+    // v1.9.4 根因④：真实背景模糊层（Mica 磨砂，API 31+；null=回退静态玻璃，向后兼容）
+    backdropLayer: GlassBackdropLayer? = null,
 ) {
     val p = LocalGtjColors.current
     val clipboard = LocalClipboardManager.current
@@ -121,12 +128,22 @@ fun ChatInputBar(
     )
     val canSend = input.isNotBlank() || pendingImages.isNotEmpty()
 
-    // edge-to-edge：bottomBar 不自动处理 insets，手动下移导航栏高度（手势条/三键自适应）
+    // edge-to-edge：bottomBar 不自动处理 insets，手动下移导航栏高度（手势条/三键自适应）。
+    // v1.9.4 评审修复（IME 联动）：bottom inset 取 max(导航栏, IME)（safeDrawing 联合，
+    // IME 弹出时其 bottom 覆盖导航条区域不双算）——键盘弹出时输入栏整体上移，Scaffold
+    // body padding 随 bottomBar 测量高度同步增大，列表 contentPadding
+    // （ChatScreen padding.calculateBottomPadding()）联动保证可滚动到最新消息；
+    // 自动可见由 ChatScreen 滚动跟随 LaunchedEffect 保证（该 key 计入 calculateBottomPadding，
+    // 位于底部时键盘弹出/多行长高即重滚到底）——本注释 v1.9.4 评审时曾与实现不符，已闭环。
+    // v1.9.4 IME 定位修复配套：MainActivity 已在 Manifest 显式声明 windowSoftInputMode=
+    // adjustResize——未声明时默认 adjustUnspecified，系统对聚焦输入框走 adjustPan 把整个
+    // 窗口内容上移出键盘高度，再叠加本 inset 就是双重位移（顶栏被 pan 出屏幕、输入栏悬空
+    // 在键盘上方一大截，模拟器 API 35 已复现）；声明后窗口不动，IME 只经本 inset 单点消费。
     // v1.5：悬浮胶囊形态——外层无底，内层 r28 圆角 + 投影 + surfaceElevated 底（设计稿 WY-01 输入栏）
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars),
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
         color = Color.Transparent,
     ) {
         Column {
@@ -202,15 +219,19 @@ fun ChatInputBar(
                 )
             }
             // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜（strong 玻璃 + 光斑透出）
+            // v1.9.4：glassBackdropLayer（Mica 磨砂）垫在 liquidGlass 之前（靠前的 drawBehind 先画）；
+            // backdrop=false：本面已显式全量磨砂（背景+消息穿透），卡片级磨砂不叠加（v1.9.4 配套）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .glassBackdropLayer(backdropLayer, GtjShape.inputBar)
                     // v1.7.1 二改：clip 在 liquidGlass 之后，软投影不被裁（此前投影丢失→纯色平台感）
                     .liquidGlass(
                         shape = GtjShape.inputBar,
                         strong = true,
                         enablePressAnimation = true,
+                        backdrop = false,
                     )
                     .clip(GtjShape.inputBar),
             ) {

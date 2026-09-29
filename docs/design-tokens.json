@@ -4,10 +4,13 @@
     "product": "温言",
     "register": "product",
     "platform": "android-compose",
-    "axes": { "variance": 5, "motion": 4, "density": 3 },
-    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。v1.6.1 配色与启动图标（陶土棕气泡×米白底）对齐：墨绿×宣纸 → 陶土棕×暖米白。v1.6.3 沉浸式手势小白条：系统状态栏/导航栏全透明露出 color.light.bg / color.dark.bg，手势条颜色由 Android 15 系统按背景亮度自动对比（浅底深灰条/深底浅条），无需新 Token。"
+    "axes": {
+      "variance": 5,
+      "motion": 4,
+      "density": 3
+    },
+    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。v1.6.1 配色与启动图标（陶土棕气泡×米白底）对齐：墨绿×宣纸 → 陶土棕×暖米白。v1.6.3 沉浸式手势小白条：系统状态栏/导航栏全透明露出 color.light.bg / color.dark.bg，手势条颜色由 Android 15 系统按背景亮度自动对比（浅底深灰条/深底浅条），无需新 Token。v1.9.4 新增 color.light/dark.fluid.a/b/c：流光背景（AGSL FluidBackground）三基色，与桌面 aqua-fluid.js paletteForTheme 完全一致。v1.9.4 新增 color.light/dark.glass.hairlineOuter/hairlineInner/specular/innerShade/grainLight/grainDark：玻璃材质升级（双发丝描边/方向性 specular/底部内阴影/磨砂颗粒）；component.glass 与 component.glassBackdrop 为玻璃质感数值参数（磨砂颗粒与 backdrop blur，对应桌面 styles.css Mica 配方 blur(20px) saturate(170%)）。"
   },
-
   "color": {
     "light": {
       "bg": "#F6F0E6",
@@ -37,12 +40,23 @@
         "fillStrong": "rgba(253,248,240,0.72)",
         "border": "rgba(255,255,255,0.75)",
         "edgeHighlight": "rgba(255,255,255,0.95)",
-        "shadow": "rgba(110,70,30,0.18)"
+        "shadow": "rgba(110,70,30,0.18)",
+        "hairlineOuter": "rgba(110,70,30,0.25)",
+        "hairlineInner": "rgba(255,255,255,0.70)",
+        "specular": "rgba(255,255,255,0.30)",
+        "innerShade": "rgba(110,70,30,0.10)",
+        "grainLight": "#FFFFFF",
+        "grainDark": "#6E461E"
       },
       "glow": {
         "a": "rgba(242,203,169,0.50)",
         "b": "rgba(223,166,120,0.42)",
         "c": "rgba(192,116,63,0.30)"
+      },
+      "fluid": {
+        "a": "#C0743F",
+        "b": "#F6F0E6",
+        "c": "#FFFFFF"
       },
       "statusDot": {
         "connected": "#7FA65A",
@@ -79,12 +93,23 @@
         "fillStrong": "rgba(34,26,20,0.74)",
         "border": "rgba(255,255,255,0.12)",
         "edgeHighlight": "rgba(255,255,255,0.35)",
-        "shadow": "rgba(0,0,0,0.50)"
+        "shadow": "rgba(0,0,0,0.50)",
+        "hairlineOuter": "rgba(0,0,0,0.45)",
+        "hairlineInner": "rgba(255,255,255,0.10)",
+        "specular": "rgba(255,255,255,0.10)",
+        "innerShade": "rgba(0,0,0,0.28)",
+        "grainLight": "#FFFFFF",
+        "grainDark": "#000000"
       },
       "glow": {
         "a": "rgba(206,138,86,0.45)",
         "b": "rgba(223,166,120,0.30)",
         "c": "rgba(58,42,28,0.75)"
+      },
+      "fluid": {
+        "a": "#5C3F28",
+        "b": "#211A13",
+        "c": "#0B0705"
       },
       "statusDot": {
         "connected": "#7FA65A",
@@ -94,7 +119,6 @@
       }
     }
   },
-
   "typography": {
     "font": {
       "display": "Roboto, Noto Sans SC, sans-serif",
@@ -102,15 +126,70 @@
       "mono": "Roboto Mono, monospace"
     },
     "typeScale": {
-      "display":  { "size": 32, "weight": 500, "lineHeight": 40, "letterSpacing": -0.8, "unit": "sp" },
-      "headline": { "size": 24, "weight": 500, "lineHeight": 32, "letterSpacing": 0,    "unit": "sp" },
-      "title":    { "size": 20, "weight": 500, "lineHeight": 28, "letterSpacing": 0,    "unit": "sp" },
-      "subtitle": { "size": 16, "weight": 500, "lineHeight": 24, "letterSpacing": 0,    "unit": "sp" },
-      "body":     { "size": 16, "weight": 400, "lineHeight": 24, "letterSpacing": 0,    "unit": "sp" },
-      "bodySm":   { "size": 14, "weight": 400, "lineHeight": 20, "letterSpacing": 0,    "unit": "sp" },
-      "label":    { "size": 13, "weight": 500, "lineHeight": 18, "letterSpacing": 0.3,  "unit": "sp" },
-      "caption":  { "size": 12, "weight": 400, "lineHeight": 16, "letterSpacing": 0.2,  "unit": "sp" },
-      "mono":     { "size": 14, "weight": 400, "lineHeight": 20, "letterSpacing": 0,    "unit": "sp", "font": "mono" }
+      "display": {
+        "size": 32,
+        "weight": 500,
+        "lineHeight": 40,
+        "letterSpacing": -0.8,
+        "unit": "sp"
+      },
+      "headline": {
+        "size": 24,
+        "weight": 500,
+        "lineHeight": 32,
+        "letterSpacing": 0,
+        "unit": "sp"
+      },
+      "title": {
+        "size": 20,
+        "weight": 500,
+        "lineHeight": 28,
+        "letterSpacing": 0,
+        "unit": "sp"
+      },
+      "subtitle": {
+        "size": 16,
+        "weight": 500,
+        "lineHeight": 24,
+        "letterSpacing": 0,
+        "unit": "sp"
+      },
+      "body": {
+        "size": 16,
+        "weight": 400,
+        "lineHeight": 24,
+        "letterSpacing": 0,
+        "unit": "sp"
+      },
+      "bodySm": {
+        "size": 14,
+        "weight": 400,
+        "lineHeight": 20,
+        "letterSpacing": 0,
+        "unit": "sp"
+      },
+      "label": {
+        "size": 13,
+        "weight": 500,
+        "lineHeight": 18,
+        "letterSpacing": 0.3,
+        "unit": "sp"
+      },
+      "caption": {
+        "size": 12,
+        "weight": 400,
+        "lineHeight": 16,
+        "letterSpacing": 0.2,
+        "unit": "sp"
+      },
+      "mono": {
+        "size": 14,
+        "weight": 400,
+        "lineHeight": 20,
+        "letterSpacing": 0,
+        "unit": "sp",
+        "font": "mono"
+      }
     },
     "usage": {
       "headline": "页面主标题/分析结论",
@@ -123,32 +202,48 @@
       "mono": "API Key/Base URL/Host"
     }
   },
-
   "spacing": {
-    "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 20,
-    "xxl": 24, "xxxl": 32, "xl4": 40, "xl5": 48,
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 20,
+    "xxl": 24,
+    "xxxl": 32,
+    "xl4": 40,
+    "xl5": 48,
     "unit": "dp"
   },
-
   "radius": {
-    "sm": 8, "md": 12, "lg": 16, "xl": 18, "pill": 9999,
-    "bubble": 20, "bubbleTail": 4, "sheetTop": 28,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 18,
+    "pill": 9999,
+    "bubble": 20,
+    "bubbleTail": 4,
+    "sheetTop": 28,
     "unit": "dp"
   },
-
   "iconSize": {
-    "sm": 16, "md": 20, "lg": 24,
+    "sm": 16,
+    "md": 20,
+    "lg": 24,
     "unit": "dp",
     "library": "Material Symbols (Outlined)",
     "rule": "全项目仅此一套图标库，禁 emoji 字符，禁多库混用"
   },
-
   "elevation": {
-    "flat":   { "light": "none", "dark": "none" },
-    "raised": { "light": "0 2px 8px rgba(0,0,0,0.06)", "dark": "0 4px 16px rgba(0,0,0,0.40)" },
+    "flat": {
+      "light": "none",
+      "dark": "none"
+    },
+    "raised": {
+      "light": "0 2px 8px rgba(0,0,0,0.06)",
+      "dark": "0 4px 16px rgba(0,0,0,0.40)"
+    },
     "overlay": "scrim"
   },
-
   "motion": {
     "fast": 150,
     "base": 200,
@@ -158,25 +253,154 @@
     "ease": "cubic-bezier(0.2, 0, 0, 1)",
     "reducedMotion": "prefers-reduced-motion 下所有动效降为 0ms 或静态"
   },
-
   "component": {
-    "bubbleUser":      { "bg": "accent", "fg": "accentOn", "radius": "lg", "maxWidthPercent": 82, "padding": "md/lg" },
-    "bubbleAi":        { "bg": "surfaceElevated", "fg": "fg", "radius": "lg", "maxWidthPercent": 92, "border": "borderSoft", "padding": "lg", "note": "P1 风格：白卡浮在暖米白底上" },
-    "inputBar":        { "bg": "surfaceElevated", "radius": "pill", "border": "border", "height": 48, "paddingH": "lg" },
-    "primaryButton":   { "bg": "accent", "fg": "accentOn", "radius": "md", "height": 48, "paddingH": "lg", "minTouch": 48 },
-    "secondaryButton": { "bg": "transparent", "fg": "accent", "radius": "md", "border": "border", "height": 48, "minTouch": 48 },
-    "ghostButton":     { "bg": "transparent", "fg": "muted", "radius": "md", "height": 48, "minTouch": 48 },
-    "chip":            { "bg": "surfaceElevated", "fg": "fg", "border": "border", "radius": "pill", "height": 36, "paddingH": "lg", "selectedBg": "accentSoft", "selectedFg": "accent", "selectedBorder": "accent", "minTouch": 36 },
-    "card":            { "bg": "surfaceElevated", "fg": "fg", "radius": "lg", "border": "borderSoft", "elevation": "flat", "note": "P1 风格：大圆角白卡" },
-    "sheet":           { "bg": "surfaceElevated", "radiusTop": "xl", "elevation": "raised", "dragHandle": true },
-    "dialog":          { "bg": "surfaceElevated", "radius": "lg", "scrim": "scrim" },
-    "divider":         { "color": "borderSoft", "thickness": 1 },
-    "progressTrack":   { "bg": "borderSoft", "indicator": "accent", "height": 4, "radius": "pill" },
-    "textField":       { "bg": "surfaceElevated", "border": "border", "focusBorder": "accent", "radius": "sm", "height": 48 },
-    "tag":             { "neutral": { "bg": "borderSoft", "fg": "muted" }, "warm": { "bg": "warmSoft", "fg": "warmOn" }, "danger": { "bg": "dangerSoft", "fg": "danger" } },
-    "analysisCard":    { "bg": "surfaceElevated", "radius": "lg", "border": "borderSoft", "sectionGap": "xxl", "stepTitleColor": "accent", "note": "v1.6.1 陶土棕系：近白卡+大圆角，段标题陶土棕（如'先分清事实'）" },
-    "replyCard":       { "bg": "accentSoft", "radius": "lg", "labelColor": "warmOn", "copyButtonBorder": "accent", "note": "v1.6.1 陶土棕系：浅奶咖话术卡 + 深棕标签 + 描边复制按钮" },
-    "quoteBlock":      { "bg": "surface", "border": "borderSoft", "radius": "sm", "padding": "lg" },
-    "dividerThick":    { "color": "border", "thickness": 8, "note": "设置页分组间隔" }
+    "bubbleUser": {
+      "bg": "accent",
+      "fg": "accentOn",
+      "radius": "lg",
+      "maxWidthPercent": 82,
+      "padding": "md/lg"
+    },
+    "bubbleAi": {
+      "bg": "surfaceElevated",
+      "fg": "fg",
+      "radius": "lg",
+      "maxWidthPercent": 92,
+      "border": "borderSoft",
+      "padding": "lg",
+      "note": "P1 风格：白卡浮在暖米白底上"
+    },
+    "inputBar": {
+      "bg": "surfaceElevated",
+      "radius": "pill",
+      "border": "border",
+      "height": 48,
+      "paddingH": "lg"
+    },
+    "primaryButton": {
+      "bg": "accent",
+      "fg": "accentOn",
+      "radius": "md",
+      "height": 48,
+      "paddingH": "lg",
+      "minTouch": 48
+    },
+    "secondaryButton": {
+      "bg": "transparent",
+      "fg": "accent",
+      "radius": "md",
+      "border": "border",
+      "height": 48,
+      "minTouch": 48
+    },
+    "ghostButton": {
+      "bg": "transparent",
+      "fg": "muted",
+      "radius": "md",
+      "height": 48,
+      "minTouch": 48
+    },
+    "chip": {
+      "bg": "surfaceElevated",
+      "fg": "fg",
+      "border": "border",
+      "radius": "pill",
+      "height": 36,
+      "paddingH": "lg",
+      "selectedBg": "accentSoft",
+      "selectedFg": "accent",
+      "selectedBorder": "accent",
+      "minTouch": 36
+    },
+    "card": {
+      "bg": "surfaceElevated",
+      "fg": "fg",
+      "radius": "lg",
+      "border": "borderSoft",
+      "elevation": "flat",
+      "note": "P1 风格：大圆角白卡"
+    },
+    "sheet": {
+      "bg": "surfaceElevated",
+      "radiusTop": "xl",
+      "elevation": "raised",
+      "dragHandle": true
+    },
+    "dialog": {
+      "bg": "surfaceElevated",
+      "radius": "lg",
+      "scrim": "scrim"
+    },
+    "divider": {
+      "color": "borderSoft",
+      "thickness": 1
+    },
+    "progressTrack": {
+      "bg": "borderSoft",
+      "indicator": "accent",
+      "height": 4,
+      "radius": "pill"
+    },
+    "textField": {
+      "bg": "surfaceElevated",
+      "border": "border",
+      "focusBorder": "accent",
+      "radius": "sm",
+      "height": 48
+    },
+    "tag": {
+      "neutral": {
+        "bg": "borderSoft",
+        "fg": "muted"
+      },
+      "warm": {
+        "bg": "warmSoft",
+        "fg": "warmOn"
+      },
+      "danger": {
+        "bg": "dangerSoft",
+        "fg": "danger"
+      }
+    },
+    "analysisCard": {
+      "bg": "surfaceElevated",
+      "radius": "lg",
+      "border": "borderSoft",
+      "sectionGap": "xxl",
+      "stepTitleColor": "accent",
+      "note": "v1.6.1 陶土棕系：近白卡+大圆角，段标题陶土棕（如'先分清事实'）"
+    },
+    "replyCard": {
+      "bg": "accentSoft",
+      "radius": "lg",
+      "labelColor": "warmOn",
+      "copyButtonBorder": "accent",
+      "note": "v1.6.1 陶土棕系：浅奶咖话术卡 + 深棕标签 + 描边复制按钮"
+    },
+    "quoteBlock": {
+      "bg": "surface",
+      "border": "borderSoft",
+      "radius": "sm",
+      "padding": "lg"
+    },
+    "dividerThick": {
+      "color": "border",
+      "thickness": 8,
+      "note": "设置页分组间隔"
+    },
+    "glass": {
+      "grainSize": 96,
+      "grainAlpha": 0.06,
+      "note": "v1.9.4 磨砂颗粒：预生成噪声位图边长（px，≤128）与叠加 alpha"
+    },
+    "glassBackdrop": {
+      "blurRadiusDp": 20,
+      "saturation": 1.7,
+      "brightness": 1.03,
+      "samplePaddingDp": 40,
+      "note": "v1.9.4 backdrop blur（ChatScreen 顶栏/输入栏 Mica 悬浮面，API 31+）：对应桌面 styles.css --wy-glass-blur:20px + backdrop-filter saturate(170%)；samplePadding=2×blur 模糊采样余量。v1.9.4 卡片透光磨砂：cardBlurRadiusDp=4 对齐桌面玻璃设置「模糊度」运行时默认 4px（app.js glassBlur），cardSamplePaddingDp=2×cardBlur 同比例采样余量；卡片级饱和度/亮度复用 saturation/brightness",
+      "cardBlurRadiusDp": 4,
+      "cardSamplePaddingDp": 8
+    }
   }
 }

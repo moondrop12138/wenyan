@@ -47,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,9 +69,13 @@ import com.wenyan.app.ui.components.ModelSheet
 import com.wenyan.app.ui.components.Tag
 import com.wenyan.app.ui.components.TagKind
 import com.wenyan.app.ui.components.ThickDivider
+import com.wenyan.app.ui.components.glass.FluidBackground
 import com.wenyan.app.ui.components.glass.GlassSurface
-import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
+import com.wenyan.app.ui.components.glass.glassBackdropBackground
+import com.wenyan.app.ui.components.glass.glassBackdropContent
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.TargetUi
@@ -107,6 +112,8 @@ fun SettingsScreen(
     val usage by vm.usage.collectAsState()
     val targets by vm.targets.collectAsState()
     val memoryAutoEnabled by vm.memoryAutoEnabled.collectAsState()
+    // v1.9.4 流光背景开关状态
+    val fluidBackground by vm.fluidBackgroundEnabled.collectAsState()
     val toastMessage by vm.toastMessage.collectAsState()
     val showNameDialog by vm.showNameDialog.collectAsState()
     val editTarget by vm.editTarget.collectAsState()
@@ -143,9 +150,20 @@ fun SettingsScreen(
 
     // v1.8.1 B4：移除 glowState 光斑共享——dead path 且每帧重组开销大
 
+    // v1.9.4 卡片透光磨砂：record 本页「流光背景层」并 provide——本页全部玻璃卡片
+    // （设置行/开关行/顶栏胶囊等 GlassSurface/liquidGlass）内部自动消费，垫卡片级
+    // 真实高斯模糊（API 31+；未接入或低版本自动回退现状半透明，无设置开关）
+    val glassBackdrop = rememberGlassBackdrop()
+
     // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
+    CompositionLocalProvider(LocalGlassBackdrop provides glassBackdrop) {
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        GlowBackground()
+        // v1.9.4 流光背景（AGSL 流体 shader；LocalFluidBackground=false 时不绘制露出底色）。
+        // v1.9.4 卡片透光磨砂：背景独立 record 进背景层，卡片磨砂取样后模糊区域背后
+        // 始终有流光可磨（此前背景画在 Scaffold 之外，直接取样会漏掉它）
+        Box(Modifier.fillMaxSize().glassBackdropBackground(glassBackdrop)) {
+            FluidBackground()
+        }
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -175,7 +193,9 @@ fun SettingsScreen(
         },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxWidth(),
+            // v1.9.4 卡片透光磨砂：滚动内容 record 进内容层（供未来悬浮面全量磨砂取样；
+            // 卡片级磨砂只取背景层，滚动内容无需参与，挂此保持与 Chat 页同构）
+            modifier = Modifier.padding(padding).fillMaxWidth().glassBackdropContent(glassBackdrop),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
         ) {
             item { SettingsSectionHeader("模型服务") }
@@ -322,6 +342,38 @@ fun SettingsScreen(
             item {
                 ThemePicker(current = themeMode, onSelect = vm::setTheme, modifier = Modifier.padding(horizontal = 16.dp))
             }
+            item {
+                // v1.9.4 流光背景开关行（照「自动记忆」行模板：玻璃行 + Switch，默认开；
+                // Android 13 以下组件层自动降级为简化光斑，开关语义不变）
+                GlassSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("流光背景", style = GtjType.Body, color = p.fg)
+                            Text("流动渐变背景；Android 13 以下显示简化光斑", style = GtjType.Caption, color = p.muted)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = fluidBackground,
+                            onCheckedChange = vm::setFluidBackgroundEnabled,
+                            // 无障碍：Switch 显式关联 label
+                            modifier = Modifier.semantics { contentDescription = "流光背景" },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = p.accentOn,
+                                checkedTrackColor = p.accent,
+                                uncheckedTrackColor = p.borderSoft,
+                            ),
+                        )
+                    }
+                }
+            }
             item { ThickDivider() }
             item { SettingsSectionHeader("隐私与安全") }
             item {
@@ -437,7 +489,8 @@ fun SettingsScreen(
             }
         }
     }
-    } // Box（GlowBackground + Scaffold）
+    } // Box（FluidBackground + Scaffold）
+    } // CompositionLocalProvider（LocalGlassBackdrop）
 
     pickerTarget?.let { target ->
         val list = if (target == PickerTarget.VISION) models.filter { it.supportsVision } else models

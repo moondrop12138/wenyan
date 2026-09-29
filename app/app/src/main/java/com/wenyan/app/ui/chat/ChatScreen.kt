@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -49,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -90,8 +92,15 @@ import com.wenyan.app.ui.components.TranscriptionCard
 import com.wenyan.app.ui.components.TypingIndicator
 import com.wenyan.app.ui.components.resolveWaitingLabel
 import com.wenyan.app.ui.components.glass.GlassSurface
-import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.GlassBackdropLayer
+import com.wenyan.app.ui.components.glass.FluidBackground
+import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
+import com.wenyan.app.ui.components.glass.glassBackdropBackground
+import com.wenyan.app.ui.components.glass.glassBackdropContent
+import com.wenyan.app.ui.components.glass.glassBackdropLayer
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
+import com.wenyan.app.ui.components.glass.rememberGlassBackdropLayer
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.MessageType
@@ -214,6 +223,17 @@ fun ChatScreen(
     val currentId by container.settingsRepository.currentModelId.collectAsState(initial = null)
     val p = LocalGtjColors.current
 
+    // v1.9.4 根因④：真实背景模糊（backdrop blur）。API < 31 返回 null → 全部玻璃面回退现状静态玻璃。
+    // 悬浮栏：顶栏/输入栏经 glassBackdropLayer 显式接入全量磨砂（取样「背景+内容」层，
+    // 消息从栏下穿过被磨砂）；
+    // 卡片（v1.9.4 新增）：经 LocalGlassBackdrop provide 分发——本页全部 GlassSurface/
+    // liquidGlass（消息气泡、危机卡、错误卡、等待气泡、转录卡、模型 pill、抽屉卡片）内部
+    // 自动消费，垫卡片级透光磨砂（取样纯流光背景层，防自反馈）；弹窗层（DropdownMenu/
+    // AlertDialog/ModelSheet）不包进 provide——其自带 scrim 实底遮罩，磨砂不可见也无必要。
+    val glassBackdrop = rememberGlassBackdrop()
+    val topBarBackdropLayer = rememberGlassBackdropLayer(glassBackdrop)
+    val inputBarBackdropLayer = rememberGlassBackdropLayer(glassBackdrop)
+
     fun copy(text: String) {
         clipboard.setText(AnnotatedString(text))
         Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
@@ -265,6 +285,8 @@ fun ChatScreen(
             null
         }
     }
+    // v1.9.4 卡片透光磨砂分发：provide 范围 = 主 UI 树（含抽屉，抽屉玻璃卡随之透光）
+    CompositionLocalProvider(LocalGlassBackdrop provides glassBackdrop) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -303,13 +325,21 @@ fun ChatScreen(
                 renderEffect = contentBlur
             },
     ) {
-        GlowBackground()
+        // v1.9.4 流光背景（AGSL 流体 shader；LocalFluidBackground=false 时不绘制露出底色）。
+        // v1.9.4 卡片透光磨砂：背景独立 record 进背景层——修复"glassBackdropContent 挂在
+        // Scaffold 内容上、FluidBackground 画在 Scaffold 之外"导致的取样缺口（模糊区域背后
+        // 没有消息时无内容可磨）；glassBackdropContent 会把本层合进内容层头部（悬浮栏全量
+        // 磨砂同步获得背景成分），卡片磨砂直接取样本层（纯背景，无卡片自反馈）
+        Box(Modifier.fillMaxSize().glassBackdropBackground(glassBackdrop)) {
+            FluidBackground()
+        }
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
             ChatTopBar(
                 modelName = modelName,
                 dotState = dotState,
+                backdropLayer = topBarBackdropLayer,
                 onModelClick = { showModelSheet = true },
                 onSettings = onOpenSettings,
                 onMenu = { scope.launch { drawerState.open() } },
@@ -328,14 +358,18 @@ fun ChatScreen(
                 onPendingImagesPicked = vm::addPendingImages,
                 onRemovePendingImage = vm::removePendingImage,
                 inputFocusRequester = inputFocusRequester,
+                backdropLayer = inputBarBackdropLayer,
             )
         },
     ) { padding ->
         // v1.6.1 选择模式激活时，点列表任意空白处退出（tap 与长按拖选手势不冲突）
+        // v1.9.4 Mica：内容区不再用 Scaffold padding 避开悬浮栏（那会挡住玻璃取样），
+        // 改为铺满全屏 + glassBackdropContent record 进内容层；列表用 contentPadding
+        // 让消息从顶栏/输入栏玻璃下穿过被磨砂（对齐桌面 mica 的 chat-scroll padding）
         Box(
             Modifier
-                .padding(padding)
                 .fillMaxSize()
+                .glassBackdropContent(glassBackdrop)
                 .pointerInput(textSelectForId) {
                     if (textSelectForId != null) {
                         detectTapGestures(onTap = { textSelectForId = null })
@@ -350,13 +384,29 @@ fun ChatScreen(
                         onInputChange(text)
                         inputFocusRequester.requestFocus()
                     },
+                    // v1.9.4 评审修复：小屏保底避开顶栏（calculateTopPadding 含状态栏，保底
+                    // 略偏保守——标题只会更低不会钻进玻璃）；+8dp 对齐列表顶部穿透余量
+                    minTopPadding = padding.calculateTopPadding() + 8.dp,
+                    // v1.9.4 IME 定位修复：只避让状态栏/导航栏，不再吃 Scaffold bottom padding
+                    //（其含输入栏抬升的 IME 高度——键盘一弹容器被压短，12% 顶部留白跟着收缩，
+                    // 标题随键盘动画逐帧上跳）。容器高度现在与 IME 无关，弹出/收起标题纹丝不动，
+                    // 12% 与 minTopPadding 在同一恒定基数上比较，小屏保底语义不变；
+                    // 索引列表越过输入栏的部分照常从栏下穿过被 Mica 磨砂（与消息列表同语义）
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.navigationBars),
                 )
             } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
+                    // v1.9.4 Mica：顶/底留出悬浮栏高（Scaffold 仍计算栏高）+ 穿透余量，
+                    // 滚动时消息进入 padding 区被栏下玻璃磨砂；栏高随输入栏多行/insets 自适应
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp,
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = padding.calculateTopPadding() + 8.dp,
+                        bottom = padding.calculateBottomPadding() + 24.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -467,7 +517,14 @@ fun ChatScreen(
                         layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 1
                     }
                 }
-                LaunchedEffect(messages.size, streaming, transcription, isAtBottom) {
+                // v1.9.4 评审修复（键盘弹出滚动跟随）：M3 Scaffold body 恒以全屏测量，键盘弹出
+                // 只使 bottomBar（ChatInputBar 的 safeDrawing-bottom）长高 → 上述 contentPadding
+                // bottom 联动增大，LazyColumn viewport 高度与滚动 offset 均不变——最后一条消息
+                // 屏幕位置不动，被抬升的输入栏+键盘区域盖住（多行输入使栏长高同理）。把
+                // calculateBottomPadding 计入触发 key：栏高变化时若仍位于底部且未在拖动，
+                // 重滚到底让最新消息回到输入栏上方；手动上滑（isAtBottom=false）不受打扰。
+                val bottomBarPadding = padding.calculateBottomPadding()
+                LaunchedEffect(messages.size, streaming, transcription, isAtBottom, bottomBarPadding) {
                     val count = listState.layoutInfo.totalItemsCount
                     if (count > 0 && isAtBottom && !listState.isScrollInProgress) {
                         listState.scrollToItem(count - 1)
@@ -476,8 +533,9 @@ fun ChatScreen(
             }
         }
     }
-    } // Box（GlowBackground + Scaffold）
+    } // Box（FluidBackground + Scaffold）
     } // ModalNavigationDrawer
+    } // CompositionLocalProvider（LocalGlassBackdrop）
 
     // 长按消息操作菜单：文本类可复制/删除，图片仅删除。
     // v1.2.1：offset 跟随长按触点（窗口坐标），菜单出现在手指处而非固定左下角。
@@ -620,6 +678,7 @@ enum class DotState { Idle, Connecting, Thinking, Failure }
 private fun ChatTopBar(
     modelName: String,
     dotState: DotState,
+    backdropLayer: GlassBackdropLayer?,
     onModelClick: () -> Unit,
     onSettings: () -> Unit,
     onMenu: () -> Unit,
@@ -665,8 +724,13 @@ private fun ChatTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
+                // v1.9.4 根因④：真实背景模糊（Mica 磨砂）垫在玻璃填充之下——
+                // glassBackdropLayer 必须在 liquidGlass 之前（链上靠前的 drawBehind 先画）；
+                // backdrop=false：本面已显式全量磨砂（背景+消息穿透），liquidGlass 内部的
+                // 卡片级磨砂不再叠加，防止盖掉消息穿透成分（v1.9.4 卡片透光磨砂配套）
+                .glassBackdropLayer(backdropLayer, GtjShape.inputBar)
                 // v1.8.0 液态玻璃 2.0：边缘透镜（v1.8.1 B4 移除光斑 dead path）
-                .liquidGlass(shape = GtjShape.inputBar)
+                .liquidGlass(shape = GtjShape.inputBar, backdrop = false)
                 .clip(GtjShape.inputBar),
         ) {
         Row(
@@ -687,10 +751,13 @@ private fun ChatTopBar(
                 modifier = Modifier.padding(start = 2.dp),
             )
             Spacer(Modifier.weight(1f))
-            // 模型 pill：玻璃胶囊（radius 99 / maxWidth 158 / 内 padding 5,11），内含微型玻璃状态点
+            // 模型 pill：玻璃胶囊（radius 99 / maxWidth 158 / 内 padding 5,11），内含微型玻璃状态点。
+            // v1.9.4：backdrop=false——pill/状态点是顶栏磨砂面上的内部小件，取样原始背景
+            // 会与顶栏已磨砂观感割裂，维持顶栏一体的半透明玻璃
             GlassSurface(
                 onClick = onModelClick,
                 shape = GtjShape.pill,
+                backdrop = false,
                 modifier = Modifier.widthIn(max = 158.dp),
             ) {
                 Row(
@@ -700,7 +767,7 @@ private fun ChatTopBar(
                     // 微型玻璃状态点：11dp 玻璃壳（同款 glass 材质）+ 5dp 状态色内芯（呼吸）
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(11.dp).liquidGlass(shape = CircleShape),
+                        modifier = Modifier.size(11.dp).liquidGlass(shape = CircleShape, backdrop = false),
                     ) {
                         Box(
                             modifier = Modifier

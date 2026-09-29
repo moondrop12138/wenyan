@@ -5,12 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -39,6 +41,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -53,8 +56,12 @@ import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.components.SecondaryButton
-import com.wenyan.app.ui.components.glass.GlowBackground
+import com.wenyan.app.ui.components.glass.FluidBackground
+import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
+import com.wenyan.app.ui.components.glass.glassBackdropBackground
+import com.wenyan.app.ui.components.glass.glassBackdropContent
 import com.wenyan.app.ui.components.glass.liquidGlass
+import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.navigation.rememberViewModel
@@ -79,9 +86,19 @@ fun ProviderEditScreen(
 
     // v1.8.1 B4：移除 glowState 光斑共享——dead path 且每帧重组开销大
 
+    // v1.9.4 卡片透光磨砂：record 本页「流光背景层」并 provide——顶栏胶囊（liquidGlass）
+    // 及未来玻璃卡片自动获得透光磨砂（API 31+；低版本自动回退现状半透明，无设置开关）
+    val glassBackdrop = rememberGlassBackdrop()
+
     // v1.7.1：根 Box 加主题背景（防系统深色下 windowBackground 透出导致浅色模式变暗底）
+    CompositionLocalProvider(LocalGlassBackdrop provides glassBackdrop) {
     Box(Modifier.fillMaxSize().background(p.bg)) {
-        GlowBackground()
+        // v1.9.4 流光背景（AGSL 流体 shader；LocalFluidBackground=false 时不绘制露出底色）。
+        // v1.9.4 卡片透光磨砂：背景独立 record 进背景层，卡片磨砂取样后模糊区域背后
+        // 始终有流光可磨（此前背景画在 Scaffold 之外，直接取样会漏掉它）
+        Box(Modifier.fillMaxSize().glassBackdropBackground(glassBackdrop)) {
+            FluidBackground()
+        }
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -111,7 +128,17 @@ fun ProviderEditScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxWidth().verticalScroll(rememberScrollState()),
+            // v1.9.4 IME 定位修复：Manifest 已全局 adjustResize（窗口不再 pan 让聚焦框
+            // 避开键盘），本页须自行消费 IME insets——imePadding 把滚动区压到键盘上沿，
+            // API Key 等聚焦输入框经 BringIntoView 滚入可视区，不再被键盘盖住；键盘收起
+            // 时为 0，无副作用
+            // v1.9.4 评审修复（insets 双算）：padding(PaddingValues) 不进入 insets 消费链，
+            // 须显式 consumeWindowInsets(padding) 把 Scaffold 已垫的导航栏高度标记为已消费，
+            // imePadding 才按 max(导航栏, IME) 语义取剩余量——否则键盘弹出时底部空隙 =
+            // 导航栏 + IME，比键盘上沿多让出一条导航栏高度（与 ChatInputBar 同一 max 语义）
+            // v1.9.4 卡片透光磨砂：内容 record 进内容层（与 Chat/Settings 页同构）
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxWidth().verticalScroll(rememberScrollState())
+                .glassBackdropContent(glassBackdrop),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -214,7 +241,8 @@ fun ProviderEditScreen(
             Spacer(Modifier.height(16.dp))
         }
     }
-    } // Box（GlowBackground + Scaffold）
+    } // Box（FluidBackground + Scaffold）
+    } // CompositionLocalProvider（LocalGlassBackdrop）
 
     if (vm.showDeleteDialog) {
         AlertDialog(

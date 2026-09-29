@@ -23,9 +23,15 @@ interface SettingsRepository {
     val visionModelId: Flow<Long?>
     val themeMode: Flow<String>
 
+    /** v1.9.4 流光背景开关（默认开；关闭后 FluidBackground 不绘制，露出主题底色） */
+    val fluidBackgroundEnabled: Flow<Boolean>
+
     suspend fun setCurrentModel(id: Long)
     suspend fun setVisionModel(id: Long)
     suspend fun setThemeMode(mode: String)
+
+    /** v1.9.4 流光背景开关 */
+    suspend fun setFluidBackgroundEnabled(enabled: Boolean)
 
     /** 测试连接：成功返回 null，失败返回归一错误 */
     suspend fun testConnection(providerId: Long): LlmError?

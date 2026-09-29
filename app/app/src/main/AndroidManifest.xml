@@ -18,9 +18,18 @@
         android:theme="@style/Theme.Wenyan">
 
         <!-- MainActivity 由前端成员负责实现与配置 -->
+        <!-- v1.9.4 IME 定位修复：必须显式 adjustResize。未声明时默认 adjustUnspecified，
+             IME 弹出时系统对聚焦输入框走 adjustPan——把整个窗口内容向上 pan 出键盘高度
+             （模拟器 API 35 实测整窗上移 738px），与 Compose 侧 insets 抬升输入栏叠加成
+             双重位移：顶栏被 pan 出屏幕、空态标题顶到状态栏、输入栏悬空在键盘上方一大截。
+             edge-to-edge（decorFitsSystemWindows=false）+ adjustResize 是官方配方：
+             窗口不再 pan，IME 以 WindowInsets.ime 下发，由各输入页自行消费
+             （聊天页 ChatInputBar 的 safeDrawing-bottom / 其余输入页 imePadding）；
+             API 30- 走窗口物理 resize 时 ime inset≈0，同一链路同样收敛到键盘上沿。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Wenyan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -63,6 +63,9 @@ class RealSettingsRepository(
 
     override val themeMode: Flow<String> = dataStore.theme
 
+    /** v1.9.4 流光背景开关（DataStore 直通，默认 true 兜底在 DataStore 层） */
+    override val fluidBackgroundEnabled: Flow<Boolean> = dataStore.fluidBackgroundEnabled
+
     override val privacyAck: Flow<Boolean> = dataStore.privacyAck
 
     // ===== v1.7.2 记忆档案 =====
@@ -296,6 +299,10 @@ class RealSettingsRepository(
     override suspend fun setThemeMode(mode: String) {
         dataStore.setTheme(mode)
     }
+
+    /** v1.9.4 流光背景开关 */
+    override suspend fun setFluidBackgroundEnabled(enabled: Boolean) =
+        dataStore.setFluidBackgroundEnabled(enabled)
 
     override suspend fun setPrivacyAck(ack: Boolean) {
         dataStore.setPrivacyAck(ack)

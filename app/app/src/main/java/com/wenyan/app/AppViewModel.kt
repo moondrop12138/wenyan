@@ -10,13 +10,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * 顶层状态（主题三态 + 首启问卷完成态）。
+ * 顶层状态（主题三态 + 首启问卷完成态 + 流光背景开关 v1.9.4）。
  * 只做状态装配与路由决策，零业务；Repository 由 AppContainer 注入。
  */
 class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    /** v1.9.4 流光背景总开关（默认 true；DataStore 加载后随设置页开关实时更新） */
+    private val _fluidBackground = MutableStateFlow(true)
+    val fluidBackground: StateFlow<Boolean> = _fluidBackground.asStateFlow()
 
     private val _onboardingCompleted = MutableStateFlow(false)
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
@@ -32,10 +36,20 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
+            container.settingsRepository.fluidBackgroundEnabled.collect { enabled ->
+                _fluidBackground.value = enabled
+            }
+        }
+        viewModelScope.launch {
             container.onboardingRepository.onboardingCompleted.collect { done ->
                 _onboardingCompleted.value = done
                 _onboardingLoaded.value = true
             }
         }
+    }
+
+    /** v1.9.4 流光背景开关（照 setThemeMode 模式：只写 DataStore，StateFlow 由 init collect 回推） */
+    fun setFluidBackground(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setFluidBackgroundEnabled(enabled) }
     }
 }

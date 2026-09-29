@@ -203,6 +203,7 @@ class ProviderEditViewModelTest {
         override val targets = MutableStateFlow<List<com.wenyan.app.ui.contract.TargetUi>>(emptyList())
         override val activeTargetId = MutableStateFlow<Long?>(null)
         override val memoryAutoEnabled = MutableStateFlow(true)
+        override val fluidBackgroundEnabled = MutableStateFlow(true)
 
         val addedModels = mutableListOf<Triple<Long, String, Boolean>>()
         var privacyAckValue = false
@@ -254,6 +255,7 @@ class ProviderEditViewModelTest {
         override suspend fun deleteTarget(id: Long) = Unit
         override suspend fun setActiveTarget(id: Long) = Unit
         override suspend fun setMemoryAutoEnabled(enabled: Boolean) = Unit
+        override suspend fun setFluidBackgroundEnabled(enabled: Boolean) = Unit
         override suspend fun ensureMigrated(targetId: Long) = Unit
         // v1.7.3 事实/详情/导出/更新（本测试不使用，空实现）
         override fun observeFacts(targetId: Long): Flow<List<com.wenyan.app.ui.contract.MemoryFactUi>> =

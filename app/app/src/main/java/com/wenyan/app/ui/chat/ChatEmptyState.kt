@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isFinite
 import androidx.compose.ui.unit.sp
@@ -46,18 +47,26 @@ private val EMPTY_INDEX = listOf(
 fun ChatEmptyState(
     onExampleClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    // v1.9.4 评审修复：小屏/横屏下 12% 留白可能小于顶栏高，标题会钻进顶栏玻璃之下被磨砂
+    // 压住（桌面 mica 稿用固定 padding-top 避开，styles.css:552）——调用方传 Scaffold 顶栏
+    // 高度（padding.calculateTopPadding()）作保底；常规屏 12% 大于该值，版式不变。
+    minTopPadding: Dp = 0.dp,
 ) {
     val p = LocalGtjColors.current
     // v1.9.0-2（2026-08-12）：排版协调 v2（对齐 HTML 稿 empty-state-balance 右版）。
     // 首版用 Column(horizontalAlignment=CenterHorizontally) + fillMaxWidth().widthIn() 实机未居中（仍贴左），
     // 改 Box(contentAlignment = TopCenter) 显式置中 + 版心列不强制填满（内容固有宽）——水平居中无歧义；
-    // 垂直：顶部留白 = 可用高度 12%（刊头感），maxHeight 无限时兜底 96dp。
+    // 垂直：顶部留白 = 可用高度 12%（刊头感），maxHeight 无限时兜底 96dp；两者均不低于 [minTopPadding]。
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxSize(),
     ) {
-        val topPad = if (maxHeight.isFinite) maxHeight * 0.12f else 96.dp
+        val topPad = if (maxHeight.isFinite) {
+            (maxHeight * 0.12f).coerceAtLeast(minTopPadding)
+        } else {
+            96.dp.coerceAtLeast(minTopPadding)
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()

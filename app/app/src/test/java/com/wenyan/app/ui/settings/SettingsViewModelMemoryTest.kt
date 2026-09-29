@@ -162,6 +162,7 @@ private class FakeSettingsRepository : SettingsRepository {
     val targetsFlow = MutableStateFlow<List<TargetUi>>(emptyList())
     val activeFlow = MutableStateFlow<Long?>(null)
     val memoryAutoFlow = MutableStateFlow(true)
+    val fluidBackgroundFlow = MutableStateFlow(true)
     val created = mutableListOf<String>()
     val updated = mutableListOf<Triple<Long, String, String>>()
     val deleted = mutableListOf<Long>()
@@ -176,6 +177,7 @@ private class FakeSettingsRepository : SettingsRepository {
     override val targets: Flow<List<TargetUi>> = targetsFlow
     override val activeTargetId: Flow<Long?> = activeFlow
     override val memoryAutoEnabled: Flow<Boolean> = memoryAutoFlow
+    override val fluidBackgroundEnabled: Flow<Boolean> = fluidBackgroundFlow
 
     override suspend fun createTarget(name: String): Long {
         created.add(name)
@@ -213,6 +215,10 @@ private class FakeSettingsRepository : SettingsRepository {
 
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) {
         memoryAutoFlow.value = enabled
+    }
+
+    override suspend fun setFluidBackgroundEnabled(enabled: Boolean) {
+        fluidBackgroundFlow.value = enabled
     }
 
     override fun observeFacts(targetId: Long): Flow<List<com.wenyan.app.ui.contract.MemoryFactUi>> =

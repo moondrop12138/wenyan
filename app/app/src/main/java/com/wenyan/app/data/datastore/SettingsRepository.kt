@@ -35,6 +35,8 @@ class SettingsRepository(private val context: Context) {
         val MEMORY_WRITE_LOG = stringPreferencesKey("memory_write_log")
         /** v1.9.4 上次打开的会话 id（隔夜冷启动恢复上次对话；不存在 = 无） */
         val CURRENT_SESSION_ID = longPreferencesKey("current_session_id")
+        /** v1.9.4 流光背景开关（默认开；关闭后 FluidBackground 不绘制，露出主题底色） */
+        val FLUID_BACKGROUND_ENABLED = booleanPreferencesKey("fluid_background_enabled")
     }
 
     val currentModelId: Flow<Long?> =
@@ -59,6 +61,10 @@ class SettingsRepository(private val context: Context) {
     /** v1.7.2 自动记忆开关（默认 true） */
     val memoryAutoEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[Keys.MEMORY_AUTO_ENABLED] ?: true }
+
+    /** v1.9.4 流光背景开关（默认 true） */
+    val fluidBackgroundEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[Keys.FLUID_BACKGROUND_ENABLED] ?: true }
 
     suspend fun setCurrentModelId(id: Long?) {
         context.settingsDataStore.edit { prefs ->
@@ -94,6 +100,11 @@ class SettingsRepository(private val context: Context) {
     /** v1.7.2 自动记忆开关 */
     suspend fun setMemoryAutoEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.MEMORY_AUTO_ENABLED] = enabled }
+    }
+
+    /** v1.9.4 流光背景开关 */
+    suspend fun setFluidBackgroundEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.FLUID_BACKGROUND_ENABLED] = enabled }
     }
 
     // ===== v1.9.4 当前会话 id 持久化（隔夜冷启动恢复上次对话） =====
