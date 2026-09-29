@@ -3,6 +3,7 @@ package com.wenyan.app.data.datastore
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -15,6 +16,8 @@ import kotlinx.coroutines.flow.map
  * current_model_id / vision_model_id / theme / onboarding_completed / privacy_ack
  * v1.7.2 新增：active_target_id（激活记忆档案）/ memory_auto_enabled（自动记忆开关，默认开）
  * v1.9.0 新增：memory_write_log（最近自动写入日志，供撤销最近一次；JSON 数组，最多 5 条）
+ * v1.9.4 新增：current_session_id（冷启动恢复）/ fluid_background_enabled（流光背景开关）
+ * v1.9.4 三改新增：fluid_hue（流光色相 0-360，默认 0）/ bg_brightness（背景亮度 0-100，默认 50）
  * clearAll() 一键清全部 key（含新 key），隐私清除自动覆盖
  */
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
@@ -37,6 +40,10 @@ class SettingsRepository(private val context: Context) {
         val CURRENT_SESSION_ID = longPreferencesKey("current_session_id")
         /** v1.9.4 流光背景开关（默认开；关闭后 FluidBackground 不绘制，露出主题底色） */
         val FLUID_BACKGROUND_ENABLED = booleanPreferencesKey("fluid_background_enabled")
+        /** v1.9.4 三改 流光色相（0-360 度，默认 0 = 主题原色；旋转 fluidA/B/C 三基色） */
+        val FLUID_HUE = intPreferencesKey("fluid_hue")
+        /** v1.9.4 三改 背景亮度（0-100，默认 50 = 不叠 veil，观感与不可调版本完全一致） */
+        val BG_BRIGHTNESS = intPreferencesKey("bg_brightness")
     }
 
     val currentModelId: Flow<Long?> =
@@ -65,6 +72,17 @@ class SettingsRepository(private val context: Context) {
     /** v1.9.4 流光背景开关（默认 true） */
     val fluidBackgroundEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[Keys.FLUID_BACKGROUND_ENABLED] ?: true }
+
+    /**
+     * v1.9.4 三改 流光色相（度，默认 0；越界值在读取与写入两侧都夹到 0..360：
+     * 读到脏数据（旧版本写入 / 手工改 prefs）也不会把 UI 滑条顶出范围）
+     */
+    val fluidHue: Flow<Int> =
+        context.settingsDataStore.data.map { (it[Keys.FLUID_HUE] ?: 0).coerceIn(0, 360) }
+
+    /** v1.9.4 三改 背景亮度（0-100，默认 50 = 中点 = 不叠 veil；同样双向夹取） */
+    val bgBrightness: Flow<Int> =
+        context.settingsDataStore.data.map { (it[Keys.BG_BRIGHTNESS] ?: 50).coerceIn(0, 100) }
 
     suspend fun setCurrentModelId(id: Long?) {
         context.settingsDataStore.edit { prefs ->
@@ -105,6 +123,16 @@ class SettingsRepository(private val context: Context) {
     /** v1.9.4 流光背景开关 */
     suspend fun setFluidBackgroundEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.FLUID_BACKGROUND_ENABLED] = enabled }
+    }
+
+    /** v1.9.4 三改 流光色相（度）：写前夹到 0..360（UI 滑条已受限，此处兜底防越界值落盘） */
+    suspend fun setFluidHue(degrees: Int) {
+        context.settingsDataStore.edit { it[Keys.FLUID_HUE] = degrees.coerceIn(0, 360) }
+    }
+
+    /** v1.9.4 三改 背景亮度（0-100，50 = 中点）：写前夹取 */
+    suspend fun setBgBrightness(value: Int) {
+        context.settingsDataStore.edit { it[Keys.BG_BRIGHTNESS] = value.coerceIn(0, 100) }
     }
 
     // ===== v1.9.4 当前会话 id 持久化（隔夜冷启动恢复上次对话） =====

@@ -2,7 +2,10 @@ package com.wenyan.app.ui.contract
 
 import com.wenyan.app.data.update.UpdateCheckResult
 import com.wenyan.app.data.update.UpdateInfo
+import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
+import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /** O6: 设置页「用量/诊断」面板展示的快照 */
 data class UsageMetricsUi(
@@ -26,12 +29,27 @@ interface SettingsRepository {
     /** v1.9.4 流光背景开关（默认开；关闭后 FluidBackground 不绘制，露出主题底色） */
     val fluidBackgroundEnabled: Flow<Boolean>
 
+    /**
+     * v1.9.4 三改 流光色相（0-360 度，默认 0 = 主题原色）与背景亮度（0-100，默认 50 = 不叠 veil）。
+     * 两者带**默认实现**（default 即「保持原观感」）：androidTest 的 FakeSettingsRepository 与
+     * 各单元测试 Fake 不在本轨道改动范围内，默认实现让它们零改动继续编译；生产实现见
+     * RealSettingsRepository（DataStore 直通，默认值兜底在 DataStore 层）。
+     */
+    val fluidHue: Flow<Int> get() = flowOf(FLUID_HUE_DEFAULT)
+    val bgBrightness: Flow<Int> get() = flowOf(BG_BRIGHTNESS_DEFAULT)
+
     suspend fun setCurrentModel(id: Long)
     suspend fun setVisionModel(id: Long)
     suspend fun setThemeMode(mode: String)
 
     /** v1.9.4 流光背景开关 */
     suspend fun setFluidBackgroundEnabled(enabled: Boolean)
+
+    /** v1.9.4 三改 流光色相（写入前夹到 0..360） */
+    suspend fun setFluidHue(degrees: Int) = Unit
+
+    /** v1.9.4 三改 背景亮度（写入前夹到 0..100） */
+    suspend fun setBgBrightness(value: Int) = Unit
 
     /** 测试连接：成功返回 null，失败返回归一错误 */
     suspend fun testConnection(providerId: Long): LlmError?

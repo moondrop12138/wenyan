@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import com.wenyan.app.data.update.UpdateInfo
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.ModelSheet
+import com.wenyan.app.ui.components.SliderField
 import com.wenyan.app.ui.components.Tag
 import com.wenyan.app.ui.components.TagKind
 import com.wenyan.app.ui.components.ThickDivider
@@ -80,9 +81,19 @@ import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.TargetUi
 import com.wenyan.app.ui.navigation.rememberViewModel
+import com.wenyan.app.ui.theme.BG_BRIGHTNESS_MAX
+import com.wenyan.app.ui.theme.BG_BRIGHTNESS_MIN
+import com.wenyan.app.ui.theme.FLUID_HUE_MAX
+import com.wenyan.app.ui.theme.FLUID_HUE_MIN
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
+
+/** v1.9.4 三改 色相滑条步进（5° = 73 个落点，宽度足够时手感连续，且避免 1° 级的无意义抖动） */
+private const val FLUID_HUE_STEP = 5
+
+/** v1.9.4 三改 亮度滑条步进（1% = 101 个落点，veil alpha 随之为 0.02 级，肉眼平滑） */
+private const val BG_BRIGHTNESS_STEP = 1
 
 private enum class PickerTarget { MAIN, VISION }
 
@@ -114,6 +125,9 @@ fun SettingsScreen(
     val memoryAutoEnabled by vm.memoryAutoEnabled.collectAsState()
     // v1.9.4 流光背景开关状态
     val fluidBackground by vm.fluidBackgroundEnabled.collectAsState()
+    // v1.9.4 三改 流光可调：色相 / 背景亮度（滑条当前值 = 落盘值的实时回流）
+    val fluidHue by vm.fluidHue.collectAsState()
+    val bgBrightness by vm.bgBrightness.collectAsState()
     val toastMessage by vm.toastMessage.collectAsState()
     val showNameDialog by vm.showNameDialog.collectAsState()
     val editTarget by vm.editTarget.collectAsState()
@@ -370,6 +384,37 @@ fun SettingsScreen(
                                 checkedTrackColor = p.accent,
                                 uncheckedTrackColor = p.borderSoft,
                             ),
+                        )
+                    }
+                }
+            }
+            item {
+                // v1.9.4 三改 流光可调（流光开关正下方的玻璃卡，两个滑条）：
+                // 色相 0-360°（W3C hue-rotate 矩阵旋转 fluidA/B/C，= 桌面 filter: hue-rotate 同算子；
+                // 保 luma，滑条全量程卡片正文对比度不跌破 AA）、背景亮度 0-100（50 = 中点 = 不叠 veil，
+                // 与桌面 app.js --wy-brightness-white/black 同语义）。范围/默认值唯一来源
+                // design-tokens.json component.fluidAppearance（Compose 侧常量在 ui/theme/Color.kt）。
+                // 拖拽中滑条本地零延迟，落盘按 SettingsViewModel 的 60ms 合并写，背景随回流实时变化
+                GlassSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        SliderField(
+                            value = fluidHue,
+                            range = FLUID_HUE_MIN..FLUID_HUE_MAX,
+                            label = "流光色相（°）",
+                            onValueChange = vm::setFluidHue,
+                            step = FLUID_HUE_STEP,
+                        )
+                        SliderField(
+                            value = bgBrightness,
+                            range = BG_BRIGHTNESS_MIN..BG_BRIGHTNESS_MAX,
+                            label = "背景亮度（%）",
+                            onValueChange = vm::setBgBrightness,
+                            step = BG_BRIGHTNESS_STEP,
                         )
                     }
                 }

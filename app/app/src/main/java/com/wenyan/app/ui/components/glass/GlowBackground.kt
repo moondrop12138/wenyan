@@ -13,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.wenyan.app.ui.theme.LocalBgBrightness
+import com.wenyan.app.ui.theme.LocalFluidHue
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.LocalGtjIsDark
 import com.wenyan.app.ui.theme.rememberReducedMotion
 import kotlin.math.PI
 import kotlin.math.sin
@@ -48,6 +51,11 @@ private val GLOWS = listOf(
  *
  * v1.8.1 B4：移除 onGlowPositionsChanged/GlowState——该链路为 dead path
  * （liquidGlass 接收光斑参数后从未使用），且每帧写 state 导致 60fps 全屏重组。
+ *
+ * v1.9.4 三改：[FluidBackground] 的降级路径（API < 33 / AGSL 编译失败），故必须与主路径
+ * 消费同一套可调设置，否则「流光色相/背景亮度」在旧机型上静默失效：
+ * - 色相：光斑三色同走 [hueRotated]（与 fluidA/B/C 同一旋转语义）；
+ * - 亮度：绘制末尾叠一层 [brightnessVeil] 矩形（与 shader 的 uVeil 同语义，默认 50 = 不画）。
  */
 @Composable
 fun GlowBackground(
@@ -55,6 +63,20 @@ fun GlowBackground(
 ) {
     val p = LocalGtjColors.current
     val reduced = rememberReducedMotion()
+    // v1.9.4 三改：与 FluidBackground 同一套可调设置（降级路径同样响应）
+    val hueDegrees = LocalFluidHue.current
+    val bgBrightness = LocalBgBrightness.current
+    val isDark = LocalGtjIsDark.current
+    // 光斑三色（色相旋转后）与亮度 veil 均在重组级算好：原先 colors 在 draw lambda 内每帧
+    // listOf(...) 新建列表（每帧一次分配），随本次接入一并移出帧循环
+    val colors = remember(p.glowA, p.glowB, p.glowC, hueDegrees) {
+        listOf(
+            hueRotated(p.glowA, hueDegrees.toFloat()),
+            hueRotated(p.glowB, hueDegrees.toFloat()),
+            hueRotated(p.glowC, hueDegrees.toFloat()),
+        )
+    }
+    val veil = remember(bgBrightness, isDark) { brightnessVeil(bgBrightness, isDark) }
     var frameNanos by remember { mutableLongStateOf(0L) }
 
     if (!reduced) {
@@ -69,7 +91,6 @@ fun GlowBackground(
         val w = size.width
         val h = size.height
         val t = frameNanos / 1e9f
-        val colors = listOf(p.glowA, p.glowB, p.glowC)
 
         GLOWS.forEachIndexed { i, g ->
             val speed = t / g.period * 2f * PI.toFloat()
@@ -95,5 +116,9 @@ fun GlowBackground(
                 center = Offset(cx, cy),
             )
         }
+
+        // v1.9.4 三改 背景亮度：与 FluidBackground 的 uVeil 同语义（半透明色叠全屏）。
+        // 默认 50 → Transparent，直接跳过，零额外绘制
+        if (veil.alpha > 0f) drawRect(color = veil)
     }
 }

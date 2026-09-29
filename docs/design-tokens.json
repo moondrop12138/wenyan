@@ -9,7 +9,7 @@
       "motion": 4,
       "density": 3
     },
-    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。v1.6.1 配色与启动图标（陶土棕气泡×米白底）对齐：墨绿×宣纸 → 陶土棕×暖米白。v1.6.3 沉浸式手势小白条：系统状态栏/导航栏全透明露出 color.light.bg / color.dark.bg，手势条颜色由 Android 15 系统按背景亮度自动对比（浅底深灰条/深底浅条），无需新 Token。v1.9.4 新增 color.light/dark.fluid.a/b/c：流光背景（AGSL FluidBackground）三基色，与桌面 aqua-fluid.js paletteForTheme 完全一致。v1.9.4 新增 color.light/dark.glass.hairlineOuter/hairlineInner/specular/innerShade/grainLight/grainDark：玻璃材质升级（双发丝描边/方向性 specular/底部内阴影/磨砂颗粒）；component.glass 与 component.glassBackdrop 为玻璃质感数值参数（磨砂颗粒与 backdrop blur，对应桌面 styles.css Mica 配方 blur(20px) saturate(170%)）。"
+    "note": "色值以 SPEC v1.0 第 8 节为准锁定；本文件为前端唯一 Token 来源，Compose 端据此生成 Color/Type 常量。禁止在组件中硬编码色值。v1.6.1 配色与启动图标（陶土棕气泡×米白底）对齐：墨绿×宣纸 → 陶土棕×暖米白。v1.6.3 沉浸式手势小白条：系统状态栏/导航栏全透明露出 color.light.bg / color.dark.bg，手势条颜色由 Android 15 系统按背景亮度自动对比（浅底深灰条/深底浅条），无需新 Token。v1.9.4 新增 color.light/dark.fluid.a/b/c：流光背景（AGSL FluidBackground）三基色，与桌面 aqua-fluid.js paletteForTheme 完全一致。v1.9.4 新增 color.light/dark.glass.hairlineOuter/hairlineInner/specular/innerShade/grainLight/grainDark：玻璃材质升级（双发丝描边/方向性 specular/底部内阴影/磨砂颗粒）；component.glass 与 component.glassBackdrop 为玻璃质感数值参数（磨砂颗粒与 backdrop blur，对应桌面 styles.css Mica 配方 blur(20px) saturate(170%)）。v1.9.4 三改①卡片通透化：color.light/dark.glass.fill 与 fillStrong alpha 下调（浅 .55/.72→.40/.549、深 .45/.74→.33/.549），让流光透进卡片内部；配套 component.glassBackdrop.cardBlurRadiusDp 4→8、cardSamplePaddingDp 8→16（磨砂取样更充分），文字可读性由 fg/fgSecondary 对比度自检守住。v1.9.4 三改②流光可调：新增 component.fluidAppearance（色相 0-360°/亮度 0-100，默认 0/50；默认值下观感与不可调版本完全一致；色相算子 = W3C hue-rotate 矩阵，保 luma，滑条全量程卡片正文 ≥4.5 有逐度测试护栏），Compose 侧常量见 ui/theme/Color.kt（LocalFluidHue/LocalBgBrightness），纯函数内核见 ui/components/glass/FluidAppearance.kt。"
   },
   "color": {
     "light": {
@@ -36,8 +36,8 @@
       "warmOn": "#8F4F24",
       "scrim": "rgba(43,33,24,0.45)",
       "glass": {
-        "fill": "rgba(253,249,242,0.55)",
-        "fillStrong": "rgba(253,248,240,0.72)",
+        "fill": "rgba(253,249,242,0.40)",
+        "fillStrong": "rgba(253,248,240,0.549)",
         "border": "rgba(255,255,255,0.75)",
         "edgeHighlight": "rgba(255,255,255,0.95)",
         "shadow": "rgba(110,70,30,0.18)",
@@ -89,8 +89,8 @@
       "warmOn": "#F2CBA9",
       "scrim": "rgba(0,0,0,0.60)",
       "glass": {
-        "fill": "rgba(46,36,28,0.45)",
-        "fillStrong": "rgba(34,26,20,0.74)",
+        "fill": "rgba(46,36,28,0.33)",
+        "fillStrong": "rgba(34,26,20,0.549)",
         "border": "rgba(255,255,255,0.12)",
         "edgeHighlight": "rgba(255,255,255,0.35)",
         "shadow": "rgba(0,0,0,0.50)",
@@ -398,9 +398,20 @@
       "saturation": 1.7,
       "brightness": 1.03,
       "samplePaddingDp": 40,
-      "note": "v1.9.4 backdrop blur（ChatScreen 顶栏/输入栏 Mica 悬浮面，API 31+）：对应桌面 styles.css --wy-glass-blur:20px + backdrop-filter saturate(170%)；samplePadding=2×blur 模糊采样余量。v1.9.4 卡片透光磨砂：cardBlurRadiusDp=4 对齐桌面玻璃设置「模糊度」运行时默认 4px（app.js glassBlur），cardSamplePaddingDp=2×cardBlur 同比例采样余量；卡片级饱和度/亮度复用 saturation/brightness",
-      "cardBlurRadiusDp": 4,
-      "cardSamplePaddingDp": 8
+      "note": "v1.9.4 backdrop blur（ChatScreen 顶栏/输入栏 Mica 悬浮面，API 31+）：对应桌面 styles.css --wy-glass-blur:20px + backdrop-filter saturate(170%)；samplePadding=2×blur 模糊采样余量。v1.9.4 卡片透光磨砂：cardBlurRadiusDp 对齐桌面玻璃设置「模糊度」运行时默认 4px（app.js glassBlur），cardSamplePaddingDp=2×cardBlur 同比例采样余量；卡片级饱和度/亮度复用 saturation/brightness。v1.9.4 三改（卡片通透化）：cardBlur 4→8、cardSamplePadding 8→16 —— 玻璃 fill alpha 由 .55/.72 降到 .40/.549 后透出更多流光，模糊半径加倍让流光在卡片内真正化开（并把深色涡心平均掉，卡片内文字底更稳，核算见 app/src/test/java/com/wenyan/app/ui/components/glass/GlassTransparencyReadabilityTest.kt）",
+      "cardBlurRadiusDp": 8,
+      "cardSamplePaddingDp": 16
+    },
+    "fluidAppearance": {
+      "hueDefault": 0,
+      "hueRange": [0, 360],
+      "hueUnit": "deg",
+      "hueStep": 5,
+      "brightnessDefault": 50,
+      "brightnessRange": [0, 100],
+      "brightnessStep": 1,
+      "veilRule": "浅色主题：亮度 >50 叠白 alpha=(v-50)/50；深色主题：亮度 <50 叠黑 alpha=(50-v)/50；两侧另一端不叠（与桌面 app.js applyGlass 的 --wy-brightness-white/black 逐行同语义：浅色主题叠黑会把深棕正文压到不可读，深色主题叠白同理）",
+      "note": "v1.9.4 三改 流光可调：色相 = 对 fluid.a/b/c（及降级路径 glow.a/b/c）做 W3C Filter Effects hue-rotate 矩阵旋转（与桌面 styles.css `filter: hue-rotate(var(--wy-fluid-hue))` 同一算子；行和=1 按 Rec.709 权重构造 → luma 保持，色相转一圈卡片内底色的明度基本不动；纯灰/纯白不染。评审修复记录：此前用 HSL 旋转保 S/L 但保不住相对亮度——浅色 #C0743F 转 215° 得 #3F40C0、相对亮度 0.2406→0.062，卡片内 fgSecondary 在 190°-344° 区间跌到 3.31:1 <AA 4.5；换矩阵后逐度全量程 fg ≥7.51 / fgSecondary ≥4.82）；亮度 = 全屏 veil（AGSL 走 uVeil 后处理，降级路径走 veil 矩形）。单位换算：hueStep=5° 与 brightnessStep=1%；默认值（0/50）下输出与不可调版本逐位一致（hue=0 原样返回、veil alpha=0 时 mix 恒等）。"
     }
   }
 }

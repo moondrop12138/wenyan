@@ -576,6 +576,43 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         call.respondText(json.toString(2), ContentType.Application.Json)
     }
 
+    /**
+     * v1.9.4 记忆导出（JSON 下载）：只含 targets/facts/profile 三段，不含聊天记录与 API Key。
+     * GET 不校验 token（与上方 /api/export 一致，仅走统一 Host 校验）；响应写法同 /api/export。
+     */
+    get("/api/memory/export") {
+        val json = service.exportMemoryJson()
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm").format(java.util.Date())
+        call.response.headers.append(
+            "Content-Disposition",
+            "attachment; filename=\"wenyan-memory-$stamp.json\"",
+        )
+        call.respondText(json.toString(2), ContentType.Application.Json)
+    }
+
+    /**
+     * v1.9.4 记忆合并导入：只增不删（事务失败整体回滚），绝不删除任何现有数据。
+     * 挂载与请求体解析同 /api/import（统一拦截器已校验 Host + POST 的 X-Wenyan-Token；
+     * 非法 JSON 与合并失败均回 {ok:false}，不抛 500）。
+     * 响应 {ok, message, error}：成功 message = 中文合并摘要（导入 N 个档案、M 条记忆…），
+     * 失败 error = 中文原因（message 为空串）。
+     */
+    post("/api/memory/import") {
+        val json = runCatching { org.json.JSONObject(call.receiveText()) }.getOrNull()
+        if (json == null) {
+            call.respondJson(
+                JSONObject().put("ok", false).put("message", "").put("error", "记忆文件不是有效 JSON")
+            )
+            return@post
+        }
+        val (ok, detail) = service.importMemoryMerge(json)
+        call.respondJson(
+            JSONObject().put("ok", ok)
+                .put("message", if (ok) detail else "")
+                .put("error", if (ok) "" else detail),
+        )
+    }
+
     /** 清空全部数据并重新注入预设（危险操作，前端已二次确认） */
     post("/api/data/clear") {
         service.clearAll()

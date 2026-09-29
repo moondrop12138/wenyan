@@ -34,6 +34,7 @@ import com.wenyan.app.ui.contract.StreamEvent
 import com.wenyan.app.ui.contract.StreamingState
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -113,23 +114,21 @@ class RealChatRepository(
         SupervisorJob() + Dispatchers.Default +
             // M17 修复：发送链路无协程异常兜底——原 appScope 无 CoroutineExceptionHandler，
             // sendTextFlow/analyzeImagesFlow 中任何未捕获异常（DB 写失败、解析异常等）
-            // 沿 appScope.launch 直接崩溃进程。兜底：记日志 + 复位流式状态。
+            // 沿 appScope.launch 直接崩溃进程。兜底：记日志。
+            // v1.9.5：原先还在这里无条件复位流式状态，但该兜底拿到不到归属 key，会把
+            // 「别的会话正在跑的流」也一起复位（同一类跨会话串状态问题）。异常流的收尾
+            // 改由 task 结束回调按归属复位，见 StreamStateHost.onFinished。
             CoroutineExceptionHandler { _, e ->
                 Log.e("RealChatRepository", "uncaught in appScope", e)
-                _streamingState.update { it.copy(streaming = false, transcribing = false) }
             }
     )
 
-    /** v1.3.1 流式状态中枢：async 发送族在 appScope 收集后推送，ViewModel 订阅映射 */
-    private val _streamingState = MutableStateFlow(StreamingState())
-    override val streamingState: StateFlow<StreamingState> = _streamingState.asStateFlow()
-
     /**
-     * M18 修复：流式任务按会话维度注册（key = sessionId；PENDING_SESSION_KEY = 尚未落库的新会话）。
-     * 原单一 streamJob + 全局 _streaming 守卫：切会后新会话假「思考中」、发送被锁死、
-     * stop 取消的是旧会话流。现在同会话单飞、不同会话可并行后台跑。
+     * v1.3.1 流式状态中枢：async 发送族在 appScope 收集后推送，ViewModel 订阅映射。
+     * v1.9.5：状态与任务注册表下沉到 [StreamStateHost]（归属 key 与状态同源，可被 JVM 单测覆盖）。
      */
-    private val streamJobs = ConcurrentHashMap<Long, Job>()
+    private val streamHost = StreamStateHost(appScope)
+    override val streamingState: StateFlow<StreamingState> = streamHost.state
 
     /** M22 修复：一次性回执/提示改 SharedFlow（replay=0）——原 StateFlow 字段
      *  在 Activity 旋转后重放导致 toast 重复弹，且相同文案被 StateFlow 去重导致第二次丢失 */
@@ -227,10 +226,19 @@ class RealChatRepository(
         }
 
     override fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent> =
-        sendTextFlow(text, mode, persistUser = true)
+        sendTextFlow(text, mode, persistUser = true, owner = null)
 
-    /** v1.3.1 persistUser=false 供失败重试：用户消息首次已落库，重试不重复落库、不重复更新状态机 */
-    private fun sendTextFlow(text: String, mode: AnalysisMode, persistUser: Boolean): Flow<StreamEvent> = flow {
+    /**
+     * v1.3.1 persistUser=false 供失败重试：用户消息首次已落库，重试不重复落库、不重复更新状态机。
+     * v1.9.5 [owner] = 本流的归属句柄（async 入口传入；直接 collect 的同步入口传 null，不参与
+     * 流式状态归属）：新会话首次落库后由它把状态归属与任务注册 key 一起迁移（见 [StreamStateHost.Handle.retag]）。
+     */
+    private fun sendTextFlow(
+        text: String,
+        mode: AnalysisMode,
+        persistUser: Boolean,
+        owner: StreamStateHost.Handle?,
+    ): Flow<StreamEvent> = flow {
         // AC-13：危机关键词本地预检，命中即转介，不调 LLM
         val crisis = CrisisDetector.detect(text)
         if (crisis.isNotEmpty()) {
@@ -240,7 +248,7 @@ class RealChatRepository(
         }
 
         val sid = ensureSession()
-        retagStreamingOwner(sid)   // H5/M18：新建会话首次落库后把流式状态归属改为真实 sid
+        owner?.retag(sid)   // H5/M18：新建会话首次落库后把状态归属与任务注册 key 一起迁到真实 sid
         if (persistUser) {
             conversationRepository.addMessage(sid, "USER", "text", text)
         }
@@ -358,14 +366,18 @@ class RealChatRepository(
         uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
-    ): Flow<StreamEvent> = analyzeImagesFlow(uris, text, mode, persistUser = true)
+    ): Flow<StreamEvent> = analyzeImagesFlow(uris, text, mode, persistUser = true, owner = null)
 
-    /** v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库 */
+    /**
+     * v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库。
+     * v1.9.5 [owner] 同 [sendTextFlow]：async 入口传入归属句柄，同步入口传 null。
+     */
     private fun analyzeImagesFlow(
         uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
         persistUser: Boolean,
+        owner: StreamStateHost.Handle?,
     ): Flow<StreamEvent> = flow {
         // v1.3.1 图文同发：配文先过危机预检（命中即转介，不落库、不发 LLM）
         val caption = text.trim()
@@ -382,7 +394,7 @@ class RealChatRepository(
         // ensureSession() 读共享 MutableStateFlow<Long?>，期间切会话/新建会话 →
         // 用户消息、AI 回复、记忆提炼全部落错会话。现在 sid 先快照，后续全部用参数传递。
         val sid = ensureSession()
-        retagStreamingOwner(sid)   // H5/M18
+        owner?.retag(sid)   // H5/M18
         // v1.6.1 多图：全部压缩成功才进入落库（任一失败 → 整体报错，未写任何消息，ViewModel 恢复整批待发送）
         val dataUrls = mutableListOf<String>()
         for (uri in uris) {
@@ -418,7 +430,7 @@ class RealChatRepository(
         } else {
             // 通道 B：先调视觉模型转述（配文已作为独立消息在历史里，确认转述后模型可见）
             // v1.9.2 等待文案三档：转述期间 UI 显示「视觉模型正在提取截图文字…」
-            _streamingState.update { it.copy(transcribing = true) }
+            owner?.markTranscribing(true)
             val vision = resolveVisionClient()
             if (vision == null) {
                 emit(StreamEvent.Error(LlmError("NO_VISION", "未配置视觉模型，请在设置中选择", false)))
@@ -453,7 +465,15 @@ class RealChatRepository(
         }
     }
 
-    override fun confirmTranscription(transcription: String, sid: Long?): Flow<StreamEvent> = flow {
+    override fun confirmTranscription(transcription: String, sid: Long?): Flow<StreamEvent> =
+        confirmTranscriptionFlow(transcription, sid, owner = null)
+
+    /** v1.9.5：实现体带 [StreamStateHost.Handle]（async 入口经 launchStream 传入；同步入口传 null） */
+    private fun confirmTranscriptionFlow(
+        transcription: String,
+        sid: Long?,
+        owner: StreamStateHost.Handle?,
+    ): Flow<StreamEvent> = flow {
         // M5 修复（双端）：转述通道第二步同样执行危机预检——原实现仅 sendMessage/analyzeImages
         // 入口有 CrisisDetector 硬短路，截图里的危机表述（遗书/割腕等）经视觉模型转述后
         // 直送主模型分析。落库前同样检测并走安全卡片（不落库、不调 LLM）。
@@ -465,7 +485,7 @@ class RealChatRepository(
         }
         // H5 修复：优先用转述卡来源会话（跨会话确认不再落错会话）；null 回退当前会话（旧语义）
         @Suppress("NAME_SHADOWING") val sid = sid ?: ensureSession()
-        retagStreamingOwner(sid)   // H5/M18
+        owner?.retag(sid)   // H5/M18
         conversationRepository.addMessage(sid, "USER", "transcription", transcription)
 
         val (knowledge, _) = knowledgeEngine.buildInjection(transcription)
@@ -535,7 +555,10 @@ class RealChatRepository(
         // 把刚被删除的会话 id 赋回内存（FK 约束下会导致该条消息静默丢失）
         sessionChosenByUser = true
         // M18：删除会话时取消其进行中的流式任务（回复不再静默落已删除会话）
-        streamJobs.remove(sessionId)?.cancel()
+        // v1.9.5：同时复位归属该会话的流式状态——取消是异步生效的（协程真正结束才走
+        // invokeOnCompletion 兜底），不同步复位会留下僵尸 {streaming=true}：
+        // 被删会话不再有任何事件来复位它，用户停在「停止生成/思考中」的假态上。
+        streamHost.cancelFor(sessionId)
         conversationRepository.deleteSession(sessionId)
         if (this.sessionId.value == sessionId) {
             this.sessionId.value = null
@@ -549,72 +572,35 @@ class RealChatRepository(
         // 原实现取消的是唯一 streamJob，stop 掉的可能是旧会话的流。
         // M15 修复：状态机完整复位——原仅 streaming=false，残留 transcribing 与 error：
         // 转述中断后状态机残留；错误卡「取消」按钮点击无效（错误码不清、再 cancel 是 no-op）。
-        val key = sessionId.value ?: PENDING_SESSION_KEY
-        streamJobs.remove(key)?.cancel()
-        _streamingState.update {
-            if ((it.sessionId ?: PENDING_SESSION_KEY) == key) {
-                it.copy(streaming = false, transcribing = false, error = null)
-            } else {
-                it
-            }
-        }
+        // v1.9.5：key 解析（状态归属优先，与任务注册 key 同源）与复位收进 StreamStateHost.cancel
+        // ——原实现按 sessionId.value 取 job，新会话首条消息的 job 注册在 PENDING key 下，
+        // 点停止只复位 UI、LLM 协程照跑。
+        streamHost.cancel(sessionId.value)
     }
 
     // ===== v1.3.1 后台续跑 async 发送族 =====
 
     override fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean) =
-        launchStream { sendTextFlow(text, mode, persistUser) }
+        launchStream { owner -> sendTextFlow(text, mode, persistUser, owner) }
 
     override fun analyzeImagesAsync(
         uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
         persistUser: Boolean,
-    ) = launchStream { analyzeImagesFlow(uris, text, mode, persistUser) }
+    ) = launchStream { owner -> analyzeImagesFlow(uris, text, mode, persistUser, owner) }
 
     override fun confirmTranscriptionAsync(transcription: String, sid: Long?) =
-        launchStream { confirmTranscription(transcription, sid) }
+        launchStream { owner -> confirmTranscriptionFlow(transcription, sid, owner) }
 
     /**
-     * M18/H5 统一异步流入口：
-     * - 任务按「当前会话 key」注册，同会话已有流在跑则忽略（原全局 _streaming 守卫把
-     *   切会后的新会话发送也锁死）；不同会话可并行后台跑。
-     * - 流式状态初始化即带归属 sessionId；事件应用时校验归属，旧会话流的迟到事件
-     *   不再污染新会话的状态（打字增量/错误/转述卡均不串场）。
+     * M18/H5 统一异步流入口：任务按「当前会话 key」注册，同会话已有流在跑则忽略（原全局
+     * _streaming 守卫把切会后的新会话发送也锁死）；不同会话可并行后台跑。
+     * 流式状态初始化即带归属 sessionId；事件应用时校验归属，旧会话流的迟到事件不再污染新会话。
+     * 流内部拿到 [StreamStateHost.Handle]：新会话首次落库后用它把状态归属与任务注册 key 一起迁移。
      */
-    private fun launchStream(flowFactory: () -> Flow<StreamEvent>) {
-        val viewSid = sessionId.value
-        val key = viewSid ?: PENDING_SESSION_KEY
-        if (streamJobs[key]?.isActive == true) return
-        _streamingState.value = StreamingState(streaming = true, sessionId = viewSid)
-        val job = appScope.launch {
-            flowFactory().collect { event -> applyStreamEvent(event, key) }
-        }
-        job.invokeOnCompletion { streamJobs.remove(key, job) }
-        streamJobs[key] = job
-    }
-
-    /** H5/M18：新建会话首次落库后，把 PENDING（null）归属的流式状态重打标为真实 sid */
-    private fun retagStreamingOwner(sid: Long) {
-        _streamingState.update { if (it.sessionId == null) it.copy(sessionId = sid) else it }
-    }
-
-    /** 流式事件 → streamingState 中枢（带归属校验：非本会话事件丢弃，防跨会话串状态） */
-    private fun applyStreamEvent(event: StreamEvent, ownerKey: Long) {
-        fun owned(st: StreamingState) = (st.sessionId ?: PENDING_SESSION_KEY) == ownerKey
-        when (event) {
-            is StreamEvent.Delta -> _streamingState.update { if (owned(it)) it.copy(text = it.text + event.text) else it }
-            is StreamEvent.Thinking -> _streamingState.update { if (owned(it)) it.copy(thinking = it.thinking + event.text) else it }
-            is StreamEvent.Analysis -> _streamingState.update { if (owned(it)) it.copy(streaming = false, text = "", thinking = "") else it }
-            is StreamEvent.Transcription -> _streamingState.update {
-                if (owned(it)) it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false) else it
-            }
-            is StreamEvent.Error -> _streamingState.update {
-                if (owned(it)) it.copy(streaming = false, error = event.error, transcribing = false) else it
-            }
-            StreamEvent.Restart -> _streamingState.update { if (owned(it)) it.copy(text = "", thinking = "") else it }
-            StreamEvent.Done -> _streamingState.update { if (owned(it)) it.copy(streaming = false, text = "", thinking = "") else it }
-        }
+    private fun launchStream(flowFactory: (StreamStateHost.Handle) -> Flow<StreamEvent>) {
+        streamHost.launch(sessionId.value, flowFactory)
     }
 
     // ===== 私有辅助 =====
@@ -999,9 +985,6 @@ class RealChatRepository(
         /** 历史中的图片消息占位文本 */
         const val IMAGE_PLACEHOLDER = "[用户发送了一张聊天截图]"
 
-        /** H5/M18：尚未落库的新会话在 streamJobs/归属比较里的哨兵 key（Room 自增 id 恒 >=1） */
-        const val PENDING_SESSION_KEY = -1L
-
         /** v1.2.1：标题生成超时（毫秒），超时静默回退首句截断 */
         const val TITLE_TIMEOUT_MS = 20_000L
         /** v1.2.1：标题生成 system prompt，只输出标题本身 */
@@ -1017,5 +1000,162 @@ class RealChatRepository(
 
         /** O9: 历史压缩透明化提示 */
         const val HISTORY_TRUNCATED_NOTICE = "对话较长，较早内容已摘要化，如需精确信息请补充"
+    }
+}
+
+/**
+ * 流式状态主机（v1.9.5）：[ChatRepository.streamingState] 的唯一写入方。
+ *
+ * 职责：持有流式状态中枢 + 按会话 key 注册的流任务表，并保证**状态归属 sessionId 与任务注册
+ * key 同源同步**——M18 归属校验（「状态归属 == ownerKey」才应用事件）成立的前提。
+ *
+ * 为什么必须抽出来单独修：新会话首条消息在 ensureSession 之前以 [PENDING_SESSION_KEY] 启动
+ * （此时 sessionId.value 还是 null），拿到真实 sid 后若只把状态里的 sessionId 改成真实 sid、
+ * 任务仍注册在 PENDING 下，则事件应用时 ownerKey 仍是 -1 → Delta/Analysis/Done/Error/
+ * Transcription 全部被丢弃：Done 的 streaming=false 永不落地，打字气泡不消失、发送键卡在
+ * 「停止生成」；cancel()/deleteSession() 也按真实 sid 取不到 job（点停止只复位 UI，LLM 协程照跑）。
+ * [Handle.retag] 现在一次迁移这两处（见 RealChatRepositoryTest 回归用例）。
+ *
+ * 另：本类不依赖 Android（只用 kotlinx.coroutines + ui.contract），JVM 单测可直接驱动；
+ * RealChatRepository 本体依赖 Context/DataStore/Android Keystore，JVM 单测构造不起来。
+ */
+internal class StreamStateHost(private val scope: CoroutineScope) {
+
+    private val _state = MutableStateFlow(StreamingState())
+    val state: StateFlow<StreamingState> = _state.asStateFlow()
+
+    /**
+     * M18 修复：流式任务按会话维度注册（key = 会话 id；[PENDING_SESSION_KEY] = 尚未落库的新会话）。
+     * 原单一 streamJob + 全局 _streaming 守卫：切会后新会话假「思考中」、发送被锁死、
+     * stop 取消的是旧会话流。现在同会话单飞、不同会话可并行后台跑。
+     */
+    private val jobs = ConcurrentHashMap<Long, Job>()
+
+    /**
+     * 启动一条流（同 key 已有活跃流则忽略）。
+     * LAZY 启动 + 先注册再 start：保证流内部调 [Handle.retag] 时注册表已就绪，key 一定迁得动
+     * （否则 retag 与注册之间存在竞态窗口，迁移会丢）。
+     */
+    fun launch(viewSessionId: Long?, flowFactory: (Handle) -> Flow<StreamEvent>) {
+        val key = viewSessionId ?: PENDING_SESSION_KEY
+        if (jobs[key]?.isActive == true) return
+        _state.value = StreamingState(streaming = true, sessionId = viewSessionId)
+        val handle = Handle(key)
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            flowFactory(handle).collect { event -> applyEvent(event, handle.key) }
+        }
+        handle.job = job
+        jobs[key] = job
+        // v1.9.5 兜底：流结束（正常/取消/异常）都要复位——原来只摘除注册表项，
+        // 事件没走到收尾时状态就永久卡在 {streaming=true}
+        job.invokeOnCompletion { onFinished(handle) }
+        job.start()
+    }
+
+    /** 流式事件 → 状态中枢（带归属校验：非本会话事件丢弃，防跨会话串状态） */
+    fun applyEvent(event: StreamEvent, ownerKey: Long) {
+        when (event) {
+            is StreamEvent.Delta -> _state.update { if (owned(it, ownerKey)) it.copy(text = it.text + event.text) else it }
+            is StreamEvent.Thinking -> _state.update { if (owned(it, ownerKey)) it.copy(thinking = it.thinking + event.text) else it }
+            is StreamEvent.Analysis -> _state.update { if (owned(it, ownerKey)) it.copy(streaming = false, text = "", thinking = "") else it }
+            is StreamEvent.Transcription -> _state.update {
+                if (owned(it, ownerKey)) it.copy(streaming = false, transcription = event.text, text = "", thinking = "", transcribing = false) else it
+            }
+            is StreamEvent.Error -> _state.update {
+                if (owned(it, ownerKey)) it.copy(streaming = false, error = event.error, transcribing = false) else it
+            }
+            StreamEvent.Restart -> _state.update { if (owned(it, ownerKey)) it.copy(text = "", thinking = "") else it }
+            StreamEvent.Done -> _state.update { if (owned(it, ownerKey)) it.copy(streaming = false, text = "", thinking = "") else it }
+        }
+    }
+
+    /**
+     * stop 按钮：取消当前**显示中**的流并复位状态机（M15：transcribing/error 一并清）。
+     * 状态归属与任务注册 key 由 [Handle.retag] 保持同步，故优先按状态归属取 job
+     * （stop 按钮可见 ⇔ 状态归属 == 当前查看会话：ViewModel 只映射 mine 的状态）；
+     * 视图会话 key 作兜底，避免状态已被别的会话流占走时点停止完全无反应。
+     */
+    fun cancel(viewSessionId: Long?) {
+        val ownerKey = _state.value.sessionId ?: PENDING_SESSION_KEY
+        val viewKey = viewSessionId ?: PENDING_SESSION_KEY
+        val key = if (jobs.containsKey(ownerKey)) ownerKey else viewKey
+        jobs.remove(key)?.cancel()
+        _state.update {
+            if ((it.sessionId ?: PENDING_SESSION_KEY) == key) {
+                it.copy(streaming = false, transcribing = false, error = null)
+            } else {
+                it
+            }
+        }
+    }
+
+    /**
+     * deleteSession：取消该会话的流并复位其流式状态。
+     * 取消是异步生效的（协程真正结束才走 [onFinished] 兜底），这里同步复位：被删会话不会再有
+     * 任何事件回来复位自己，否则留下僵尸 {streaming=true}（打字气泡不消失 / 停止键卡住）。
+     */
+    fun cancelFor(sessionId: Long) {
+        jobs.remove(sessionId)?.cancel()
+        _state.update { if (it.sessionId == sessionId) StreamingState() else it }
+    }
+
+    /**
+     * 流结束兜底：摘除注册 + 若状态仍归属本流且仍在 streaming 则复位。
+     * 文案保护：Done/Error/Analysis 正常到达时已自行复位（streaming=false），这里不再改动
+     * 状态（尤其不碰 error），只兜「事件没走到收尾」的路径（取消 / 抛异常 / 断流未收尾）。
+     * 归属校验同样保留：别的会话正在跑的流不被误复位。
+     */
+    private fun onFinished(handle: Handle) {
+        val key = handle.key
+        handle.job?.let { jobs.remove(key, it) }
+        _state.update {
+            if ((it.sessionId ?: PENDING_SESSION_KEY) == key && it.streaming) {
+                it.copy(streaming = false, transcribing = false, text = "", thinking = "")
+            } else {
+                it
+            }
+        }
+    }
+
+    private fun owned(st: StreamingState, key: Long) = (st.sessionId ?: PENDING_SESSION_KEY) == key
+
+    /**
+     * 一条流的句柄：当前归属 key（可重打标）+ 它在注册表里的 job。
+     * 每个句柄只被它自己那条协程的 retag 写过一次，无需加锁（volatile 读足够）。
+     */
+    inner class Handle(initialKey: Long) {
+        @Volatile
+        private var currentKey = initialKey
+
+        /** 注册表中的 job（launch 内 start 之前绑定） */
+        var job: Job? = null
+
+        val key: Long get() = currentKey
+
+        /**
+         * H5/M18：新建会话首次落库后重打标——状态归属与任务注册 key **一起**迁移
+         * （PENDING → 真实 sid），使事件归属校验与 cancel/deleteSession 查表共用同一个 key。
+         * 只处理 PENDING → 真实 sid 这一步：已落定的流（如 H5 跨会话确认转述，其 sid 与视图会话
+         * 不同）保持原归属，避免把某个会话的流改签到另一个会话。
+         */
+        fun retag(sid: Long) {
+            val old = currentKey
+            if (old != PENDING_SESSION_KEY || sid == PENDING_SESSION_KEY) return
+            currentKey = sid
+            val registered = job
+            if (registered != null && jobs.remove(old, registered)) jobs[sid] = registered
+            // 状态归属同样只在不属于其他流时才接管（原 retagStreamingOwner 语义）
+            _state.update { if (it.sessionId == null) it.copy(sessionId = sid) else it }
+        }
+
+        /** 通道 B 转述等待态：仅在本流仍拥有状态时生效（不串到别的会话的流上） */
+        fun markTranscribing(value: Boolean) {
+            _state.update { if (owned(it, currentKey)) it.copy(transcribing = value) else it }
+        }
+    }
+
+    companion object {
+        /** H5/M18：尚未落库的新会话在任务表/归属比较里的哨兵 key（Room 自增 id 恒 >= 1） */
+        const val PENDING_SESSION_KEY = -1L
     }
 }

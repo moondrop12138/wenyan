@@ -5,7 +5,7 @@
 'use strict';
 
 // L6: 版本号从 /api/health 拉取（避免与后端 DESKTOP_VERSION 漂移），此处为兜底默认
-let APP_VERSION = '1.9.3';
+let APP_VERSION = '1.9.4';
 async function loadVersion(){
   try { const h = await (await fetch('/api/health')).json(); if (h && h.version) APP_VERSION = h.version.replace('-desktop',''); } catch(e) {}
 }
@@ -79,6 +79,22 @@ const S = {
   visionModelId: null,          // 视觉模型槽位（后端 Properties 持久化；主模型不支持视觉时走通道 B 转述）
   memoryAutoEnabled: true,      // v1.9.0 自动记忆开关（默认开；/api/settings 加载后覆盖）
 };
+
+// v1.9.4: 当前会话冷启动恢复 —— 写穿见 persistSessionId，启动校验见 restoreSession
+const SESSION_KEY = 'wenyan.sessionId';
+/** 写穿当前会话 id（null = 清 key，回未建会话状态） */
+function persistSessionId(id){
+  if (id == null) localStorage.removeItem(SESSION_KEY);
+  else localStorage.setItem(SESSION_KEY, String(id));
+}
+/** 冷启动恢复：仅当存留 id 仍在会话列表中才恢复，否则清 key 回空态（防悬挂 id） */
+function restoreSession(){
+  const saved = Number(localStorage.getItem(SESSION_KEY)) || null;
+  if (saved == null) return false;
+  if (S.sessions.some(s => s.id === saved)){ S.sessionId = saved; return true; }
+  localStorage.removeItem(SESSION_KEY);
+  return false;
+}
 
 // ===== 主题 & Web 玻璃主题增强 =====
 function persistGlassSettings(){
@@ -222,7 +238,7 @@ function renderSidebar(){
       await api.del('/api/sessions/' + s.id);
       // v1.8.2-fix（审查 P3-11）：删除会话同时 abort 在途 fetch → 后端 SSE 写入失败 →
       // 取消传播到 LLM 请求（不再浪费 token 写孤儿消息）
-      if (S.sessionId === s.id){ S.sessionId = null; abortStream(); }
+      if (S.sessionId === s.id){ S.sessionId = null; persistSessionId(null); abortStream(); }
       await refreshSessions(); renderSidebar(); renderChat();
     };
     item.appendChild(del);
@@ -231,7 +247,7 @@ function renderSidebar(){
         toast('军师还在奋笔疾书，写完这一轮再切换');
         return;
       }
-      S.sessionId = s.id; S.streamSeq++; renderSidebar(); renderChat();
+      S.sessionId = s.id; persistSessionId(s.id); S.streamSeq++; renderSidebar(); renderChat();
     };
     list.appendChild(item);
   });
@@ -250,7 +266,7 @@ function wireSearch(){
       if (!ids.length){ toast('没有匹配的消息'); return; }
       const target = S.sessions.find(s => ids.includes(s.id));
       if (target){
-        S.sessionId = target.id; S.streamSeq++; renderSidebar(); renderChat();
+        S.sessionId = target.id; persistSessionId(target.id); S.streamSeq++; renderSidebar(); renderChat();
         toast('找到 ' + ids.length + ' 个相关会话，已跳转最近一个');
       }
     } catch(err){ toast('搜索失败'); }
@@ -399,8 +415,11 @@ function shortName(name){
 
 // ===== 聊天渲染 =====
 async function renderChat(){
+  // v1.9.4-fix（P0 白屏）：d6352e8 曾误删本行，使下方消息拉取与迟到守卫引用未定义的 sid——
+  // 点侧栏会话 / 搜索跳转 / 删除刷新时聊天区已清空却抛 ReferenceError，历史消息白屏。
+  const sid = S.sessionId;                      // await 期间用户可能已切走
   const col = $('chatCol'); col.innerHTML = '';
-  if (S.sessionId == null){
+  if (sid == null){
     S.sessionTargetId = undefined;
     renderTargetPill();
     $('emptyState').classList.remove('hidden');
@@ -692,7 +711,7 @@ function renderPending(){
 async function ensureSession(){
   if (S.sessionId != null) return S.sessionId;
   const r = await api.post('/api/sessions', { targetId: S.pendingTargetId || null });
-  S.sessionId = r.id;
+  S.sessionId = r.id; persistSessionId(S.sessionId);
   await refreshSessions(); renderSidebar();
   return S.sessionId;
 }
@@ -938,7 +957,7 @@ function abortStream(){
 // ===== 侧栏 =====
 $('btnNewSession').onclick = () => {
   if (S.streaming){ toast('军师还在奋笔疾书，写完这一轮再开新会话'); return; }
-  S.sessionId = null; renderSidebar(); renderChat(); inputBox.focus();
+  S.sessionId = null; persistSessionId(null); renderSidebar(); renderChat(); inputBox.focus();
 };
 $('btnToggleSb').onclick = () => $('sidebar').classList.toggle('closed');
 $('btnSettings').onclick = () => go('settings');
@@ -1224,6 +1243,63 @@ async function renderSettings(col){
   exRow.onclick = () => { location.href = '/api/export'; toast('正在导出…'); };
   g5.appendChild(exRow);
 
+  // v1.9.4: 记忆档案导出（仅档案 + 记忆事实；与上方「全量备份」用途不同，可合并导入）
+  const memExRow = el('div','setrow glass edge');
+  memExRow.appendChild(el('span','ic','⇩'));
+  const memExTx = el('span','tx');
+  memExTx.appendChild(el('span','t','导出记忆档案'));
+  memExTx.appendChild(el('span','d','全部档案与记忆事实 → JSON（可合并导入到其他设备）'));
+  memExRow.appendChild(memExTx);
+  memExRow.appendChild(el('span','ch','导出'));
+  memExRow.onclick = async () => {
+    try {
+      const data = await api.get('/api/memory/export');
+      if (!data || data.ok === false){ toast((data && data.error) || '导出失败'); return; }
+      const d = new Date();
+      const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = el('a');
+      a.href = url; a.download = `wenyan-memory-${stamp}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+      toast('记忆档案已导出');
+    } catch(err){ toast('导出失败：' + (err.message||err)); }
+  };
+  g5.appendChild(memExRow);
+
+  // v1.9.4: 合并导入记忆档案（合并语义：只新增/合并，绝不删除现有数据）
+  const memImRow = el('div','setrow glass edge');
+  memImRow.appendChild(el('span','ic','⇧'));
+  const memImTx = el('span','tx');
+  memImTx.appendChild(el('span','t','合并导入记忆'));
+  memImTx.appendChild(el('span','d','选择记忆档案 JSON，合并进现有数据（不删除任何现有内容）'));
+  memImRow.appendChild(memImTx);
+  memImRow.appendChild(el('span','ch','导入'));
+  const memInput = el('input');
+  memInput.type = 'file'; memInput.accept = '.json,application/json'; memInput.style.display = 'none';
+  document.body.appendChild(memInput);
+  memInput.onchange = async () => {
+    const file = memInput.files && memInput.files[0];
+    memInput.value = '';
+    if (!file) return;
+    if (!confirm('合并导入记忆档案？\n只新增/合并，不会删除任何现有数据。')) return;
+    let json;
+    try { json = JSON.parse(await file.text()); }
+    catch(err){ toast('文件不是合法 JSON'); return; }
+    if (!json || typeof json !== 'object'){ toast('文件内容不是记忆档案 JSON'); return; }
+    try {
+      const r = await api.post('/api/memory/import', json);
+      // 后端契约（ApiRoutes.kt POST /api/memory/import）：{ok, message=合并摘要, error=失败原因}
+      if (r && r.ok === false){ toast(r.error || '导入失败'); return; }
+      await Promise.all([refreshTargets(), refreshSessions()]);
+      renderSidebar(); renderSettings(col);
+      toast((r && r.message) || '记忆已合并导入');
+    } catch(err){ toast('导入失败：' + (err.message||err)); }
+  };
+  memImRow.onclick = () => memInput.click();
+  g5.appendChild(memImRow);
+
   // O1: 从备份恢复
   const impRow = el('div','setrow glass edge');
   impRow.appendChild(el('span','ic','⇧'));
@@ -1245,7 +1321,7 @@ async function renderSettings(col){
       const r = await fetch('/api/import', { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: text });
       const j = await r.json();
       if (j.ok){
-        S.sessionId = null;
+        S.sessionId = null; persistSessionId(null);
         await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions()]);
         renderSidebar(); renderSettings(col);
         toast('导入完成');
@@ -1269,7 +1345,7 @@ async function renderSettings(col){
     if (!confirm('最后确认：真的要清空吗？')) return;
     const r = await api.post('/api/data/clear');
     if (r.ok){
-      S.sessionId = null;
+      S.sessionId = null; persistSessionId(null);
       await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions()]);
       renderSidebar(); renderSettings(col);
       toast('已清空，预设厂商已重置');
@@ -1711,6 +1787,8 @@ async function render(){
   await loadVersion();
   wireSearch();
   await Promise.all([refreshProviders(), refreshModels(), refreshTargets(), refreshSessions(), refreshSettings()]);
+  // v1.9.4: 冷启动恢复上次会话——须在 refreshSessions 之后（拿列表校验），末尾 renderChat 落到该会话
+  restoreSession();
   renderSidebar();
   renderModelPill();
 

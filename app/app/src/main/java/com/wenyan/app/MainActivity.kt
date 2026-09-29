@@ -12,7 +12,9 @@ import androidx.compose.runtime.collectAsState
 import com.wenyan.app.ui.navigation.AppRoot
 import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.GtjTheme
+import com.wenyan.app.ui.theme.LocalBgBrightness
 import com.wenyan.app.ui.theme.LocalFluidBackground
+import com.wenyan.app.ui.theme.LocalFluidHue
 
 /**
  * 入口：只装配 Navigation/主题，零业务逻辑（code-organization 硬规则 4）。
@@ -40,8 +42,16 @@ class MainActivity : ComponentActivity() {
             // v1.9.4 流光背景开关：AppViewModel 统一收集后全局下发（GtjTheme 块内包 AppRoot，
             // FluidBackground 组件读 LocalFluidBackground，默认 true；关闭 = 不绘制露出主题底色）
             val fluidBackground by appViewModel.fluidBackground.collectAsState()
+            // v1.9.4 三改 流光可调：色相（0-360°）与背景亮度（0-100，50 = 不叠 veil）同样全局下发，
+            // 默认值（0/50）下输出与不可调版本逐位一致（见 FluidAppearance.kt）
+            val fluidHue by appViewModel.fluidHue.collectAsState()
+            val bgBrightness by appViewModel.bgBrightness.collectAsState()
             GtjTheme(themeMode = themeMode) {
-                CompositionLocalProvider(LocalFluidBackground provides fluidBackground) {
+                CompositionLocalProvider(
+                    LocalFluidBackground provides fluidBackground,
+                    LocalFluidHue provides fluidHue,
+                    LocalBgBrightness provides bgBrightness,
+                ) {
                     AppRoot(container = container, appViewModel = appViewModel)
                 }
             }

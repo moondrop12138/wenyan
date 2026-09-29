@@ -17,8 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.platform.LocalDensity
+import com.wenyan.app.ui.theme.LocalBgBrightness
 import com.wenyan.app.ui.theme.LocalFluidBackground
+import com.wenyan.app.ui.theme.LocalFluidHue
 import com.wenyan.app.ui.theme.LocalGtjColors
+import com.wenyan.app.ui.theme.LocalGtjIsDark
 import com.wenyan.app.ui.theme.rememberReducedMotion
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -69,16 +72,23 @@ private const val PARAM_OFFSET_Y = 0.4f        // offsetY 40 → /100
  * 渲染/性能（沿用 GlowBackground 的 v1.8.1 B4 教训：严禁每帧写状态触发重组）：
  * - withInfiniteAnimationFrameNanos 手动驱动 + 30fps 节流（<33ms 跳过不写 state）；
  *   frameNanos 只在 Canvas 的 draw lambda 中被读取 → 只触发重绘，不触发重组；
- * - 每帧仅 setFloatUniform(uTime/uResolution) 两个调用 + 复用缓存的 ShaderBrush，零对象分配；
+ * - 每帧仅 6 个 setFloatUniform 调用（uTime/uResolution/uColor1-3/uVeil）+ 复用缓存的 ShaderBrush，
+ *   零对象分配；色相/亮度只在 draw 阶段写 uniform，**不重建 shader**——拖动设置页滑条时
+ *   零 AGSL 重编译（AGSL 编译是毫秒级，若把色相纳入 remember key，拖一次滑条会重建上百次）；
  * - swirl 循环用固定 30 次迭代 + step 掩码替代 break（掩码为 0 时增量恒为 0，
  *   与桌面 `if (i > iters) break` 数学完全等价），规避个别 ROM 对动态跳出循环的编译差异。
  *
  * 降级：API < 33（LiquidGlassShaders.isRuntimeShaderSupported()）或 RuntimeShader 构造失败
  * （个别 ROM 抛 IllegalArgumentException，同 LiquidGlassShaders.createLensEdgeShader 的
- * runCatching 防御）→ 渲染现有 GlowBackground；LocalFluidBackground=false 时不画任何内容。
+ * runCatching 防御）→ 渲染现有 GlowBackground（同样消费色相/亮度，见其文档）；
+ * LocalFluidBackground=false 时不画任何内容。
  *
  * 颜色：LocalGtjColors.fluidA/B/C（唯一来源 docs/design-tokens.json color.light/dark.fluid.*，
  * 与桌面 paletteForTheme 完全一致），组件内无硬编码色值。
+ * v1.9.4 三改：三基色先经 [hueRotated]（LocalFluidHue）再写 uColor1/2/3；
+ * 亮度经 [brightnessVeil]（LocalBgBrightness）写 uVeil，在 shader 末尾 `mix(col, uVeil.rgb, uVeil.a)`
+ * 一次性叠完（比再叠一层 View 省一次全屏合成）。默认值（0°/50）下 uVeil.a == 0、色相原样，
+ * 输出与不可调版本逐位一致。
  */
 @SuppressLint("NewApi") // RuntimeShader 构造已由 LiquidGlassShaders.isRuntimeShaderSupported() 做 API 33 守卫
 @Composable
@@ -90,6 +100,10 @@ fun FluidBackground(
 
     val palette = LocalGtjColors.current
     val reduced = rememberReducedMotion()
+    // v1.9.4 三改：色相（度）/亮度（0-100）/当前深浅主题（决定亮度叠白还是叠黑）
+    val hueDegrees = LocalFluidHue.current
+    val bgBrightness = LocalBgBrightness.current
+    val isDark = LocalGtjIsDark.current
     // uPixelRatio = 设备密度：uv 在 shader 内先乘分辨率再除以它 → 图案尺度按 dp 归一
     // （对应桌面的 window.devicePixelRatio，aqua-fluid.js 346 行）。
     // 已知取舍（规格钦定，评审提示项）：桌面渲染分辨率封顶 1.5×CSS（aqua-fluid.js:258
@@ -97,13 +111,21 @@ fun FluidBackground(
     // 安卓（density 不封顶，uResolution 传物理 px）相对更细；dpr≤1.5 时两者一致。
     val pixelRatio = LocalDensity.current.density
 
-    // RuntimeShader 仅在颜色/密度变化时重建（重组级、低频）；动画帧内只改 uniform
+    // v1.9.4 三改：色相旋转只依赖（基色, 度），重组级重算一次（纯 Kotlin 数学，无分配）；
+    // 之后 draw 阶段直接读，不进帧循环、不进 shader 重建路径
+    val color1 = remember(palette.fluidA, hueDegrees) { hueRotated(palette.fluidA, hueDegrees.toFloat()) }
+    val color2 = remember(palette.fluidB, hueDegrees) { hueRotated(palette.fluidB, hueDegrees.toFloat()) }
+    val color3 = remember(palette.fluidC, hueDegrees) { hueRotated(palette.fluidC, hueDegrees.toFloat()) }
+    // 亮度 veil（50 = Transparent，零叠加）：alpha 0 时 shader 里的 mix 恒等，观感与不可调版本一致
+    val veil = remember(bgBrightness, isDark) { brightnessVeil(bgBrightness, isDark) }
+
+    // RuntimeShader 仅在颜色/密度变化时重建（重组级、低频）；动画帧内只改 uniform。
+    // 色相刻意不进 key：拖滑条时每帧重建 RuntimeShader 会触发上百次 AGSL 编译（毫秒级 × N）→ 掉帧
     val shader = remember(palette.fluidA, palette.fluidB, palette.fluidC, pixelRatio) {
         if (!LiquidGlassShaders.isRuntimeShaderSupported()) {
             null
         } else {
-            runCatching { createFluidShader(palette.fluidA, palette.fluidB, palette.fluidC, pixelRatio) }
-                .getOrNull()
+            runCatching { createFluidShader(color1, color2, color3, veil, pixelRatio) }.getOrNull()
         }
     }
 
@@ -147,16 +169,26 @@ fun FluidBackground(
             if (reduced) STATIC_FRAME_TIME else frameNanos / 1e9f * TIME_SPEED,
         )
         shader.setFloatUniform("uResolution", w, h)
+        // v1.9.4 三改：色相/亮度每帧写 uniform（4 次 JNI，可忽略）——保证「设置即时生效」与
+        // 「reducedMotion 静帧同样生效」都不依赖任何重建/失效时序；默认值下与不可调版本逐位一致
+        shader.setFloatUniform("uColor1", color1.red, color1.green, color1.blue, color1.alpha)
+        shader.setFloatUniform("uColor2", color2.red, color2.green, color2.blue, color2.alpha)
+        shader.setFloatUniform("uColor3", color3.red, color3.green, color3.blue, color3.alpha)
+        shader.setFloatUniform("uVeil", veil.red, veil.green, veil.blue, veil.alpha)
         drawRect(brush = brush)
     }
 }
 
-/** 创建流光 RuntimeShader 并写入全部静态 uniform（uTime/uResolution 每帧覆写）。 */
+/**
+ * 创建流光 RuntimeShader 并写入全部静态 uniform（uTime/uResolution/uColor1-3/uVeil 每帧覆写）。
+ * v1.9.4 三改：color1-3 为**色相旋转后**的基色、veil 为亮度叠加色（默认 Transparent）。
+ */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 private fun createFluidShader(
     color1: Color,
     color2: Color,
     color3: Color,
+    veil: Color,
     pixelRatio: Float,
 ): RuntimeShader = RuntimeShader(FLUID_SHADER_SRC).apply {
     setFloatUniform("uResolution", 1f, 1f) // 占位，draw 阶段按实际尺寸覆写
@@ -167,6 +199,7 @@ private fun createFluidShader(
     setFloatUniform("uColor1", color1.red, color1.green, color1.blue, color1.alpha)
     setFloatUniform("uColor2", color2.red, color2.green, color2.blue, color2.alpha)
     setFloatUniform("uColor3", color3.red, color3.green, color3.blue, color3.alpha)
+    setFloatUniform("uVeil", veil.red, veil.green, veil.blue, veil.alpha)
     setFloatUniform("uProportion", PARAM_PROPORTION)
     setFloatUniform("uSoftness", PARAM_SOFTNESS)
     setFloatUniform("uShapeScale", PARAM_SHAPE_SCALE)
@@ -196,6 +229,8 @@ uniform float uDistortion;
 uniform float uSwirl;
 uniform float uSwirlIterations;
 uniform float2 uOffset;
+// v1.9.4 三改：亮度叠加色（rgb + alpha；alpha 0 = 完全不叠 = 默认 50 的观感）
+uniform float4 uVeil;
 
 // 桌面 #define TWO_PI / PI（aqua-fluid.js 86-87 行）→ AGSL 用 const
 const float PI = 3.14159265358979323846;
@@ -273,6 +308,9 @@ half4 main(float2 fragCoord) {
     float shape = 0.5 + 0.5 * sin(cuv.x) * cos(cuv.y);
     float mixer = shape + 0.48 * sign(proportion - 0.5) * pow(abs(proportion - 0.5), 0.5);
     float3 col = blendMulti(mixer, clamp(uSoftness, 0.0, 1.0));
+    // v1.9.4 三改 背景亮度：整屏叠一层 veil（对应桌面 --wy-brightness-white/black 的
+    // linear-gradient 叠加层）。uVeil.a == 0 时 mix 恒等 → 默认 50 输出与不可调版本逐位一致
+    col = mix(col, uVeil.rgb, clamp(uVeil.a, 0.0, 1.0));
     return half4(col, 1.0);
 }
 """

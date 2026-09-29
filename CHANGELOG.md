@@ -2,12 +2,14 @@
 
 「温言」版本历史。版本命名：`vX.Y.Z`（功能）与 `vX.Y.Z-N`（同版本迭代构建）。
 
-## v1.9.4（2026-09-28）— 冷启动会话恢复 + 记忆导出/导入 + 流光背景 + 液态玻璃质感升级 + 触摸修复
+## v1.9.4（2026-09-28，09-29 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + 触摸修复
 
 **修复**：
 - 历史会话点击失效与危机卡长按失效：玻璃按压动画旧实现用 `detectTapGestures(onPress)`，会消费 DOWN/UP——GlassSurface 无 onClick 时把按压修饰符放在内层，外层 `combinedClickable` 拿不到未消费的 DOWN，点击/长按静默失效（历史会话行、危机卡长按均中招）；改用 `awaitEachGesture` 纯手势观察器，全程不消费任何事件，与外层 clickable/combinedClickable 共存
 - 会话抽屉搜索框对齐全 App 输入框规范（20dp 圆角 + 内凹底色 + 透明指示线），不再直角 + 底部横线与抽屉玻璃风格割裂
 - 聊天页键盘（IME）弹出时整窗上移、顶栏被顶出屏幕：Manifest 未声明 `windowSoftInputMode`（默认 adjustUnspecified），系统对聚焦输入框走 adjustPan 把整个窗口内容上移出键盘高度（API 35 模拟器实测整窗 pan 738px），与 Compose 侧 `safeDrawing-bottom` 抬升输入栏叠加成双重位移——顶栏胶囊被 pan 出屏幕、空态标题顶到状态栏、输入栏悬空在键盘上方一大截。修复：MainActivity 显式 `adjustResize`（edge-to-edge 官方配方，窗口不动、IME 只以 insets 下发，输入栏单点消费贴合键盘上沿）；空态容器不再吃含 IME 的 Scaffold bottom padding（只避让状态栏/导航栏，高度恒定，键盘弹出/收起标题零跳变）；档案详情/提供商编辑/首启问卷三个输入页补 `imePadding()`，失去 pan 保护后聚焦框仍不被键盘盖住；会话抽屉搜索框因 safeDrawing 自带 IME 消费同步受益。scrollToItem(0)（仅会话切换触发）与"上滑看历史不拽底"保护均未触碰
+- 新会话首条消息流式状态卡死（AI 回答完成后打字气泡不消失、发送键卡在「停止生成」）：流式状态中枢与任务注册表从 `RealChatRepository` 下沉到同文件内的 `internal class StreamStateHost`（未新增 main 源文件），核心是把「状态归属 sessionId」与 `streamJobs` 注册 key 一起交给每个流的句柄 `Handle` 迁移——retag 时把注册 key 从 `PENDING(-1)` 改签到真实 sid 并同步改写状态归属，事件应用改读动态 `handle.key`（不再用启动时捕获的常量 ownerKey），Done/Error/Delta/Analysis/Transcription 重新被归属校验接受；`cancel()` 按状态归属取 job（与注册 key 同源，兜底退回视图会话 key），`deleteSession` 走 `cancelFor` 同步复位该会话状态且不留僵尸，`invokeOnCompletion` 增加按归属的兜底复位（正常/取消/异常全覆盖，且只在 `state.streaming == true` 时动，绝不覆盖先到的 Error 文案）；`appScope` 的 `CoroutineExceptionHandler` 不再无条件复位全局状态（它拿不到归属 key，会误伤别的会话正在跑的流），异常收尾改由该流的结束回调按归属复位。retag 只处理 PENDING→真实 sid 这一步：已落定会话的流（含 H5 跨会话确认转述）保持原归属，旧会话迟到事件仍被拒收，M18/H5 语义不回归；签名层面仅私有实现加了 owner 形参，非 async 的同步入口（`sendText` / `analyzeImages` / `confirmTranscription`，本 App 内无调用方，已 grep 确认）传 owner=null，公共接口零变化、UI 层无需改动
+- 桌面 Web 聊天页白屏（P0）：`d6352e8` 的改动删掉了 `renderChat()` 开头的 `const sid = S.sessionId;`，`'use strict'` 下消息拉取与迟到守卫引用未定义 sid（点侧栏会话 / 搜索跳转 / 删除刷新时聊天区已清空却抛 ReferenceError，历史消息白屏）；补回该行并注明用途，入口空态判断改用同一捕获值（同一处、其间无 await，语义等价），fetch 与 `if (sid !== S.sessionId) return;` 守卫恢复工作
 
 **新增**：
 - **冷启动自动恢复上次会话**：当前会话 id 持久化到 DataStore 并写穿（切换/新建/删除会话同步更新，带竞态护栏不覆盖用户较新选择）；澎湃OS 等夜间杀进程后重开自动回到上次对话，不再聊天页空态、历史抽屉无「当前会话」高亮
@@ -15,8 +17,17 @@
 - **安卓流光背景**：桌面 aqua-fluid.js 流体 shader 逐行移植为 AGSL RuntimeShader（API 33+），暖色流体渐变跟随主题明暗（色值与桌面 paletteForTheme 一致）；30fps 节流只重绘不重组、缓存 Brush 每帧零对象分配，「移除动画」显示静态帧，Android 13 以下自动降级现有光斑背景；聊天/设置/问卷/提供商/记忆各页背景接入，设置页「外观」新增开关（默认开）
 - **液态玻璃质感升级**：修复边缘折射 shader 因 AGSL 语法不符（vec3/vec4）从未真正渲染的问题并补 uTime 动画驱动；顶栏/输入栏接入真背景模糊（自研 backdrop blur，消息从栏底穿过时被磨砂，对齐桌面 blur(20px)+saturate(170%)）；材质细节升级：双发丝描边、五停靠 specular 高光、底部内阴影、磨砂颗粒，色值全部收敛进 design-tokens.json
 - **卡片透光磨砂**：全 App 玻璃卡片升级为真实背景高斯模糊（延续自研 backdrop 机制，零第三方库，模糊半径对齐桌面玻璃设置「模糊度」默认 4px）——流光背景独立成层 record（修复背景画在 Scaffold 之外、卡片取样漏掉流光的缺口），经 `LocalGlassBackdrop` 分发，聊天消息气泡/危机卡/错误卡/等待气泡/转录卡/模型列表、抽屉卡片、设置页全部卡片与开关行、各二级页顶栏胶囊等约 25 个玻璃面自动垫磨砂；卡片取样纯背景层从结构上消除自反馈/自重影（内容层→卡片模糊层→背景层引用链单向无环），顶栏/输入栏既有全量磨砂（消息穿透）不回退且与卡片磨砂正确级联；API 31+ 生效，低版本与未接入页面自动回退现状半透明，不新增设置开关；模糊半径/采样余量 token 化（design-tokens.json `cardBlurRadiusDp=4`/`cardSamplePaddingDp=8`），除既有录制/重放闭包外每帧零分配，滚动不整屏失效
+- **卡片通透化**：浅色 `glassFill` alpha .55→.40、`glassFillStrong` .72→.549，深色 .45→.33、.74→.549（与浅色同比例 ≈−27%），让流光真正透进卡片内部；卡片模糊半径 4dp→8dp、采样余量 8dp→16dp（维持注释里 2×blur 不变式，仍远低于悬浮栏 20dp 的性能护栏）。文字可读性用数值守而不改排版：新增 `GlassTransparencyReadabilityTest` 以**真实生产矩阵**（流光最深/最亮基色 → saturate(170%)/brightness(1.03) → 玻璃填充三层合成）复算卡片内实色并把数值以 ±0.15 钉死——浅色 fg 7.97:1 / fgSecondary 5.12:1、深色 fg 8.95:1 / fgSecondary 6.15:1（均 ≥4.5 AA）；muted 小字 3.08:1（改动前 3.61:1）属既有短板，写成记录性断言并注明正文层不用 muted
+- **流光色相 / 背景亮度可调**：设置页「外观」组流光开关正下方新增「流光色相（°）」0–360 step5 与「背景亮度（%）」0–100 step1 两条滑条（`SliderField` 自带当前值显示）。色相走 **W3C hue-rotate 矩阵**（与桌面 CSS filter 同一算子，行和恒 1 保 luma），只旋转流光/光斑基色、不动 UI 文字与玻璃，逐度扫描全量程卡片正文 fg ≥7.51 / fgSecondary ≥4.82（深色 fg ≥8.60 / fgSecondary ≥5.91）——HSL 保饱和旋转版实测 190°–344° 区间 fgSecondary 跌到 3.31:1，已按评审换成矩阵并留逐度护栏；亮度与桌面 `applyGlass` 的 `--wy-brightness-white/black` 同语义（>50 叠白、<50 叠黑，浅色只叠白、深色只叠黑），默认 50 = 不叠 veil，0°/50 下与不可调版本逐位一致。链路：DataStore 新增 `fluid_hue` / `bg_brightness`（读写两侧 `coerceIn` 兜底脏数据）→ 滑条写盘 60ms 合并（拖拽不再逐像素重写 prefs，本地状态即时更新）→ `CompositionLocal`（`LocalFluidHue` / `LocalBgBrightness`）下发 → `FluidBackground` 只改每帧写入的 `uColor1/2/3` 与新增 `uVeil` uniform（不重建 RuntimeShader，拖滑条不触发 AGSL 重编译），降级光斑路径同语义消费，reducedMotion 静态帧与动画帧共用同一段绘制代码故自动生效；纯函数内核 `ui/components/glass/FluidAppearance.kt`（`hueRotated` / `brightnessVeil`）零 Android 依赖，`docs/design-tokens.json` 新增 `component.fluidAppearance` 作唯一来源并同步玻璃数值（JSON 已校验）
 
-**其他**：手机 versionCode 41。
+**桌面版迭代（2026-09-29，版本号 1.9.3 → 1.9.4）**：
+- **Web 端冷启动会话恢复**：当前会话 id 持久化到 `localStorage`（`wenyan.sessionId`），侧栏切换 / 搜索跳转 / 新建会话三处写穿，删除当前会话、「新会话」按钮、备份恢复、清空全部四处清 key（不留指向已删数据的悬挂键）；启动时在 `refreshSessions` 之后校验该 id 仍在会话列表内（不在则清 key 回空态），末尾 `renderChat()` 自然落到恢复的会话
+- **记忆导出/导入（与安卓 v1.9.4 对齐）**：设置页「数据管理」在全量导出行之后新增「导出记忆档案」（浏览器直接下载 `wenyan-memory-YYYYMMDD.json`）与「合并导入记忆」（JS 创建隐藏 file input，二次确认明示「只新增/合并，不会删除任何现有数据」，`index.html` 未动）；后端新增 `GET /api/memory/export` —— 只含 targets/facts/profile 三段 + 文件头 `{app, version, exportedAt}`，元素字段逐字段照抄既有全量导出与安卓 `BackupRepository.exportMemoryJson`（target 8 键 / fact 6 键 / profile 4 键，无 profile 写 `JSONObject.NULL` 但保留键），`Content-Disposition: attachment; filename="wenyan-memory-<yyyyMMdd-HHmm>.json"`，GET 沿用统一拦截器只校验 Host、不校验 token（未新增任何 token 逻辑）；`POST /api/memory/import` —— Host + `X-Wenyan-Token`，事务包裹（`withTransaction(DEFERRED)`），异常显式重抛 `CancellationException`、其余兜底 `{ok:false}` 不抛 500，响应 `{ok, message, error}`，成功时 message 为中文合并摘要（如「导入 1 个档案、2 条记忆，跳过 1 条重复」）
+- 合并规则与安卓逐条一致（提出为文件级 `internal` 函数 `mergeMemoryImport` / `validateMemoryExportHeader`）：文件头收 `wenyan-desktop` / `wenyan-android` 且 version≥1，非法即返回中文原因且不触碰 DAO；档案按 trim 后 codeName 精确匹配复用本地 id、匹配不上才新建、空名档案整体跳过、文件内同名只建一档；记忆经 targetId 重映射后按 text 精确去重（空白/null 跳过且不计统计）、每档案上限 `MemoryExtractor.DEFAULT_FACT_LIMIT`=50（超出跳过）、`kind` / `expiresAt` / `source` / `createdAt` 原样保留；profile 仅在本地 `getLatest() == null` 时写入；**全函数只有 insert，无任何 delete/clear**
+- **测试 20 例**（新增 `app/desktop/src/test/kotlin/MemoryMergeImportTest.kt`，无既有 DB 测试基建故自建 `Room.inMemoryDatabaseBuilder` + `BundledSQLiteDriver`，与桌面生产同驱动同 `AppDatabase_Impl`，走真实 DAO/SQL/事务而非假 DAO）：导出三段与全量导出逐字段一致、导出→导入空库往返（含 kind/expiresAt/source/createdAt）、同名合并去重且本地数据零删除、trim 匹配、文件内同名只建一档、新档案全字段保留、每档案 50 上限与跨档案独立计数、profile 仅空时写入/不覆盖/null 不写、文件头三类非法与安卓导出文件可作合并源、垃圾条目与缺段容忍、桌面全量导出只取记忆段（sessions/messages 不导入）、事务中途失败整体回滚（真实 insert 后被 JSONException 打断，断言新档案已回滚而原数据完好），以及一条 HTTP 端到端（真实 CIO 仅绑 127.0.0.1 环回：GET 无 token 可下载且带 attachment 头、POST 无 token 403 且未写入、带 token 合并成功、非法 JSON 返回 200 + `ok:false`）
+- 版本号 `DESKTOP_VERSION` 1.9.3 → 1.9.4，Web 端 `APP_VERSION` 兜底默认值同步为 1.9.4（仅在 `/api/health` 取版本失败时兜底显示）；新增动态文案全为静态中文串、错误信息走 toast（`textContent`），未新增 innerHTML 注入面，服务端自身不发起任何外部 URL 请求
+
+**其他**：手机 versionCode 41；桌面 DESKTOP_VERSION 1.9.4（Web 端 APP_VERSION 兜底同步）。
 
 ## v1.9.3（2026-08-16）— 代码审查修复 + O7 知识路由最终落地
 

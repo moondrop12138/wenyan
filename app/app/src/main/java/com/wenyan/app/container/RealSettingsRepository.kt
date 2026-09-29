@@ -66,6 +66,11 @@ class RealSettingsRepository(
     /** v1.9.4 流光背景开关（DataStore 直通，默认 true 兜底在 DataStore 层） */
     override val fluidBackgroundEnabled: Flow<Boolean> = dataStore.fluidBackgroundEnabled
 
+    /** v1.9.4 三改 流光色相/背景亮度（DataStore 直通，默认 0/50 兜底在 DataStore 层） */
+    override val fluidHue: Flow<Int> = dataStore.fluidHue
+
+    override val bgBrightness: Flow<Int> = dataStore.bgBrightness
+
     override val privacyAck: Flow<Boolean> = dataStore.privacyAck
 
     // ===== v1.7.2 记忆档案 =====
@@ -303,6 +308,12 @@ class RealSettingsRepository(
     /** v1.9.4 流光背景开关 */
     override suspend fun setFluidBackgroundEnabled(enabled: Boolean) =
         dataStore.setFluidBackgroundEnabled(enabled)
+
+    /** v1.9.4 三改 流光色相（度，0-360；夹取在 DataStore 层） */
+    override suspend fun setFluidHue(degrees: Int) = dataStore.setFluidHue(degrees)
+
+    /** v1.9.4 三改 背景亮度（0-100，50 = 中点；夹取在 DataStore 层） */
+    override suspend fun setBgBrightness(value: Int) = dataStore.setBgBrightness(value)
 
     override suspend fun setPrivacyAck(ack: Boolean) {
         dataStore.setPrivacyAck(ack)

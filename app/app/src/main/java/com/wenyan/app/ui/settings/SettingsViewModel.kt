@@ -13,10 +13,23 @@ import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
 import com.wenyan.app.ui.contract.TargetUi
 import com.wenyan.app.ui.contract.UsageMetricsUi
+import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
+import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/**
+ * 拖滑条时 onValueChange 在拖拽中每次移动都触发；若每次直写 DataStore，
+ * 一次拖拽会产生数百次 prefs 文件重写（DataStore edit = 读+序列化+原子替换整个文件）。
+ * 这里做 trailing 合并：最后一次调用起算 [SLIDER_WRITE_MERGE_MS] 后落盘，期间的中间值丢弃——
+ * 每次拖拽最坏 1 次写字 = 1 次写盘，且末值必写。60ms 低于感知阈值，
+ * 背景仍随 DataStore 回流「拖到哪亮到哪」（观感为连续变化，非松手才跳）。
+ */
+private const val SLIDER_WRITE_MERGE_MS = 60L
 
 /**
  * 设置页状态（AC-09/11/12/18）：提供商列表、主/视觉模型、主题、隐私清除。
@@ -79,6 +92,18 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _fluidBackgroundEnabled = MutableStateFlow(true)
     val fluidBackgroundEnabled: StateFlow<Boolean> = _fluidBackgroundEnabled.asStateFlow()
 
+    /** v1.9.4 三改 流光色相（0-360°，默认 0 = 主题原色） */
+    private val _fluidHue = MutableStateFlow(FLUID_HUE_DEFAULT)
+    val fluidHue: StateFlow<Int> = _fluidHue.asStateFlow()
+
+    /** v1.9.4 三改 背景亮度（0-100，默认 50 = 不叠 veil） */
+    private val _bgBrightness = MutableStateFlow(BG_BRIGHTNESS_DEFAULT)
+    val bgBrightness: StateFlow<Int> = _bgBrightness.asStateFlow()
+
+    /** 滑条写盘合并任务（见 [SLIDER_WRITE_MERGE_MS]）：新值到来即取消上一笔，只落最后一笔 */
+    private var fluidHueWriteJob: Job? = null
+    private var bgBrightnessWriteJob: Job? = null
+
     /** v1.7.2 一次性 Toast（消费后清空，防重组重复弹） */
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -117,6 +142,8 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.activeTargetId.collect { _activeTargetId.value = it } }
         viewModelScope.launch { repo.memoryAutoEnabled.collect { _memoryAutoEnabled.value = it } }
         viewModelScope.launch { repo.fluidBackgroundEnabled.collect { _fluidBackgroundEnabled.value = it } }
+        viewModelScope.launch { repo.fluidHue.collect { _fluidHue.value = it } }
+        viewModelScope.launch { repo.bgBrightness.collect { _bgBrightness.value = it } }
     }
 
     fun setTheme(mode: String) {
@@ -262,6 +289,29 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     /** v1.9.4 流光背景开关 */
     fun setFluidBackgroundEnabled(enabled: Boolean) {
         viewModelScope.launch { repo.setFluidBackgroundEnabled(enabled) }
+    }
+
+    /**
+     * v1.9.4 三改 流光色相（0-360°，滑条 step 限制在 UI 层，范围夹取在 DataStore 层）。
+     * 本地 StateFlow 立即更新（滑条零延迟）；落盘走 [SLIDER_WRITE_MERGE_MS] 合并写。
+     */
+    fun setFluidHue(degrees: Int) {
+        _fluidHue.value = degrees
+        fluidHueWriteJob?.cancel()
+        fluidHueWriteJob = viewModelScope.launch {
+            delay(SLIDER_WRITE_MERGE_MS)
+            repo.setFluidHue(degrees)
+        }
+    }
+
+    /** v1.9.4 三改 背景亮度（0-100，50 = 中点）：同上，合并落盘 */
+    fun setBgBrightness(value: Int) {
+        _bgBrightness.value = value
+        bgBrightnessWriteJob?.cancel()
+        bgBrightnessWriteJob = viewModelScope.launch {
+            delay(SLIDER_WRITE_MERGE_MS)
+            repo.setBgBrightness(value)
+        }
     }
 
     /** v1.9.0 撤销最近一次自动写入（无日志 → Toast 提示；有 → 删除对应事实） */

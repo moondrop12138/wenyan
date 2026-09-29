@@ -2,15 +2,19 @@ package com.wenyan.desktop
 
 import androidx.room.useWriterConnection
 import com.wenyan.app.data.db.AppDatabase
+import com.wenyan.app.data.db.MemoryFactDao
 import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.MessageEntity
 import com.wenyan.app.data.db.ModelEntity
 import com.wenyan.app.data.db.PresetSeed
+import com.wenyan.app.data.db.ProfileDao
 import com.wenyan.app.data.db.ProfileEntity
 import com.wenyan.app.data.db.ProviderEntity
 import com.wenyan.app.data.db.SessionEntity
+import com.wenyan.app.data.db.TargetDao
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.security.KeystoreAesGcmCipher
+import com.wenyan.app.domain.MemoryExtractor
 import kotlinx.coroutines.flow.first
 
 /**
@@ -447,6 +451,80 @@ class WenyanService(
         return true to ""
     }
 
+    // ===== v1.9.4 记忆导出 / 合并导入（换机迁移，对齐安卓 BackupRepository）=====
+
+    /**
+     * v1.9.4 记忆导出：只导出记忆三段（targets/facts/profile），不含聊天记录（sessions/messages）
+     * 与 API Key（providers/models）。
+     * 三段字段与 exportAllJson 对应段逐字段一致、与安卓 BackupRepository.exportMemoryJson 同构，
+     * app 标记为 wenyan-desktop（version 1）；任一端「记忆合并导入」均可读取本文件。
+     * 注：facts 顺序沿用 exportAllJson 的「按档案 id 升序 + 档案内 listFacts（新→旧）」，
+     * 与安卓导出（全表按 createdAt 升序）集合相同、顺序无关（导入按 text 去重，不看顺序）。
+     */
+    suspend fun exportMemoryJson(): org.json.JSONObject {
+        val targets = listTargets()
+        return org.json.JSONObject()
+            .put("app", "wenyan-desktop").put("version", 1)
+            .put("exportedAt", System.currentTimeMillis())
+            .put("profile", getLatestProfile()?.let { p ->
+                org.json.JSONObject()
+                    .put("mbti", p.mbti ?: org.json.JSONObject.NULL)
+                    .put("score", p.score ?: org.json.JSONObject.NULL)
+                    .put("strengths", p.strengths ?: org.json.JSONObject.NULL)
+                    .put("weaknesses", p.weaknesses ?: org.json.JSONObject.NULL)
+            } ?: org.json.JSONObject.NULL)
+            .put("targets", JSONArray().apply {
+                targets.forEach { t ->
+                    put(org.json.JSONObject()
+                        .put("id", t.id).put("codeName", t.codeName)
+                        .put("mbti", t.mbti ?: org.json.JSONObject.NULL)
+                        .put("score", t.score ?: org.json.JSONObject.NULL)
+                        .put("relationStatus", t.relationStatus ?: org.json.JSONObject.NULL)
+                        .put("timeline", t.timeline).put("note", t.note)
+                        .put("createdAt", t.createdAt))
+                }
+            })
+            .put("facts", JSONArray().apply {
+                targets.forEach { t ->
+                    listFacts(t.id).forEach { f ->
+                        put(org.json.JSONObject()
+                            .put("targetId", f.targetId).put("text", f.text)
+                            .put("kind", f.kind)
+                            .put("expiresAt", f.expiresAt ?: org.json.JSONObject.NULL)
+                            .put("source", f.source)
+                            .put("createdAt", f.createdAt))
+                    }
+                }
+            })
+    }
+
+    /**
+     * v1.9.4 记忆合并导入（换机迁移）：绝不清表、绝不删除任何现有数据
+     * （与 importAllJson 的清空重建相反；重复内容按 text 去重跳过）。
+     * 兼容两种文件：桌面记忆导出（wenyan-desktop）与安卓记忆导出（wenyan-android）；
+     * 桌面「全量导出」文件同样可导入——providers/models/sessions/messages 段被忽略，
+     * 只取 targets/facts/profile 三段（换机只带走记忆）。
+     * 事务包裹（写法同 importAllJson：useWriterConnection + Transactor.withTransaction）：
+     * 任一步失败整体回滚，不产生半份导入。
+     * @return (是否成功, 中文结果描述)——成功时为合并摘要（导入 N 个档案、M 条记忆…），
+     *         失败时为中文原因；文件非法快速失败且不触碰任何数据
+     */
+    suspend fun importMemoryMerge(json: org.json.JSONObject): Pair<Boolean, String> {
+        validateMemoryExportHeader(json)?.let { return false to it }
+        return try {
+            db.useWriterConnection { transactor ->
+                transactor.withTransaction(androidx.room.Transactor.SQLiteTransactionType.DEFERRED) {
+                    mergeMemoryImport(db.targetDao(), db.memoryFactDao(), db.profileDao(), json)
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 安卓 L27 同款：runCatching 会吞 CancellationException（取消后仍返回「失败」，破坏结构化并发）
+            throw e
+        } catch (e: Throwable) {
+            false to "导入失败：${e.message ?: "数据损坏"}"
+        }
+    }
+
     /** 清空全部数据（顺序：消息→会话→事实→档案→模型→提供商→用户画像），返回后由调用方重新 seed */
     suspend fun clearAll() {
         db.messageDao().clear()
@@ -492,6 +570,144 @@ private object DesktopSettingsStore {
 }
 
 private typealias JSONArray = org.json.JSONArray
+
+/**
+ * 温言记忆导出文件头校验：app 标识（wenyan-desktop / wenyan-android）+ 版本号 ≥1。
+ * 非法返回中文原因，合法返回 null。与安卓 BackupRepository.validateMemoryExportHeader 同语义（双端互读）。
+ * WenyanService.importMemoryMerge（事务外快速失败）与 mergeMemoryImport（核心函数自身输入防御，
+ * 亦供单测直接覆盖）共用；校验幂等，合法文件两处零额外行为。
+ */
+internal fun validateMemoryExportHeader(json: org.json.JSONObject): String? {
+    val app = json.optString("app", "")
+    if (app != "wenyan-desktop" && app != "wenyan-android") {
+        return "不是温言记忆导出文件"
+    }
+    if (json.optInt("version", -1) < 1) {
+        return "记忆文件版本无效或过低"
+    }
+    return null
+}
+
+/**
+ * v1.9.4 合并导入核心逻辑（internal 提出为独立函数：只依赖三个 DAO，纯 JVM 可单测；
+ * 生产路径由 WenyanService.importMemoryMerge 包事务 + try/catch，规则与安卓
+ * BackupRepository.mergeMemoryImport 逐条一致）。
+ * 合并规则：
+ * - targets 按 codeName（trim 后精确匹配）对上 → 沿用本地 id；对不上 → 插入新档案
+ *   （mbti/score/relationStatus/timeline/note/createdAt 原样保留）；
+ * - facts 在 targetId 重映射后按 text 精确相等去重，只插增量；每档案总数 ≤50
+ *   （MemoryExtractor.DEFAULT_FACT_LIMIT，与提炼链路上限一致），超出跳过；
+ *   expiresAt/source/kind/createdAt 原样保留；
+ * - profile 仅当本地无档案（getLatest()==null）时写入，绝不覆盖现有用户画像。
+ * 本函数只做 insert（无任何 delete/clear），失败由事务层整体回滚——绝不删除任何现有数据。
+ * @return (true, 中文结果描述)；DAO 异常向上抛出由事务层统一兜底为 (false, 原因)
+ */
+internal suspend fun mergeMemoryImport(
+    targetDao: TargetDao,
+    memoryFactDao: MemoryFactDao,
+    profileDao: ProfileDao,
+    json: org.json.JSONObject,
+): Pair<Boolean, String> {
+    // 文件头校验（app 标识 / 版本号）：非法直接拒绝，不触碰任何 DAO
+    validateMemoryExportHeader(json)?.let { return false to it }
+    val targets = json.optJSONArray("targets") ?: JSONArray()
+    val facts = json.optJSONArray("facts") ?: JSONArray()
+
+    // 档案合并索引：本地现有 + 本次已建档案（trim 后 codeName → 本地 id）。
+    // 导入文件内同名条目也复用同一档案（先建者胜），不重复建档。
+    val idByName = HashMap<String, Long>()
+    targetDao.listAll().forEach { idByName[it.codeName.trim()] = it.id }
+    val idMap = HashMap<Long, Long>() // 导出 targetId → 本地 targetId
+    var newTargets = 0
+    for (i in 0 until targets.length()) {
+        val t = targets.getJSONObject(i)
+        val name = if (t.isNull("codeName")) "" else t.optString("codeName").trim()
+        if (name.isEmpty()) continue // 无名档案为垃圾条目，整体跳过（其事实随后也不可归档）
+        val resolvedId = idByName[name] ?: run {
+            val newId = targetDao.insert(
+                TargetEntity(
+                    codeName = name,
+                    mbti = if (t.isNull("mbti")) null else t.optString("mbti"),
+                    score = if (t.isNull("score")) null else t.optInt("score"),
+                    relationStatus = if (t.isNull("relationStatus")) null else t.optString("relationStatus"),
+                    timeline = t.optString("timeline", "[]"),
+                    note = t.optString("note", ""),
+                    createdAt = t.optLong("createdAt", System.currentTimeMillis()),
+                ),
+            )
+            idByName[name] = newId
+            newTargets++
+            newId
+        }
+        idMap[t.optLong("id", -1)] = resolvedId
+    }
+
+    // 事实去重/计数索引：按本地 targetId 收集现有 text 集合与条数（一次全表拉取）
+    val seenTexts = HashMap<Long, MutableSet<String>>()
+    val counts = HashMap<Long, Int>()
+    memoryFactDao.listAll().forEach { f ->
+        seenTexts.getOrPut(f.targetId) { mutableSetOf() }.add(f.text)
+        counts[f.targetId] = (counts[f.targetId] ?: 0) + 1
+    }
+
+    var addedFacts = 0
+    var skippedDuplicates = 0
+    var skippedOverLimit = 0
+    for (i in 0 until facts.length()) {
+        val f = facts.getJSONObject(i)
+        val localTargetId = idMap[f.optLong("targetId", -1)] ?: continue // 档案缺失的事实跳过
+        // 同安卓 M7 防御：text 为 JSON null 时 optString 会返回字面量 "null"，先 isNull 预检
+        val text = if (f.isNull("text")) "" else f.optString("text")
+        if (text.isBlank()) continue // 空文本为垃圾条目，不计入任何统计
+        val seen = seenTexts.getOrPut(localTargetId) { mutableSetOf() }
+        if (text in seen) {
+            skippedDuplicates++
+            continue
+        }
+        val current = counts[localTargetId] ?: 0
+        if (current >= MemoryExtractor.DEFAULT_FACT_LIMIT) {
+            skippedOverLimit++
+            continue
+        }
+        memoryFactDao.insert(
+            MemoryFactEntity(
+                targetId = localTargetId,
+                text = text,
+                kind = f.optString("kind", MemoryFactEntity.KIND_FACT),
+                expiresAt = if (f.isNull("expiresAt")) null else f.optLong("expiresAt"),
+                source = f.optString("source", MemoryFactEntity.SOURCE_MANUAL),
+                createdAt = f.optLong("createdAt", System.currentTimeMillis()),
+            ),
+        )
+        seen.add(text)
+        counts[localTargetId] = current + 1
+        addedFacts++
+    }
+
+    // profile 仅当本地无档案时写入（合并语义：绝不覆盖现有用户画像）
+    var profileWritten = false
+    val jsonProfile = json.optJSONObject("profile")
+    if (jsonProfile != null && jsonProfile !== org.json.JSONObject.NULL && profileDao.getLatest() == null) {
+        profileDao.insert(
+            ProfileEntity(
+                createdAt = jsonProfile.optLong("createdAt", System.currentTimeMillis()),
+                mbti = if (jsonProfile.isNull("mbti")) null else jsonProfile.optString("mbti"),
+                score = if (jsonProfile.isNull("score")) null else jsonProfile.optInt("score"),
+                strengths = if (jsonProfile.isNull("strengths")) null else jsonProfile.optString("strengths"),
+                weaknesses = if (jsonProfile.isNull("weaknesses")) null else jsonProfile.optString("weaknesses"),
+            ),
+        )
+        profileWritten = true
+    }
+
+    val message = buildString {
+        append("导入 ").append(newTargets).append(" 个档案、").append(addedFacts).append(" 条记忆")
+        if (skippedDuplicates > 0) append("，跳过 ").append(skippedDuplicates).append(" 条重复")
+        if (skippedOverLimit > 0) append("，").append(skippedOverLimit).append(" 条超出档案上限")
+        if (profileWritten) append("，已写入用户档案")
+    }
+    return true to message
+}
 
 /** v1.9.0 桌面版自动记忆写入日志条目（与手机端 SettingsRepository.MemoryWriteLogEntry 同构） */
 data class DesktopWriteLogEntry(

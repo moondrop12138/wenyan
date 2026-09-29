@@ -3,6 +3,8 @@ package com.wenyan.app
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wenyan.app.ui.contract.AppContainer
+import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
+import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
 import com.wenyan.app.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +24,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _fluidBackground = MutableStateFlow(true)
     val fluidBackground: StateFlow<Boolean> = _fluidBackground.asStateFlow()
 
+    /** v1.9.4 三改 流光色相（0-360°，默认 0 = 主题原色；设置页滑条写入后经 DataStore 回流） */
+    private val _fluidHue = MutableStateFlow(FLUID_HUE_DEFAULT)
+    val fluidHue: StateFlow<Int> = _fluidHue.asStateFlow()
+
+    /** v1.9.4 三改 背景亮度（0-100，默认 50 = 不叠 veil） */
+    private val _bgBrightness = MutableStateFlow(BG_BRIGHTNESS_DEFAULT)
+    val bgBrightness: StateFlow<Int> = _bgBrightness.asStateFlow()
+
     private val _onboardingCompleted = MutableStateFlow(false)
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
 
@@ -39,6 +49,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             container.settingsRepository.fluidBackgroundEnabled.collect { enabled ->
                 _fluidBackground.value = enabled
             }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.fluidHue.collect { degrees -> _fluidHue.value = degrees }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.bgBrightness.collect { value -> _bgBrightness.value = value }
         }
         viewModelScope.launch {
             container.onboardingRepository.onboardingCompleted.collect { done ->

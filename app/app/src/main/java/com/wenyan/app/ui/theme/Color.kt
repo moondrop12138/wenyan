@@ -86,10 +86,16 @@ val LightPalette = GtjPalette(
     warmSoft = Color(0xFFF7EADC),
     warmOn = Color(0xFF8F4F24),
     scrim = Color(0x732B2118),
-    // 玻璃（原型浅色值）：fill rgba(253,249,242,.55) / strong rgba(253,248,240,.72)（v1.7.1 二改降透明度去纯色感）/
+    // 玻璃（原型浅色值）：fill rgba(253,249,242,.40) / strong rgba(253,248,240,.549)（v1.9.4 三改通透化：.55/.72 → .40/.549，
+    // 让流光背景透进卡片内部；边缘轮廓由双发丝描边 + specular 承担）/
     // border rgba(255,255,255,.75) / edge rgba(255,255,255,.95) / shadow rgba(110,70,30,.18)
-    glassFill = Color(0x8CFDF9F2),
-    glassFillStrong = Color(0xB8FDF8F0), // 0.72 × 255 ≈ 184 = 0xB8
+    // 可读性核算（GlassTransparencyReadabilityTest）：卡片级 backdrop 最坏底（流光最深色 #C0743F 经 saturate(170%))
+    // 上 fg ≈8.0:1、fgSecondary ≈5.1:1（WCAG AA ≥4.5:1 达标）；muted 标题小字 ≈3.1:1 与改动前 3.6:1 同量级
+    // （浅色 muted 在流光最深处本就低于 AA，故正文层用 fg/fgSecondary，见 design-pages 无障碍基线）。
+    // 色相滑条维度（评审修复）：基色经 W3C hue-rotate 矩阵旋转后 luma 保持，全量程逐度扫描
+    // fg ≥7.51、fgSecondary ≥4.82（两主题均达标；曾用 HSL 旋转时 190°-344° 区间跌到 3.31:1）
+    glassFill = Color(0x66FDF9F2), // 0.40 × 255 ≈ 102 = 0x66
+    glassFillStrong = Color(0x8CFDF8F0), // 0.549 × 255 ≈ 140 = 0x8C（= 旧 glassFill 值）
     glassBorder = Color(0xBFFFFFFF),
     glassEdgeHighlight = Color(0xF2FFFFFF),
     glassShadow = Color(0x2E6E461E),
@@ -141,10 +147,12 @@ val DarkPalette = GtjPalette(
     warmSoft = Color(0xFF3A2A1C),
     warmOn = Color(0xFFF2CBA9),
     scrim = Color(0x99000000),
-    // 玻璃（原型深色值）：fill rgba(46,36,28,.45) / strong rgba(34,26,20,.74)（v1.7.1 二改降透明度）/
+    // 玻璃（原型深色值）：fill rgba(46,36,28,.33) / strong rgba(34,26,20,.549)（v1.9.4 三改通透化：.45/.74 → .33/.549，
+    // 与浅色同比例下调 ~27%，让深色流光（#5C3F28 暖褐涌动）透进卡片）/
     // border rgba(255,255,255,.12) / edge rgba(255,255,255,.35) / shadow rgba(0,0,0,.5)
-    glassFill = Color(0x732E241C),
-    glassFillStrong = Color(0xBD221A14), // 0.74 × 255 ≈ 189 = 0xBD
+    // 可读性核算：深色最深流光区卡片仍由 glassHairlineInner(10% 白) + specular 勾边；fg 合成底 ≈9:1 达标
+    glassFill = Color(0x542E241C), // 0.33 × 255 ≈ 84 = 0x54
+    glassFillStrong = Color(0x8C221A14), // 0.549 × 255 ≈ 140 = 0x8C
     glassBorder = Color(0x1FFFFFFF),
     glassEdgeHighlight = Color(0x59FFFFFF),
     glassShadow = Color(0x80000000),
@@ -175,6 +183,31 @@ val LocalGtjColors = staticCompositionLocalOf { LightPalette }
 
 /** v1.9.4 流光背景总开关（默认开启；设置页可 provides false，关闭后 FluidBackground 不绘制、露出主题底色） */
 val LocalFluidBackground = staticCompositionLocalOf { true }
+
+// ── v1.9.4 三改 流光可调（色相 + 背景亮度；唯一来源 docs/design-tokens.json component.fluidAppearance）──
+
+/** 流光色相范围（度）。0 = 主题原色（与不可调版本完全一致），顺时针旋转 fluidA/B/C 三基色。 */
+const val FLUID_HUE_MIN = 0
+const val FLUID_HUE_MAX = 360
+const val FLUID_HUE_DEFAULT = 0
+
+/** 背景亮度范围。50 = 中点 = 不叠加任何 veil（与不可调版本完全一致）。 */
+const val BG_BRIGHTNESS_MIN = 0
+const val BG_BRIGHTNESS_MAX = 100
+const val BG_BRIGHTNESS_DEFAULT = 50
+
+/**
+ * 流光色相（度，0-360）：FluidBackground 把 fluidA/B/C 做 W3C hue-rotate 矩阵旋转后送进 shader 的
+ * uColor1/2/3；GlowBackground 降级路径同样旋转 glowA/B/C。默认 0 = 原色（原样返回，逐位一致）。
+ */
+val LocalFluidHue = staticCompositionLocalOf { FLUID_HUE_DEFAULT }
+
+/**
+ * 背景亮度（0-100）：>50 叠白、<50 叠黑（veil 语义与桌面 app.js applyGlass 的
+ * --wy-brightness-white/black 完全一致，浅色主题只叠白、深色主题只叠黑）。
+ * 默认 50 = 不叠加，观感与不可调版本完全一致。
+ */
+val LocalBgBrightness = staticCompositionLocalOf { BG_BRIGHTNESS_DEFAULT }
 
 /** M3 ColorScheme 映射（浅色）。映射关系固定：accent→primary 等，勿随意改。 */
 fun lightColorScheme(p: GtjPalette = LightPalette): ColorScheme = ColorScheme(

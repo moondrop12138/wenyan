@@ -68,7 +68,8 @@ import androidx.compose.ui.unit.roundToIntSize
  * - 卡片透光磨砂（v1.9.4 新增）：Chat/Settings/Onboarding/ProviderEdit/MemoryEdit 各页
  *   record 自己的「流光背景层」并 [LocalGlassBackdrop] provide，全部 GlassSurface/liquidGlass
  *   内部自动消费——卡片之下垫真实高斯模糊（[GlassBackdropParams.cardBlurRadius]，
- *   对齐桌面玻璃设置「模糊度」默认 4px），卡片自反馈/自重影经「取样纯背景层」结构性消除
+ *   对齐桌面玻璃设置「模糊度」运行时默认 4px；v1.9.4 三改随玻璃通透化加倍到 8dp），
+ *   卡片自反馈/自重影经「取样纯背景层」结构性消除
  *   （见 [GlassBackdropLayer.recordBlur] 注释），未接入页面 null 自动回退半透明。
  *
  * 与抽屉模糊（ChatScreen 根 Box 的整层 BlurEffect(18f)）共存：抽屉 blur 挂在更外层的
@@ -93,13 +94,17 @@ object GlassBackdropParams {
 
     /**
      * 卡片级模糊半径（对应桌面玻璃设置「模糊度」运行时默认 4px，app.js:66 glassBlur 默认值；
-     * styles.css :root 的 20px 仅为未开启玻璃主题时的占位）。取小值是性能护栏：
-     * 卡片数量多（消息气泡/设置行），每卡片一个模糊 pass，小半径 + 低频流光背景足够磨砂观感。
+     * styles.css :root 的 20px 仅为未开启玻璃主题时的占位）。
+     * v1.9.4 三改（卡片通透化）：4dp → 8dp —— 玻璃填充 alpha 由 .55/.72 降到 .40/.549 后，
+     * 透出的背景更依赖「磨砂」而非「半透明覆盖」，模糊半径加倍让流光在卡片内真正化开
+     * （同时把流光的深色涡心平均掉，卡片内文字底对比反而更稳，见 GlassTransparencyReadabilityTest）。
+     * 仍取小值是性能护栏：卡片数量多（消息气泡/设置行），每卡片一个模糊 pass；
+     * 8dp 远低于悬浮栏 20dp，且模糊层的 RenderEffect 只在半径变化时重建（[GlassBackdropLayer.recordBlur]）。
      */
-    val cardBlurRadius: Dp = 4.dp
+    val cardBlurRadius: Dp = 8.dp
 
-    /** 卡片级采样余量（≈2×卡片 blur，与悬浮栏 samplePadding=2×blur 同比例）。 */
-    val cardSamplePadding: Dp = 8.dp
+    /** 卡片级采样余量（≈2×卡片 blur，与悬浮栏 samplePadding=2×blur 同比例）：8dp → 16dp。 */
+    val cardSamplePadding: Dp = 16.dp
 }
 
 /**
@@ -109,8 +114,10 @@ object GlassBackdropParams {
  *   G' = 0.213(1-s)R + (0.715+0.285s)G + 0.072(1-s)B
  *   B' = 0.213(1-s)R + 0.715(1-s)G + (0.072+0.928s)B
  * 再整体乘亮度 b（RGB 通道 ×b，alpha 行不变）——等价 CSS `saturate(s) brightness(b)`。
+ * internal（仅模块内 + 单测可见）：词法作用域只在本文件的进程内单例使用，放宽到 internal
+ * 只是为了让 GlassTransparencyReadabilityTest 用**真实生产参数**复算卡片内最坏底，而非在测试里复刻公式。
  */
-private fun buildBackdropColorMatrix(saturation: Float, brightness: Float): ColorMatrix {
+internal fun buildBackdropColorMatrix(saturation: Float, brightness: Float): ColorMatrix {
     val inv = 1f - saturation
     return ColorMatrix(
         floatArrayOf(
