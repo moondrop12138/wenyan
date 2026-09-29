@@ -606,7 +606,8 @@ function buildCard(a, ts){
   }
   // 引用 / 安全
   if ((a.citations||[]).length)
-    card.appendChild(el('div','cite', '参考知识库：' + a.citations.join('、')));
+    // v1.9.4 安全修复：citations 是模型输出（可经提示注入携带 HTML），并入 innerHTML 前必须转义
+    card.appendChild(el('div','cite', '参考知识库：' + esc(a.citations.join('、'))));
   if (a.safetyOverride && a.safetyMessage){
     const s = el('div','core-txt', esc(a.safetyMessage));
     s.style.color = 'var(--danger)';
@@ -1286,7 +1287,7 @@ async function renderSettings(col){
   atx.appendChild(el('span','t','版本'));
   atx.appendChild(el('span','d','温言桌面版 · 液态玻璃'));
   aRow.appendChild(atx);
-  const chk = el('span','ch','v' + APP_VERSION + ' · 检查更新');
+  const chk = el('span','ch','v' + esc(APP_VERSION) + ' · 检查更新');
   chk.style.color = 'var(--accent)';
   chk.onclick = async e => {
     e.stopPropagation();
