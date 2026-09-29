@@ -14,7 +14,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.wenyan.app.ui.theme.LocalBgBrightness
-import com.wenyan.app.ui.theme.LocalFluidHue
 import com.wenyan.app.ui.theme.LocalGtjColors
 import com.wenyan.app.ui.theme.LocalGtjIsDark
 import com.wenyan.app.ui.theme.rememberReducedMotion
@@ -53,8 +52,9 @@ private val GLOWS = listOf(
  * （liquidGlass 接收光斑参数后从未使用），且每帧写 state 导致 60fps 全屏重组。
  *
  * v1.9.4 三改：[FluidBackground] 的降级路径（API < 33 / AGSL 编译失败），故必须与主路径
- * 消费同一套可调设置，否则「流光色相/背景亮度」在旧机型上静默失效：
- * - 色相：光斑三色同走 [hueRotated]（与 fluidA/B/C 同一旋转语义）；
+ * 消费同一套可调设置，否则「背景亮度」在旧机型上静默失效：
+ * - 色相：v1.9.4 四改起由 MainActivity 内容根部全局层统一旋转（对齐 web body 级 filter），
+ *   本组件画**未旋转**基色（glowA/B/C 原色），防二次旋转；
  * - 亮度：绘制末尾叠一层 [brightnessVeil] 矩形（与 shader 的 uVeil 同语义，默认 50 = 不画）。
  */
 @Composable
@@ -64,18 +64,11 @@ fun GlowBackground(
     val p = LocalGtjColors.current
     val reduced = rememberReducedMotion()
     // v1.9.4 三改：与 FluidBackground 同一套可调设置（降级路径同样响应）
-    val hueDegrees = LocalFluidHue.current
     val bgBrightness = LocalBgBrightness.current
     val isDark = LocalGtjIsDark.current
-    // 光斑三色（色相旋转后）与亮度 veil 均在重组级算好：原先 colors 在 draw lambda 内每帧
-    // listOf(...) 新建列表（每帧一次分配），随本次接入一并移出帧循环
-    val colors = remember(p.glowA, p.glowB, p.glowC, hueDegrees) {
-        listOf(
-            hueRotated(p.glowA, hueDegrees.toFloat()),
-            hueRotated(p.glowB, hueDegrees.toFloat()),
-            hueRotated(p.glowC, hueDegrees.toFloat()),
-        )
-    }
+    // 光斑三色（未旋转基色）在重组级装好：原先 colors 在 draw lambda 内每帧
+    // listOf(...) 新建列表（每帧一次分配），已移出帧循环
+    val colors = remember(p.glowA, p.glowB, p.glowC) { listOf(p.glowA, p.glowB, p.glowC) }
     val veil = remember(bgBrightness, isDark) { brightnessVeil(bgBrightness, isDark) }
     var frameNanos by remember { mutableLongStateOf(0L) }
 

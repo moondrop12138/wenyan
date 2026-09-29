@@ -93,6 +93,7 @@ import com.wenyan.app.ui.components.TypingIndicator
 import com.wenyan.app.ui.components.resolveWaitingLabel
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.GlassBackdropLayer
+import com.wenyan.app.ui.components.glass.GlassFill
 import com.wenyan.app.ui.components.glass.FluidBackground
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
@@ -291,7 +292,10 @@ fun ChatScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                // v1.7.1-4：API31+ 半透明玻璃（背后被模糊，可读性由模糊保证）；低版本实底
+                // v1.9.4 Mica 对齐：侧栏容器圆角 24（web 规格 radii.sidebar=24，.sidebar 悬浮卡）
+                drawerShape = GtjShape.sidebar,
+                // v1.7.1-4：API31+ 半透明玻璃（背后被模糊，可读性由模糊保证）；低版本实底。
+                // glassFill = 桌面 frost 版 --glass（.30），web 侧栏同款填充
                 drawerContainerColor = if (canBlur) p.glassFill else p.bg,
             ) {
                 SessionDrawerContent(
@@ -712,13 +716,15 @@ private fun ChatTopBar(
         DotState.Failure -> p.dotFailure
     }
 
-    // v1.7.1 二改续：顶栏改悬浮胶囊（与输入栏同款 r28 strong 玻璃 + 软投影），
-    // 外层留 12/8 悬浮留白保证投影可见；edge-to-edge 状态栏内边距保留
+    // v1.7.1 二改续：顶栏改悬浮胶囊（v1.9.4 Mica：r20 玻璃 + 栏级软投影 0 8px 28px），
+    // 外层留悬浮留白保证投影可见；edge-to-edge 状态栏内边距保留。
+    // v1.9.4：左右留白 12 → 16 与输入栏（web .input-zone 左右 16px）对齐——web 两条 Mica 栏
+    // 同宽（margin 16px），留 12 会让顶栏比输入栏宽 8dp
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Box(
             modifier = Modifier
@@ -728,10 +734,22 @@ private fun ChatTopBar(
                 // glassBackdropLayer 必须在 liquidGlass 之前（链上靠前的 drawBehind 先画）；
                 // backdrop=false：本面已显式全量磨砂（背景+消息穿透），liquidGlass 内部的
                 // 卡片级磨砂不再叠加，防止盖掉消息穿透成分（v1.9.4 卡片透光磨砂配套）
-                .glassBackdropLayer(backdropLayer, GtjShape.inputBar)
+                .glassBackdropLayer(backdropLayer, GtjShape.topBar)
                 // v1.8.0 液态玻璃 2.0：边缘透镜（v1.8.1 B4 移除光斑 dead path）
-                .liquidGlass(shape = GtjShape.inputBar, backdrop = false)
-                .clip(GtjShape.inputBar),
+                // v1.9.4 Mica：圆角 20 + 栏阴影对齐 web（亮 0 8px 28px rgba(110,70,30,.1) /
+                // 暗 0 8px 28px rgba(0,0,0,.3)）；CSS blur 半径 ≈ 2σ → 羽化 14dp，位移 8dp；
+                // fill = Card——顶栏与输入栏同属 web --wy-card-* 渐变组（styles.css:534/538 共用）
+                .liquidGlass(
+                    shape = GtjShape.topBar,
+                    fill = GlassFill.Card,
+                    backdrop = false,
+                    shadowColor = p.glassShadowTopBar,
+                    shadowFeather = 14.dp,
+                    shadowLift = 8.dp,
+                    // 近影关掉：web 对 Mica 栏的 box-shadow 是整条覆盖（styles.css:535 只剩这一条）
+                    shadowNearColor = Color.Transparent,
+                )
+                .clip(GtjShape.topBar),
         ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -767,7 +785,17 @@ private fun ChatTopBar(
                     // 微型玻璃状态点：11dp 玻璃壳（同款 glass 材质）+ 5dp 状态色内芯（呼吸）
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(11.dp).liquidGlass(shape = CircleShape, backdrop = false),
+                        modifier = Modifier
+                            .size(11.dp)
+                            // v1.9.4：状态点按 web 无投影处理——web .sdot 只有 1px 描边 + 内芯，
+                            // 没有 box-shadow；且 11dp 小件套卡片级 σ20/位移14 的软影会糊成一团。
+                            // 远端/近端两条影都关，只留玻璃填充 + 描边 + 顶边高光
+                            .liquidGlass(
+                                shape = CircleShape,
+                                backdrop = false,
+                                shadowColor = Color.Transparent,
+                                shadowNearColor = Color.Transparent,
+                            ),
                     ) {
                         Box(
                             modifier = Modifier

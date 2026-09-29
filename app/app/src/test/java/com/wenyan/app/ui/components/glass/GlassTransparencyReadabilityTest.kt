@@ -10,28 +10,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * v1.9.4 三改 卡片通透化（glass fill alpha 下调）后的文字可读性自检（纯 JVM）。
+ * v1.9.4 Mica 两组填充（web cautions：色相不同勿混用）的文字可读性自检（纯 JVM）。
  *
- * 卡片内的文字底不是主题底色，而是「流光背景 → backdrop 模糊 + saturate(170%)/brightness(1.03)
- * → 玻璃半透明填充」三层合成。本测试取**每个主题最不利的流光基色**（浅色取最深暖橙 fluidA，
- * 深色取最亮暖褐 fluidA——深色主题文字是浅色，底越亮越不利），用生产矩阵
- * （[buildBackdropColorMatrix] + [GlassBackdropParams] 真实参数，非测试内复刻公式）算出
- * 卡片内实色，再按 WCAG AA（正文 ≥4.5:1）断言 fg / fgSecondary。
+ * 卡片内的文字底不是主题底色，而是「流光背景 → backdrop 模糊 + saturate(170%)
+ * → 玻璃填充」三层合成。引擎填充分两组（[GlassFill]，与 web 分组一一对应）：
+ * - **Frost 组**（默认）：frost 版 --glass 直色（亮 rgb(253,249,242,.30)/暗 rgb(46,36,28,.30)），
+ *   承载气泡/胶囊/弹层/侧栏行等全部卡片文字 → 正文必须 AA 达标；
+ * - **Card 组**（仅顶栏/输入栏）：--wy-card-light/dark 渐变（亮 白 .150/.105、暗 .150/.150）——
+ *   web 只把这两个元素做成这样透，栏内正文仅 fg（placeholder/meta 走内衬输入框 glassInputFill
+ *   半透明底 + meta 字色），浅色 fg 全量程最坏 4.99:1 仍守 AA；fgSecondary/muted 在该组跌破 AA
+ *   属规格如实结果，转为记录性断言（同 muted 用例风格）。
  *
- * 实测值（改动后，见 Color.kt 注释）：浅色 fg 7.97:1 / fgSecondary 5.12:1；
- * 深色 fg 8.95:1 / fgSecondary 6.15:1 —— 均达标。muted 小字在最深流光上 ≈3.1:1（改动前 3.6:1），
- * 与「浅色 muted 在流光最深处本就低于 AA」同量级，故不作为断言（正文层用 fg/fgSecondary）。
+ * 实测钉值（Float16 色彩管线口径，详见各用例）：Frost 亮 fg 6.95/fgSecondary 4.46/muted 2.68、
+ * 暗 fg 9.01/fgSecondary 6.20/muted 4.07（hue0）；Card 组亮（最坏停靠点=底停）5.64/3.62/2.18、
+ * 暗（最坏停靠点=顶停）8.19/5.63/3.70。
  *
- * v1.9.4 三改·评审修复（色相维度）：上面那组是 hue=0 的值；色相滑条可把流光基色转到任何色相，
- * 卡片内底色会跟着变，故另加**逐度扫描**用例（lightText/darkText_staysReadableAcrossTheWholeHueRange）
- * 守全量程。当时选 HSL 旋转（保 S/L）曾在这里漏底：HSL 保不住相对亮度，#C0743F 转 215° 得 #3F40C0
- * （相对亮度 0.2406 → 0.062），fgSecondary 在 190°-344° 全线 <4.5、最坏 3.31:1；
- * 换成 W3C hue-rotate 矩阵（= 桌面 CSS filter 算子，行和 = 1 保 luma）后全量程 fg ≥7.51 /
- * fgSecondary ≥4.82，且最坏点仍优于「通透化之前」的基线（4.43 / 2.67）。
+ * 最坏停靠点选取依据（Card 组）：亮色两停同色（白）只差 alpha，底停 .105 < 顶停 .150 → 透出
+ * 流光更多、更不利；暗色两停 alpha 相同，但顶停填充 rgb(42,46,56) 比底停 rgb(22,25,34) 亮 →
+ * 叠出的卡内底更亮、对浅色文字更不利。
+ *
+ * 逐度扫描护栏延续：色相滑条 0-360° 全量程（W3C hue-rotate 矩阵保 luma），用生产矩阵
+ * （[buildBackdropColorMatrix] + [GlassBackdropParams] 真实参数，非测试内复刻公式）。
+ *
+ * v1.9.4 四改 关系说明（不改任何断言）：色相自本版起挂在应用内容根部的全局 colorFilter 图层
+ * （「流光+玻璃+文字」整树一起转，见 MainActivity / FluidAppearance.hueRotateColorMatrix），
+ * [hueRotated] 与全局层共用同一条系数构造器（hueRotateCoefficients），故这里「只把流光基色转色相、
+ * 文字保持原色」的逐度扫描是**更保守**的模型（全局层下文字与卡内底同步旋转、对比度更平），
+ * 结论（全量程 ≥4.5）继续成立，钉值仍指向同一套 token。
  */
 class GlassTransparencyReadabilityTest {
 
-    /** 卡片内模糊底：流光基色经 backdrop 的 saturate(170%) + brightness(1.03)（生产矩阵，行主序 4×5）。 */
+    /** 卡片内模糊底：流光基色经 backdrop 的 saturate(170%)（生产矩阵，行主序 4×5）。 */
     private fun backdropFiltered(base: Color): Color {
         // 直接按 row*5+column 取 FloatArray：ColorMatrix 的行主序布局就是构造时传入的 20 个 float
         // （values[0..4] = R 行），不走 get(row, column) 访问器以免其索引约定歧义
@@ -45,6 +54,10 @@ class GlassTransparencyReadabilityTest {
     /** 玻璃填充叠在卡片内模糊底之上（[GtjContrast.composite] = 标准 alpha 合成）。 */
     private fun cardInterior(fill: Color, backdrop: Color): Color =
         GtjContrast.composite(fill, backdrop)
+
+    /** Card 组（悬浮栏）各主题最坏停靠点（选取依据见类注释）。 */
+    private val lightBarWorstFill = LightPalette.glassCardFillBottom
+    private val darkBarWorstFill = DarkPalette.glassCardFillTop
 
     /**
      * 色相滑条 0-360° **逐度**扫描，取某文字色在卡片内的最低对比度及其色相：
@@ -70,133 +83,212 @@ class GlassTransparencyReadabilityTest {
         assertTrue("$label 对比度 ${GtjContrast.format(r)} 应 >= 4.5（fg=${fg.value} bg=${bg.value}）", r >= 4.5)
     }
 
+    // ── Frost 组（引擎默认填充，承载全部卡片正文）：fg/fgSecondary（暗）须 ≥AA ──
+
     @Test
-    fun lightText_onTransparentCard_passesAa() {
+    fun lightText_onFrostCard_passesAa() {
         val interior = cardInterior(LightPalette.glassFill, backdropFiltered(LightPalette.fluidA))
-        assertReadable("浅色 fg/通透玻璃卡（流光最深色之上）", LightPalette.fg, interior)
-        assertReadable("浅色 fgSecondary/通透玻璃卡（流光最深色之上）", LightPalette.fgSecondary, interior)
+        assertReadable("浅色 fg/Frost 玻璃卡（流光最深色之上）", LightPalette.fg, interior)
     }
 
     @Test
-    fun lightText_onStrongTransparentCard_passesAa() {
-        val interior = cardInterior(LightPalette.glassFillStrong, backdropFiltered(LightPalette.fluidA))
-        assertReadable("浅色 fg/通透强玻璃卡", LightPalette.fg, interior)
-    }
-
-    @Test
-    fun darkText_onTransparentCard_passesAa() {
+    fun darkText_onFrostCard_passesAa() {
         val interior = cardInterior(DarkPalette.glassFill, backdropFiltered(DarkPalette.fluidA))
-        assertReadable("深色 fg/通透玻璃卡（流光最亮色之上）", DarkPalette.fg, interior)
-        assertReadable("深色 fgSecondary/通透玻璃卡（流光最亮色之上）", DarkPalette.fgSecondary, interior)
+        assertReadable("深色 fg/Frost 玻璃卡（流光最亮色之上）", DarkPalette.fg, interior)
+        assertReadable("深色 fgSecondary/Frost 玻璃卡（流光最亮色之上）", DarkPalette.fgSecondary, interior)
+    }
+
+    // ── Frost 组记录性断言：浅色 fgSecondary ≈4.46 差线（改动前 Card 渐变组 3.62，回升但仍 <4.5），
+    //    muted 同类短板——正文层用 fg（v1.9.4 评审修复：卡片/正文用色点的 fgSecondary 已改 fg：
+    //    ErrorCard 正文、CoachCard 接住你+理由、空态示例问题），钉值防继续悄悄下滑。──
+
+    @Test
+    fun lightFgSecondary_onFrostCard_belowAa_recorded() {
+        val interior = cardInterior(LightPalette.glassFill, backdropFiltered(LightPalette.fluidA))
+        val r = GtjContrast.ratio(LightPalette.fgSecondary, interior)
+        assertTrue(
+            "浅色 fgSecondary/Frost 玻璃卡 应 <4.5（记录性事实；卡片正文已改用 fg，fgSecondary 不再作正文）",
+            r < 4.5,
+        )
+        assertEquals("浅色 fgSecondary 钉值（回弹/继续变淡都先红）", 4.46, r, 0.15)
+    }
+
+    // ── Card 组（仅顶栏/输入栏悬浮栏）：正文仅 fg，fg 须 ≥AA ──
+
+    @Test
+    fun lightText_onBarGradient_passesAa() {
+        val interior = cardInterior(lightBarWorstFill, backdropFiltered(LightPalette.fluidA))
+        assertReadable("浅色 fg/悬浮栏 Card 渐变（流光最深色之上，最坏停靠点=底停）", LightPalette.fg, interior)
     }
 
     @Test
-    fun darkText_onStrongTransparentCard_passesAa() {
-        val interior = cardInterior(DarkPalette.glassFillStrong, backdropFiltered(DarkPalette.fluidA))
-        assertReadable("深色 fg/通透强玻璃卡", DarkPalette.fg, interior)
+    fun darkText_onBarGradient_passesAa() {
+        val interior = cardInterior(darkBarWorstFill, backdropFiltered(DarkPalette.fluidA))
+        assertReadable("深色 fg/悬浮栏 Card 渐变（流光最亮色之上，最坏停靠点=顶停）", DarkPalette.fg, interior)
+        // 栏内虽不用 fgSecondary 作正文，深色该值仍达标，一并守住
+        assertReadable("深色 fgSecondary/悬浮栏 Card 渐变（最坏停靠点=顶停）", DarkPalette.fgSecondary, interior)
+    }
+
+    @Test
+    fun lightFgSecondary_onBarGradient_belowAa_recorded() {
+        val interior = cardInterior(lightBarWorstFill, backdropFiltered(LightPalette.fluidA))
+        val r = GtjContrast.ratio(LightPalette.fgSecondary, interior)
+        assertTrue(
+            "浅色 fgSecondary/悬浮栏 Card 渐变 应 <4.5（web --wy-card 渐变本就只铺 .150/.105 白、" +
+                "栏内正文用 fg 的规格取舍记录）",
+            r < 4.5,
+        )
+        assertEquals("浅色 fgSecondary 钉值", 3.62, r, 0.15)
     }
 
     @Test
     fun documentedRatios_hold() {
         // 把 Color.kt 注释里写下的实测值钉在生产矩阵上（容差 0.15）：若 token 或矩阵公式再动，
-        // 这里先红，而不是让注释悄悄过期。数值 = 「流光最深/最亮基色 → 卡片内实色」上的 WCAG 对比度。
-        val lightInterior = cardInterior(LightPalette.glassFill, backdropFiltered(LightPalette.fluidA))
-        assertEquals("浅色 fg", 7.97, GtjContrast.ratio(LightPalette.fg, lightInterior), 0.15)
-        assertEquals("浅色 fgSecondary", 5.12, GtjContrast.ratio(LightPalette.fgSecondary, lightInterior), 0.15)
-        assertEquals("浅色 muted", 3.08, GtjContrast.ratio(LightPalette.muted, lightInterior), 0.15)
-        val darkInterior = cardInterior(DarkPalette.glassFill, backdropFiltered(DarkPalette.fluidA))
-        assertEquals("深色 fg", 8.95, GtjContrast.ratio(DarkPalette.fg, darkInterior), 0.15)
-        assertEquals("深色 fgSecondary", 6.15, GtjContrast.ratio(DarkPalette.fgSecondary, darkInterior), 0.15)
-        assertEquals("深色 muted", 4.04, GtjContrast.ratio(DarkPalette.muted, darkInterior), 0.15)
+        // 这里先红，而不是让注释悄悄过期。数值 = 「流光最深/最亮基色 → 玻璃填充 → 卡片内实色」上的
+        // WCAG 对比度（v1.9.4 两组填充，frost=0.300，brightness=1.0）。
+        val lightFrost = cardInterior(LightPalette.glassFill, backdropFiltered(LightPalette.fluidA))
+        assertEquals("浅色 fg/Frost", 6.95, GtjContrast.ratio(LightPalette.fg, lightFrost), 0.15)
+        assertEquals("浅色 fgSecondary/Frost", 4.46, GtjContrast.ratio(LightPalette.fgSecondary, lightFrost), 0.15)
+        assertEquals("浅色 muted/Frost", 2.68, GtjContrast.ratio(LightPalette.muted, lightFrost), 0.15)
+        val darkFrost = cardInterior(DarkPalette.glassFill, backdropFiltered(DarkPalette.fluidA))
+        assertEquals("深色 fg/Frost", 9.01, GtjContrast.ratio(DarkPalette.fg, darkFrost), 0.15)
+        assertEquals("深色 fgSecondary/Frost", 6.20, GtjContrast.ratio(DarkPalette.fgSecondary, darkFrost), 0.15)
+        assertEquals("深色 muted/Frost", 4.07, GtjContrast.ratio(DarkPalette.muted, darkFrost), 0.15)
+        val lightBar = cardInterior(lightBarWorstFill, backdropFiltered(LightPalette.fluidA))
+        assertEquals("浅色 fg/Bar 渐变", 5.64, GtjContrast.ratio(LightPalette.fg, lightBar), 0.15)
+        assertEquals("浅色 fgSecondary/Bar 渐变", 3.62, GtjContrast.ratio(LightPalette.fgSecondary, lightBar), 0.15)
+        assertEquals("浅色 muted/Bar 渐变", 2.18, GtjContrast.ratio(LightPalette.muted, lightBar), 0.15)
+        val darkBar = cardInterior(darkBarWorstFill, backdropFiltered(DarkPalette.fluidA))
+        assertEquals("深色 fg/Bar 渐变", 8.19, GtjContrast.ratio(DarkPalette.fg, darkBar), 0.15)
+        assertEquals("深色 fgSecondary/Bar 渐变", 5.63, GtjContrast.ratio(DarkPalette.fgSecondary, darkBar), 0.15)
+        assertEquals("深色 muted/Bar 渐变", 3.70, GtjContrast.ratio(DarkPalette.muted, darkBar), 0.15)
     }
 
-    @Test
-    fun mutedCaption_onDeepestFluid_staysBelowAa_beforeAndAfter() {
-        // 记录性断言（与 ContrastTest 的 warnLight_asBodyText_failsAa 同风格）：muted 小字落在
-        // 流光最深处本就低于 AA（改动前 3.61:1 → 改动后 3.08:1，同为「低于 4.5」量级），
-        // 故正文层要求用 fg/fgSecondary（脚本与测试同矩阵复算，见 documentedRatios_hold）
-        val interior = cardInterior(LightPalette.glassFill, backdropFiltered(LightPalette.fluidA))
-        assertTrue(
-            "浅色 muted/通透玻璃卡 应 <4.5（故标题正文不用 muted）",
-            GtjContrast.ratio(LightPalette.muted, interior) < 4.5,
-        )
-    }
+    // ── 色相滑条 0-360° 逐度扫描护栏 ──
 
     @Test
-    fun lightText_staysReadableAcrossTheWholeHueRange() {
+    fun lightText_onFrostCard_staysReadableAcrossTheWholeHueRange() {
         val (fgWorst, fgHue) = worstRatio(LightPalette.fg, LightPalette.glassFill, LightPalette.fluidA)
-        val (secWorst, secHue) = worstRatio(LightPalette.fgSecondary, LightPalette.glassFill, LightPalette.fluidA)
-        // 评审修复（色相维度护栏）：色相滑条 0-360° 逐度扫描，卡片内正文不得跌破 AA。
-        // 修复前（HSL 旋转）190°-344° 区间 fgSecondary 最低 3.31:1 —— 该护栏就是当时的漏网处
         assertTrue(
-            "浅色 fg 全量程最低 ${GtjContrast.format(fgWorst)} @${fgHue}° 应 >= 4.5",
+            "浅色 fg/Frost 全量程最低 ${GtjContrast.format(fgWorst)} @${fgHue}° 应 >= 4.5",
             fgWorst >= 4.5,
         )
-        assertTrue(
-            "浅色 fgSecondary 全量程最低 ${GtjContrast.format(secWorst)} @${secHue}° 应 >= 4.5",
-            secWorst >= 4.5,
-        )
-        // 实测值（W3C 矩阵 + fill .40）：fg 7.51 @218°、fgSecondary 4.82 @218°（钉住，防悄悄回退）
-        assertEquals("浅色 fg 全量程最低", 7.51, fgWorst, 0.25)
-        assertEquals("浅色 fgSecondary 全量程最低", 4.82, secWorst, 0.25)
+        // 实测值（W3C 矩阵 + Frost .30）：fg 6.47 @220°（钉住，防悄悄回退）
+        assertEquals("浅色 fg/Frost 全量程最低", 6.47, fgWorst, 0.25)
     }
 
     @Test
-    fun darkText_staysReadableAcrossTheWholeHueRange() {
+    fun darkText_onFrostCard_staysReadableAcrossTheWholeHueRange() {
         val (fgWorst, fgHue) = worstRatio(DarkPalette.fg, DarkPalette.glassFill, DarkPalette.fluidA)
         val (secWorst, secHue) = worstRatio(DarkPalette.fgSecondary, DarkPalette.glassFill, DarkPalette.fluidA)
         assertTrue(
-            "深色 fg 全量程最低 ${GtjContrast.format(fgWorst)} @${fgHue}° 应 >= 4.5",
+            "深色 fg/Frost 全量程最低 ${GtjContrast.format(fgWorst)} @${fgHue}° 应 >= 4.5",
             fgWorst >= 4.5,
         )
         assertTrue(
-            "深色 fgSecondary 全量程最低 ${GtjContrast.format(secWorst)} @${secHue}° 应 >= 4.5",
+            "深色 fgSecondary/Frost 全量程最低 ${GtjContrast.format(secWorst)} @${secHue}° 应 >= 4.5",
             secWorst >= 4.5,
         )
-        assertEquals("深色 fg 全量程最低", 8.60, fgWorst, 0.25)
-        assertEquals("深色 fgSecondary 全量程最低", 5.91, secWorst, 0.25)
+        // 实测值（W3C 矩阵 + Frost .30）：fg 8.66 @309°、fgSecondary 5.96 @309°（钉住，防悄悄回退）
+        assertEquals("深色 fg/Frost 全量程最低", 8.66, fgWorst, 0.25)
+        assertEquals("深色 fgSecondary/Frost 全量程最低", 5.96, secWorst, 0.25)
     }
 
     @Test
-    fun mutedCaption_worstOverHueRange_isNoWorseThanBeforeTransparency() {
-        // 记录性断言：muted 小字在流光最深处本就低于 AA（既有短板），色相可调后也不得比
-        // 「通透化之前」的基线更差：修复前 HSL 旋转 + 旧 fill(.55) 全量程最低 2.67:1，
-        // 现 W3C 矩阵 + fill(.40) 最低 2.90:1（两者都 <4.5，故正文层继续用 fg/fgSecondary）
-        val (lightWorst, lightHue) = worstRatio(LightPalette.muted, LightPalette.glassFill, LightPalette.fluidA)
-        assertEquals("浅色 muted 全量程最低", 2.90, lightWorst, 0.25)
-        assertTrue("浅色 muted @${lightHue}° 应 <4.5（故正文不用 muted）", lightWorst < 4.5)
-        val (darkWorst, _) = worstRatio(DarkPalette.muted, DarkPalette.glassFill, DarkPalette.fluidA)
-        assertEquals("深色 muted 全量程最低", 3.88, darkWorst, 0.25)
-        assertTrue("深色 muted 应 <4.5（故正文不用 muted）", darkWorst < 4.5)
+    fun lightText_onBarGradient_staysReadableAcrossTheWholeHueRange() {
+        val (fgWorst, fgHue) = worstRatio(LightPalette.fg, lightBarWorstFill, LightPalette.fluidA)
+        assertTrue(
+            "浅色 fg/Bar 渐变全量程最低 ${GtjContrast.format(fgWorst)} @${fgHue}° 应 >= 4.5",
+            fgWorst >= 4.5,
+        )
+        // 实测值（W3C 矩阵 + Card 渐变底停）：fg 4.99 @220°（钉住，防悄悄回退）
+        assertEquals("浅色 fg/Bar 渐变全量程最低", 4.99, fgWorst, 0.25)
     }
 
     @Test
-    fun glassFills_areMoreTransparentThanBefore() {
-        // 通透化方向护栏：浅色 .55 → .35~.42、深色 .45 → .30~.37（改动前的值应被拒绝）
+    fun darkText_onBarGradient_staysReadableAcrossTheWholeHueRange() {
+        val (fgWorst, fgHue) = worstRatio(DarkPalette.fg, darkBarWorstFill, DarkPalette.fluidA)
+        val (secWorst, secHue) = worstRatio(DarkPalette.fgSecondary, darkBarWorstFill, DarkPalette.fluidA)
         assertTrue(
-            "浅色 glassFill alpha 应落在 .35~.42（通透化），实际 ${LightPalette.glassFill.alpha}",
-            LightPalette.glassFill.alpha in 0.35f..0.42f,
+            "深色 fg/Bar 渐变全量程最低 ${GtjContrast.format(fgWorst)} @${fgHue}° 应 >= 4.5",
+            fgWorst >= 4.5,
         )
         assertTrue(
-            "深色 glassFill alpha 应落在 .30~.37（同比例下调），实际 ${DarkPalette.glassFill.alpha}",
-            DarkPalette.glassFill.alpha in 0.30f..0.37f,
+            "深色 fgSecondary/Bar 渐变全量程最低 ${GtjContrast.format(secWorst)} @${secHue}° 应 >= 4.5",
+            secWorst >= 4.5,
+        )
+        // 实测值（W3C 矩阵 + Card 渐变顶停）：fg 7.75 @306°、fgSecondary 5.33 @306°（钉住，防悄悄回退）
+        assertEquals("深色 fg/Bar 渐变全量程最低", 7.75, fgWorst, 0.25)
+        assertEquals("深色 fgSecondary/Bar 渐变全量程最低", 5.33, secWorst, 0.25)
+    }
+
+    @Test
+    fun secondaryAndMuted_worstOverHueRange_recorded() {
+        // 记录性断言：浅色 fgSecondary（Frost 4.15 / Bar 渐变 3.20）与 muted（Frost 亮 2.50 / 暗 3.91）
+        // 全量程最坏 <4.5——正文层一律用 fg/（深色）fgSecondary，见类注释的取舍说明。
+        val (lightSec, lightSecHue) = worstRatio(LightPalette.fgSecondary, LightPalette.glassFill, LightPalette.fluidA)
+        val (lightMuted, lightMutedHue) = worstRatio(LightPalette.muted, LightPalette.glassFill, LightPalette.fluidA)
+        val (darkMuted, darkMutedHue) = worstRatio(DarkPalette.muted, DarkPalette.glassFill, DarkPalette.fluidA)
+        val (barSec, barSecHue) = worstRatio(LightPalette.fgSecondary, lightBarWorstFill, LightPalette.fluidA)
+        assertTrue("浅色 fgSecondary/Frost 全量程 @${lightSecHue}° 应 <4.5（记录性短板）", lightSec < 4.5)
+        assertTrue("浅色 muted/Frost 全量程 @${lightMutedHue}° 应 <4.5（正文不用 muted）", lightMuted < 4.5)
+        assertTrue("深色 muted/Frost 全量程 @${darkMutedHue}° 应 <4.5（正文不用 muted）", darkMuted < 4.5)
+        assertTrue("浅色 fgSecondary/Bar 渐变全量程 @${barSecHue}° 应 <4.5（栏内正文用 fg）", barSec < 4.5)
+        assertEquals("浅色 fgSecondary/Frost 全量程最低", 4.15, lightSec, 0.25)
+        assertEquals("浅色 muted/Frost 全量程最低", 2.50, lightMuted, 0.25)
+        assertEquals("深色 muted/Frost 全量程最低", 3.91, darkMuted, 0.25)
+        assertEquals("浅色 fgSecondary/Bar 渐变全量程最低", 3.20, barSec, 0.25)
+    }
+
+    // ── 配方方向护栏：两组填充 = web 分组（frost=0.300 实算值），不透明回退应拒绝 ──
+
+    @Test
+    fun glassFills_matchMicaGroups() {
+        // Frost 组（默认）：web frost 版 --glass 直色，亮 rgb(253,249,242)/暗 rgb(46,36,28) 均 0.30
+        assertTrue(
+            "浅色 glassFill alpha 应 = 0.30（frost 版 --glass），实际 ${LightPalette.glassFill.alpha}",
+            LightPalette.glassFill.alpha in 0.29f..0.31f,
         )
         assertTrue(
-            "strong 仍须比普通 fill 更不透明（浅）",
+            "深色 glassFill alpha 应 = 0.30（frost 版 --glass），实际 ${DarkPalette.glassFill.alpha}",
+            DarkPalette.glassFill.alpha in 0.29f..0.31f,
+        )
+        // strong 镜像 token（web --glass-strong）仍须比 Frost 更不透明（GlassTokenTest 亦有护栏）
+        assertTrue(
+            "glassFillStrong 应比 glassFill 更不透明（浅）",
             LightPalette.glassFillStrong.alpha > LightPalette.glassFill.alpha,
         )
         assertTrue(
-            "strong 仍须比普通 fill 更不透明（深）",
+            "glassFillStrong 应比 glassFill 更不透明（深）",
             DarkPalette.glassFillStrong.alpha > DarkPalette.glassFill.alpha,
+        )
+        // Card 组（仅顶栏/输入栏）：亮色 白 frost×0.50=0.150 / frost×0.35=0.105（styles.css:526-528）
+        assertTrue(
+            "浅色顶停 alpha 应 = frost×0.50 ≈ 0.149，实际 ${LightPalette.glassCardFillTop.alpha}",
+            LightPalette.glassCardFillTop.alpha in 0.14f..0.16f,
+        )
+        assertTrue(
+            "浅色底停 alpha 应 = frost×0.35 ≈ 0.106，实际 ${LightPalette.glassCardFillBottom.alpha}",
+            LightPalette.glassCardFillBottom.alpha in 0.095f..0.115f,
+        )
+        // 暗色：两停均 frost×0.50 ≈ 0.149（styles.css:529-531）
+        assertTrue(
+            "深色顶停 alpha 应 = frost×0.50 ≈ 0.149，实际 ${DarkPalette.glassCardFillTop.alpha}",
+            DarkPalette.glassCardFillTop.alpha in 0.14f..0.16f,
+        )
+        assertTrue(
+            "深色底停 alpha 应 = frost×0.50 ≈ 0.149，实际 ${DarkPalette.glassCardFillBottom.alpha}",
+            DarkPalette.glassCardFillBottom.alpha in 0.14f..0.16f,
         )
     }
 
     @Test
-    fun cardBackdrop_matchesTheDoubledBlurAndTwoTimesPadding() {
-        // 通透化配套：卡片模糊 4dp → 8dp（采样余量维持 2× 不变式）
-        assertEquals(8.dp, GlassBackdropParams.cardBlurRadius)
-        assertEquals(GlassBackdropParams.cardBlurRadius * 2, GlassBackdropParams.cardSamplePadding)
-        assertEquals(20.dp, GlassBackdropParams.blurRadius)
+    fun backdrop_matchesMicaBlurAndTwoTimesPadding() {
+        // v1.9.4 Mica 收窄：悬浮栏与卡片统一 4dp（web 8 类玻璃元素共用生效默认 --wy-glass-blur=4px），
+        // 采样余量维持 2×blur 不变式
+        assertEquals(4.dp, GlassBackdropParams.blurRadius)
         assertEquals(GlassBackdropParams.blurRadius * 2, GlassBackdropParams.samplePadding)
+        assertEquals(4.dp, GlassBackdropParams.cardBlurRadius)
+        assertEquals(GlassBackdropParams.cardBlurRadius * 2, GlassBackdropParams.cardSamplePadding)
     }
 }

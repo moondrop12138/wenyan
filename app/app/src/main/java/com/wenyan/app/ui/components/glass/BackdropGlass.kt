@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntSize
 
 /**
- * v1.9.4 真实背景模糊（backdrop blur）· 对齐桌面 styles.css Mica 悬浮玻璃配方
- * （styles.css 455 行 `--wy-glass-blur:20px` + 514 行 `backdrop-filter: ... saturate(170%)`）。
+ * v1.9.4 真实背景模糊（backdrop blur）· v1.9.4 对齐桌面**增强 Mica** 配方
+ * （生效值：`backdrop-filter: blur(var(--wy-glass-blur)) saturate(170%)`，styles.css:517-518；
+ * --wy-glass-blur 生效默认 4px——app.js:66 默认值经 app.js:130 写入 html inline，
+ * styles.css:455 的 :root 回退 20px 会被 inline 永远覆盖，不作对齐基准）。
  *
  * 根因④：v1.8.0 玻璃本体只是半透明填充，无真实背景模糊——安卓端缺失 backdrop-filter。
  * 本文件用 Compose GraphicsLayer（BOM 2025.06.01 / ui 1.8）自研实现，零第三方库。
@@ -78,33 +80,36 @@ import androidx.compose.ui.unit.roundToIntSize
 
 /** 玻璃 backdrop 数值参数（唯一来源 docs/design-tokens.json component.glassBackdrop）。 */
 object GlassBackdropParams {
-    /** 模糊半径（对应桌面 --wy-glass-blur:20px）。 */
-    val blurRadius: Dp = 20.dp
+    /**
+     * 悬浮栏模糊半径（对应桌面增强 Mica 生效默认 --wy-glass-blur:4px，app.js:66/130）。
+     * v1.9.4 同版本内先按 :root 占位值取 20dp，后按增强段生效值收窄到 4dp——
+     * Mica 的通透感来自「低模糊 + 低 alpha 渐变」而非重磨砂。
+     */
+    val blurRadius: Dp = 4.dp
 
-    /** 饱和度提升（对应桌面 saturate(170%)）。 */
+    /** 饱和度提升（对应桌面 saturate(170%)，styles.css:517-518 固定值）。 */
     const val SATURATION = 1.7f
 
-    /** 轻微亮度提升（磨砂后的暖色不发闷）。 */
-    const val BRIGHTNESS = 1.03f
+    /**
+     * 亮度增益（v1.9.4：1.03 → 1，移除 web 没有的增益——增强段 backdrop-filter
+     * 只有 blur() saturate() 两项，矩阵仍按 brightness=1 参与构造以保持公式完整）。
+     */
+    const val BRIGHTNESS = 1f
 
     /** 模糊采样余量（≈2×blur）：玻璃边缘模糊采到栏外内容，不出现边缘褪色。 */
-    val samplePadding: Dp = 40.dp
+    val samplePadding: Dp = 8.dp
 
-    // ── v1.9.4 卡片透光磨砂（全 App 玻璃卡片升级）──
+    // ── 卡片透光磨砂（全 App 玻璃卡片升级）──
 
     /**
-     * 卡片级模糊半径（对应桌面玻璃设置「模糊度」运行时默认 4px，app.js:66 glassBlur 默认值；
-     * styles.css :root 的 20px 仅为未开启玻璃主题时的占位）。
-     * v1.9.4 三改（卡片通透化）：4dp → 8dp —— 玻璃填充 alpha 由 .55/.72 降到 .40/.549 后，
-     * 透出的背景更依赖「磨砂」而非「半透明覆盖」，模糊半径加倍让流光在卡片内真正化开
-     * （同时把流光的深色涡心平均掉，卡片内文字底对比反而更稳，见 GlassTransparencyReadabilityTest）。
-     * 仍取小值是性能护栏：卡片数量多（消息气泡/设置行），每卡片一个模糊 pass；
-     * 8dp 远低于悬浮栏 20dp，且模糊层的 RenderEffect 只在半径变化时重建（[GlassBackdropLayer.recordBlur]）。
+     * 卡片级模糊半径：v1.9.4 与悬浮栏同规格收窄到 4dp（web 8 类玻璃元素共用同一个
+     * --wy-glass-blur=4px，卡片与栏不分档）。性能护栏依然成立：模糊层的 RenderEffect
+     * 只在半径变化时重建（[GlassBackdropLayer.recordBlur]）。
      */
-    val cardBlurRadius: Dp = 8.dp
+    val cardBlurRadius: Dp = 4.dp
 
-    /** 卡片级采样余量（≈2×卡片 blur，与悬浮栏 samplePadding=2×blur 同比例）：8dp → 16dp。 */
-    val cardSamplePadding: Dp = 16.dp
+    /** 卡片级采样余量（≈2×卡片 blur，与悬浮栏 samplePadding=2×blur 同比例）。 */
+    val cardSamplePadding: Dp = 8.dp
 }
 
 /**
@@ -164,7 +169,7 @@ class GlassBackdropLayer internal constructor(
     internal var barPositionInRoot by mutableStateOf(Offset.Zero)
 
     /**
-     * 最近一次 [recordBlur] 实际使用的采样余量（px，悬浮栏 40dp / 卡片 8dp 换算）：
+     * 最近一次 [recordBlur] 实际使用的采样余量（px，v1.9.4 起悬浮栏/卡片统一 8dp 换算）：
      * record 把「玻璃左上角背后的内容」放在层内 (pad,pad)，绘制侧 drawLayer 前须
      * translate(-recordedPadPx) 反向对齐（drawLayer 把层的 (0,0) 画在玻璃 (0,0)）。
      * recordBlur 与绘制点紧邻先后执行（同一 onDrawBehind），直接读字段即得本帧值，零分配。
@@ -319,7 +324,7 @@ fun Modifier.glassBackdropLayer(
                 )
                 // v1.9.4 评审修复（磨砂影像偏移）：record 时玻璃左上角的内容在层内 (pad,pad)，
                 // drawLayer 会把层的 (0,0) 画在玻璃 (0,0)——不反向平移则磨砂影像整体向右下
-                // 偏移一个 samplePadding（悬浮栏 40dp 顶栏/输入栏明显、卡片 8dp 轻微）。
+                // 偏移一个 samplePadding（v1.9.4 起悬浮栏/卡片统一 8dp，偏移量小但语义不变）。
                 // translate(-pad) 后层内 (pad,pad) 落回玻璃 (0,0)，与 CSS backdrop-filter 对齐。
                 // pad 由 [GlassBackdropLayer.recordedPadPx] 缓存（上方 recordBlur 刚写入本帧值）。
                 clipPath(glassPath) {

@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.platform.LocalDensity
 import com.wenyan.app.ui.theme.LocalBgBrightness
 import com.wenyan.app.ui.theme.LocalFluidBackground
-import com.wenyan.app.ui.theme.LocalFluidHue
 import com.wenyan.app.ui.theme.LocalGtjColors
 import com.wenyan.app.ui.theme.LocalGtjIsDark
 import com.wenyan.app.ui.theme.rememberReducedMotion
@@ -72,23 +71,25 @@ private const val PARAM_OFFSET_Y = 0.4f        // offsetY 40 → /100
  * 渲染/性能（沿用 GlowBackground 的 v1.8.1 B4 教训：严禁每帧写状态触发重组）：
  * - withInfiniteAnimationFrameNanos 手动驱动 + 30fps 节流（<33ms 跳过不写 state）；
  *   frameNanos 只在 Canvas 的 draw lambda 中被读取 → 只触发重绘，不触发重组；
- * - 每帧仅 6 个 setFloatUniform 调用（uTime/uResolution/uColor1-3/uVeil）+ 复用缓存的 ShaderBrush，
- *   零对象分配；色相/亮度只在 draw 阶段写 uniform，**不重建 shader**——拖动设置页滑条时
- *   零 AGSL 重编译（AGSL 编译是毫秒级，若把色相纳入 remember key，拖一次滑条会重建上百次）；
+ * - 每帧仅 3 个 setFloatUniform 调用（uTime/uResolution/uVeil）+ 复用缓存的 ShaderBrush，
+ *   零对象分配；基色（未旋转）在 shader 创建时写死，亮度 veil 在 draw 阶段写 uniform；
+ *   色相全局跟随（v1.9.4 四改）在 MainActivity 内容根部的 graphicsLayer colorFilter 生效，
+ *   本组件不读色相——拖动色相滑条与本组件完全解耦；
  * - swirl 循环用固定 30 次迭代 + step 掩码替代 break（掩码为 0 时增量恒为 0，
  *   与桌面 `if (i > iters) break` 数学完全等价），规避个别 ROM 对动态跳出循环的编译差异。
  *
  * 降级：API < 33（LiquidGlassShaders.isRuntimeShaderSupported()）或 RuntimeShader 构造失败
- * （个别 ROM 抛 IllegalArgumentException，同 LiquidGlassShaders.createLensEdgeShader 的
- * runCatching 防御）→ 渲染现有 GlowBackground（同样消费色相/亮度，见其文档）；
+ * （个别 ROM 抛 IllegalArgumentException，同 createFluidShader 的 runCatching 防御）
+ * → 渲染现有 GlowBackground（同样消费亮度 veil，见其文档）；
  * LocalFluidBackground=false 时不画任何内容。
  *
  * 颜色：LocalGtjColors.fluidA/B/C（唯一来源 docs/design-tokens.json color.light/dark.fluid.*，
  * 与桌面 paletteForTheme 完全一致），组件内无硬编码色值。
- * v1.9.4 三改：三基色先经 [hueRotated]（LocalFluidHue）再写 uColor1/2/3；
- * 亮度经 [brightnessVeil]（LocalBgBrightness）写 uVeil，在 shader 末尾 `mix(col, uVeil.rgb, uVeil.a)`
- * 一次性叠完（比再叠一层 View 省一次全屏合成）。默认值（0°/50）下 uVeil.a == 0、色相原样，
- * 输出与不可调版本逐位一致。
+ * v1.9.4 三改：亮度经 [brightnessVeil]（LocalBgBrightness）写 uVeil，在 shader 末尾
+ * `mix(col, uVeil.rgb, uVeil.a)` 一次性叠完（比再叠一层 View 省一次全屏合成）。
+ * 默认值（50）下 uVeil.a == 0，输出与不可调版本逐位一致。
+ * v1.9.4 四改 色相全局跟随：色相旋转上移到应用内容根部（MainActivity 的全局 graphicsLayer，
+ * 对齐 web body 级 filter 语义），本组件改画**未旋转**基色防二次旋转。
  */
 @SuppressLint("NewApi") // RuntimeShader 构造已由 LiquidGlassShaders.isRuntimeShaderSupported() 做 API 33 守卫
 @Composable
@@ -100,8 +101,8 @@ fun FluidBackground(
 
     val palette = LocalGtjColors.current
     val reduced = rememberReducedMotion()
-    // v1.9.4 三改：色相（度）/亮度（0-100）/当前深浅主题（决定亮度叠白还是叠黑）
-    val hueDegrees = LocalFluidHue.current
+    // v1.9.4 四改：色相由 MainActivity 内容根部全局层统一旋转，本组件不再读 LocalFluidHue；
+    // 亮度（0-100）/当前深浅主题（决定亮度叠白还是叠黑）照旧
     val bgBrightness = LocalBgBrightness.current
     val isDark = LocalGtjIsDark.current
     // uPixelRatio = 设备密度：uv 在 shader 内先乘分辨率再除以它 → 图案尺度按 dp 归一
@@ -111,16 +112,14 @@ fun FluidBackground(
     // 安卓（density 不封顶，uResolution 传物理 px）相对更细；dpr≤1.5 时两者一致。
     val pixelRatio = LocalDensity.current.density
 
-    // v1.9.4 三改：色相旋转只依赖（基色, 度），重组级重算一次（纯 Kotlin 数学，无分配）；
-    // 之后 draw 阶段直接读，不进帧循环、不进 shader 重建路径
-    val color1 = remember(palette.fluidA, hueDegrees) { hueRotated(palette.fluidA, hueDegrees.toFloat()) }
-    val color2 = remember(palette.fluidB, hueDegrees) { hueRotated(palette.fluidB, hueDegrees.toFloat()) }
-    val color3 = remember(palette.fluidC, hueDegrees) { hueRotated(palette.fluidC, hueDegrees.toFloat()) }
+    // v1.9.4 四改：基色用未旋转 token 原色（色相由全局层统一转，防二次旋转）
+    val color1 = palette.fluidA
+    val color2 = palette.fluidB
+    val color3 = palette.fluidC
     // 亮度 veil（50 = Transparent，零叠加）：alpha 0 时 shader 里的 mix 恒等，观感与不可调版本一致
     val veil = remember(bgBrightness, isDark) { brightnessVeil(bgBrightness, isDark) }
 
-    // RuntimeShader 仅在颜色/密度变化时重建（重组级、低频）；动画帧内只改 uniform。
-    // 色相刻意不进 key：拖滑条时每帧重建 RuntimeShader 会触发上百次 AGSL 编译（毫秒级 × N）→ 掉帧
+    // RuntimeShader 仅在基色/密度变化时重建（重组级、低频）；动画帧内只改 uniform。
     val shader = remember(palette.fluidA, palette.fluidB, palette.fluidC, pixelRatio) {
         if (!LiquidGlassShaders.isRuntimeShaderSupported()) {
             null
@@ -164,24 +163,20 @@ fun FluidBackground(
         val w = size.width
         val h = size.height
         if (w <= 0f || h <= 0f) return@Canvas
-        shader.setFloatUniform(
-            "uTime",
-            if (reduced) STATIC_FRAME_TIME else frameNanos / 1e9f * TIME_SPEED,
-        )
+        shader.setFloatUniform("uTime", if (reduced) STATIC_FRAME_TIME else frameNanos / 1e9f * TIME_SPEED)
         shader.setFloatUniform("uResolution", w, h)
-        // v1.9.4 三改：色相/亮度每帧写 uniform（4 次 JNI，可忽略）——保证「设置即时生效」与
-        // 「reducedMotion 静帧同样生效」都不依赖任何重建/失效时序；默认值下与不可调版本逐位一致
-        shader.setFloatUniform("uColor1", color1.red, color1.green, color1.blue, color1.alpha)
-        shader.setFloatUniform("uColor2", color2.red, color2.green, color2.blue, color2.alpha)
-        shader.setFloatUniform("uColor3", color3.red, color3.green, color3.blue, color3.alpha)
+        // v1.9.4 三改：亮度 veil 每帧写 uniform——保证「设置即时生效」与「reducedMotion 静帧
+        // 同样生效」都不依赖任何重建/失效时序；默认 50 下 alpha=0，mix 恒等。
+        // uColor1/2/3 基色静态（v1.9.4 四改起未旋转且不随设置变），已在 shader 创建时写入。
         shader.setFloatUniform("uVeil", veil.red, veil.green, veil.blue, veil.alpha)
         drawRect(brush = brush)
     }
 }
 
 /**
- * 创建流光 RuntimeShader 并写入全部静态 uniform（uTime/uResolution/uColor1-3/uVeil 每帧覆写）。
- * v1.9.4 三改：color1-3 为**色相旋转后**的基色、veil 为亮度叠加色（默认 Transparent）。
+ * 创建流光 RuntimeShader 并写入全部静态 uniform（uTime/uResolution/uVeil 每帧覆写，
+ * uColor1-3 基色静态）。v1.9.4 四改：color1-3 为**未旋转**基色（色相由 MainActivity 内容
+ * 根部全局层统一旋转，防二次旋转）、veil 为亮度叠加色（默认 Transparent）。
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 private fun createFluidShader(

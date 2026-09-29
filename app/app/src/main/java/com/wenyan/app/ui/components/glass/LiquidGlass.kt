@@ -1,14 +1,10 @@
 package com.wenyan.app.ui.components.glass
 
-import android.annotation.SuppressLint
-import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -22,12 +18,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asAndroidPath
@@ -36,98 +30,76 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.theme.rememberReducedMotion
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.LocalGtjColors
-import com.wenyan.app.ui.theme.LocalGtjIsDark
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
-
-/** 30fps 节流：距上一写入帧 <33ms 的帧回调直接跳过（同 FluidBackground，uTime 波纹无需 60fps）。 */
-private const val FRAME_INTERVAL_NANOS = 33_000_000L
-
-/** 磨砂颗粒噪声位图边长（design-tokens.json component.glass.grainSize，≤128px）。 */
-private const val GRAIN_SIZE = 96
-
-/** 磨砂颗粒叠加 alpha（design-tokens.json component.glass.grainAlpha）。 */
-private const val GRAIN_ALPHA = 0.06f
-
-/** 磨砂颗粒噪声固定种子（装饰性纹理，非安全用途；固定种子=纹理稳定不闪烁）。 */
-private const val GRAIN_SEED = 0x5EEDL
-
-/** 进程内共享磨砂颗粒位图缓存（键 = 亮/暗噪点 token 色；仅 Compose 主线程访问，无需加锁）。 */
-private var cachedGrainBitmap: android.graphics.Bitmap? = null
-private var cachedGrainKey: Pair<Int, Int>? = null
 
 /**
- * 取共享磨砂颗粒位图：同 token 色复用同一张（纹理仅依赖 glassGrainLight/glassGrainDark），
- * 色值变化（主题切换）时重建。像素逻辑与 v1.9.4 首版逐行一致，仅从"每实例一张"下沉为共享。
+ * 玻璃填充组（web 增强 Mica 的两组填充，styles.css cautions：两套填充色相不同，勿混用）。
+ *
+ * - [Frost]：frost 版 `--glass`（亮 rgb(253 249 242/0.300) / 暗 rgb(46 36 28/0.300) 直色）——
+ *   web 默认组：侧栏/胶囊/用户气泡/弹层/toast 及全部基础 .glass 元素；
+ * - [Card]：`--wy-card-light/dark` 纵向渐变（亮 白 frost×0.50→frost×0.35，暗 rgb(42,46,56)→
+ *   rgb(22,25,34) 均 frost×0.50）——仅顶栏/输入栏两个悬浮栏（styles.css:534/538）。
  */
-private fun sharedGrainBitmap(grainLight: Color, grainDark: Color): android.graphics.Bitmap {
-    val key = grainLight.toArgb() to grainDark.toArgb()
-    cachedGrainBitmap?.let { cached -> if (cachedGrainKey == key) return cached }
-    // 固定种子：同一次运行内纹理恒定，不随重组重掷（避免闪烁）
-    val rnd = kotlin.random.Random(GRAIN_SEED)
-    val pixels = IntArray(GRAIN_SIZE * GRAIN_SIZE) { _ ->
-        val base = if (rnd.nextBoolean()) grainLight else grainDark
-        (0xFF shl 24) or
-            (base.red.toInt() shl 16) or
-            (base.green.toInt() shl 8) or
-            base.blue.toInt()
-    }
-    return android.graphics.Bitmap.createBitmap(GRAIN_SIZE, GRAIN_SIZE, android.graphics.Bitmap.Config.ARGB_8888)
-        .apply { setPixels(pixels, 0, GRAIN_SIZE, 0, 0, GRAIN_SIZE, GRAIN_SIZE) }
-        .also {
-            cachedGrainBitmap = it
-            cachedGrainKey = key
-        }
+enum class GlassFill {
+    /** frost 版 --glass 直色（web 默认组：侧栏/胶囊/用户气泡/弹层/toast） */
+    Frost,
+
+    /** --wy-card-* 纵向渐变（仅顶栏/输入栏悬浮栏） */
+    Card,
 }
 
 /**
- * v1.8.0 液态玻璃 2.0 · iOS 26 Liquid Glass 风格
+ * 液态玻璃引擎 · v1.9.4 扁平化对齐 web 增强 Mica——只保留 web 有的五层，逐层对应：
+ * 1. 渐变填充：[GlassFill] 两组（Frost/Card，styles.css --glass / --wy-card-*）；
+ * 2. backdrop 模糊：[BackdropGlass.kt]（glassBackdropContent/glassBackdropLayer + 卡片透光磨砂，
+ *    对应 web backdrop-filter: blur() saturate(170%)）；
+ * 3. 1px 描边：外圈读 glassBorder（= web 1px solid var(--glass-border)，borderColor 可覆盖）；
+ * 4. 顶边内高光：**只沿顶边一条**渐变细线（= web .edge::before），见下方「内凹改版」；
+ * 5. 柔和投影：BlurMaskFilter 高斯模糊（web --g-shadow 双影 → 远影 + 近影，见 [liquidGlass] 参数）。
  *
- * 核心升级（对齐 iOS 26 Liquid Glass 四大特征）：
- * 1. 折射（Refraction）：边缘透镜效应，内容透过玻璃时边缘弯曲（API 33+ RuntimeShader）
- * 2. 动态镜面高光：随时间/滚动流动的光带（API 33+ RuntimeShader）
- * 3. 边缘透镜（Lens Edge）：玻璃边缘 1.5dp 亮边/深色模式辉光
- * 4. 果冻按压（Squishy Press）：按压时局部凹陷 + 回弹 overshoot
+ * v1.9.4 扁平化：删掉 web 没有的四层——流光边缘 RuntimeShader（LENS_EDGE_SHADER）及其静态
+ * 降级描边、多停靠 specular 厚度层、底部内阴影、磨砂颗粒（连 sharedGrainBitmap/GRAIN_*
+ * 与 LiquidGlassShaders.createLensEdgeShader 一并删净）；随 lens shader 失去消费方的
+ * refractionStrength 死参数同步移除（GlassSurface 签名一并收窄）。
  *
- * 降级链：
- * - API 33+：完整 RuntimeShader 效果（折射 + 动态高光 + 边缘透镜）
- * - API 31-32：RenderEffect 模糊 + 预渲染位图折射 + 静态高光
- * - API < 31：v1.7.6 四要素静态玻璃（半透明填充 + 顶部高光 + 细描边 + 柔和投影）
+ * v1.9.4 内凹改版（外凸 → 内凹，对齐 web 观感）：旧版沿整条 innerPath 描一圈内发丝
+ * （hairlineInner）——四边一圈亮线读作外凸珠边；web 的 `inset 0 1px 0` 内高光只渲染顶边一条，
+ * 配合向下柔和投影才读作「内凹面」。现整圈内描边删除，顶边内高光与既有 2dp 顶部高光线
+ * **合并为一条** `.edge` 语义的渐变细线（高 1.5dp、左右各内缩 10%、两端渐隐）；外圈
+ * 1dp glassBorder 描边保留（= web border）。
+ *
+ * 果冻按压（保留，web :active scale 的对应物）：awaitEachGesture 纯手势观察器——全程不调用
+ * consume()，真正不消费任何事件，可与外层 clickable/combinedClickable 共存；即使他人消费了
+ * UP，仍能凭 changes.pressed 观察到抬起并复位（v1.9.4 修复：旧 detectTapGestures(onPress)
+ * 实现消费 DOWN/UP，历史会话行/危机卡长按静默失效）。reducedMotion 时禁用。
  *
  * 用法：`.liquidGlass(shape).clip(shape)` 或直接用 [GlassSurface]。
  * **顺序坑（v1.7.1 二改）**：clip 必须放在 liquidGlass **之后**——liquidGlass 的软投影
  * 溢出圆角，若 clip 在前会把投影裁掉。
  *
- * v1.9.4 质感升级（修复 v1.8.0 实测质感平/廉价的根因）：
- * - 根因①：LENS_EDGE_SHADER 的 vec3（AGSL 不支持）已规范为 float3（见 LiquidGlassShaders.kt），
- *   真机不再静默回退静态亮边，色散/波纹真正渲染；
- * - 根因②：createLensEdgeShader 调用从不传 time（恒 0f）→ 所有 sin(uTime…) 静止。
- *   现按 GlowBackground/FluidBackground 模式驱动：withInfiniteAnimationFrameNanos 30fps 节流
- *   写 mutableLongStateOf，onDrawBehind 内才读取（只触发重绘不触发重组，v1.8.1 B4 教训）；
- *   shader 与 Paint 均在 drawWithCache 缓存块内创建跨帧复用，每帧仅 setFloatUniform，零分配；
- * - 根因③：createRefractionShader/createSpecularShader 死代码已删（LiquidGlassShaders.kt）；
- * - 根因④：真实背景模糊由 [BackdropGlass.kt]（glassBackdropContent/glassBackdropLayer，
- *   Compose GraphicsLayer，API 31+）承担——独立 modifier 垫在 liquidGlass 之前绘制，
- *   默认不接入，其他页面 GlassSurface 行为不变；
- * - 材质细节：双发丝描边（外深内浅）、顶部多停靠 specular、底部内阴影、磨砂颗粒
- *   （预生成 ≤128px 噪声位图 + BitmapShader 双线性平铺），色值全走 token。
- *
  * @param shape 玻璃形状（决定 fill/stroke/highlight 的路径）
- * @param strong true 用 glassFillStrong（输入胶囊/高密度容器），false 用 glassFill
+ * @param fill 填充组（默认 [GlassFill.Frost] = web frost --glass 组；顶栏/输入栏传
+ * [GlassFill.Card] 用 --wy-card-* 渐变——web 两组填充色相不同，勿混用）
  * @param tint 叠加在 fill 之上、高光之下的渐变停靠点（用户气泡深棕 tint）
- * @param borderColor 覆盖双发丝外圈色（null 用 glassHairlineOuter）
- * @param refractionStrength 折射强度 0.0~1.0（默认 0.5，仅 API 33+ 生效）
+ * @param borderColor 覆盖外圈描边色（null 用 glassBorder = web 1px solid var(--glass-border)）
  * @param enablePressAnimation 是否启用果冻按压效果（默认 true）
+ * @param shadowColor 远影色（null 用 glassShadow = web --g-shadow 首条；alpha=0 时整条不画）
+ * @param shadowFeather 远影羽化半径（BlurMaskFilter 的 σ；CSS blur 半径 ≈ 2σ，web `0 14px 40px`
+ * → σ 20dp）
+ * @param shadowLift 远影垂直位移（web `0 14px …` 的 14px）
+ * @param shadowNearColor 近影色（null 用 glassShadowNear = web --g-shadow 次条 `0 2px 6px
+ * rgba(110,70,30,.1)`；暗色 web 无次条故该 token 全透明 → 自动不画）。web 对 Mica 顶栏/输入栏
+ * 的 box-shadow 是**整条覆盖**（只剩一条栏级阴影）→ 两栏传 [Color.Transparent] 关掉近影
+ * @param shadowNearFeather 近影羽化 σ（web 6px → 3dp）
+ * @param shadowNearLift 近影垂直位移（web 2px → 2dp）
  * @param backdrop v1.9.4 卡片透光磨砂开关（默认 true）：页面 [LocalGlassBackdrop] 有层且
  *  API 31+ 时，在玻璃填充之下垫真实高斯模糊（取样页面 record 的流光背景层，防自反馈见
  *  BackdropGlass.kt）；null/低版本自动回退现状半透明，无设置开关。已显式接入全量磨砂的
@@ -136,55 +108,27 @@ private fun sharedGrainBitmap(grainLight: Color, grainDark: Color): android.grap
  *
  * v1.8.1 B4：移除 glowPositions/glowIntensities——dead path（接收后从未使用）且引发 60fps 重组。
  * v1.9.4 评审修复：移除 scrollVelocity 死参数（接收后从未消费）与死 API liquidGlassScrollAware
- * （全仓库无调用点）——「别留死路径」，动态高光流动实际由 uTime 恒时驱动。
+ * （全仓库无调用点）。
  */
-@SuppressLint("NewApi") // RuntimeShader 伪折射已由 isRuntimeShaderSupported() 做 API 33 守卫
 @Composable
 fun Modifier.liquidGlass(
     shape: Shape = GtjShape.xl,
-    strong: Boolean = false,
+    fill: GlassFill = GlassFill.Frost,
     tint: List<Pair<Float, Color>>? = null,
     borderColor: Color? = null,
-    refractionStrength: Float = 0.5f,
     enablePressAnimation: Boolean = true,
     backdrop: Boolean = true,
+    shadowColor: Color? = null,
+    shadowFeather: Dp = 20.dp,
+    shadowLift: Dp = 14.dp,
+    shadowNearColor: Color? = null,
+    shadowNearFeather: Dp = 3.dp,
+    shadowNearLift: Dp = 2.dp,
 ): Modifier {
     val p = LocalGtjColors.current
-    val density = LocalDensity.current
 
-    // v1.8.1 B5：深色模式改读显式 token（Theme 层解析后下发），不再靠 bg.red 启发式猜（陶土棕/中性灰会误判）
-    val isDarkMode = LocalGtjIsDark.current
-    val supportsRuntimeShader = LiquidGlassShaders.isRuntimeShaderSupported()
-
-    // v1.9.4：reducedMotion 统一读取一次（uTime 动画与果冻按压共用；系统"移除动画"→全静态）
+    // v1.9.4：reducedMotion 统一读取一次（果冻按压共用；系统"移除动画"→全静态）
     val reduced = rememberReducedMotion()
-
-    // v1.9.4 根因②修复：uTime 动画驱动（照 GlowBackground.kt / FluidBackground.kt 模式）。
-    // frameNanos 仅在 onDrawBehind（draw 阶段）被读取 → 状态写入只触发本节点重绘，
-    // 不触发重组（v1.8.1 B4 教训）；30fps 节流：距上一写入 <33ms 的帧回调直接跳过；
-    // reducedMotion（系统"移除动画"）不启动循环，uTime 恒 0 静态帧。
-    var lensTimeNanos by remember { mutableLongStateOf(0L) }
-    if (supportsRuntimeShader && !reduced) {
-        LaunchedEffect(Unit) {
-            var lastEmitted = 0L
-            while (currentCoroutineContext().isActive) {
-                withInfiniteAnimationFrameNanos { now ->
-                    if (now - lastEmitted >= FRAME_INTERVAL_NANOS) {
-                        lastEmitted = now
-                        lensTimeNanos = now
-                    }
-                }
-            }
-        }
-    }
-
-    // v1.9.4 磨砂颗粒：预生成一张小噪声位图（≤128px，remember 一次），
-    // 亮/暗噪点色取 token（glassGrainLight/glassGrainDark），固定种子保证纹理跨帧稳定。
-    // 评审修复：纹理仅依赖两 token 色 → 进程内共享一张（此前每玻璃实例各建一张 ≈36KB，
-    // 长会话随屏上玻璃面数线性增长），主题切换（token 色变化）时重建。
-    val grainBitmap = remember(p.glassGrainLight, p.glassGrainDark) {
-        sharedGrainBitmap(p.glassGrainLight, p.glassGrainDark)
-    }
 
     // v1.9.4 卡片透光磨砂：消费页面 provide 的 LocalGlassBackdrop（背景+内容双层 holder），
     // 卡片级取样纯背景层（backgroundOnly=true，防自反馈/自重影，见 BackdropGlass.kt）。
@@ -242,27 +186,12 @@ fun Modifier.liquidGlass(
             }
         }
         .drawWithCache {
-            // 组合期已解析 token；缓存块内仅依赖 size/density/layoutDirection，跨帧复用
+            // 组合期已解析 token；缓存块内仅依赖 size/layoutDirection，跨帧复用
             val outline = shape.createOutline(size, layoutDirection, this)
             val fillPath: Path = when (outline) {
                 is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
                 is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
                 is Outline.Generic -> outline.path
-            }
-
-            // v1.9.4 评审修复：uRadius 取实际 shape 圆角（outline 半径已按尺寸 clamp，如 48dp 高
-            // 输入栏的 inputBar 28dp→24dp、CircleShape pill 取半宽）——圆角区亮边/色散带与物理
-            // 边缘对齐；此前恒用 xlRadius 18dp 与实际圆角错位约 6dp（v1.8.0 既有，v1.9.4 修好
-            // vec3 后 shader 真正渲染才显形）。Rectangle 无圆角、Generic 无圆角信息 → 回退默认。
-            val cornerRadiusPx = when (outline) {
-                is Outline.Rectangle -> 0f
-                is Outline.Rounded -> maxOf(
-                    outline.roundRect.topLeftCornerRadius.x,
-                    outline.roundRect.topRightCornerRadius.x,
-                    outline.roundRect.bottomRightCornerRadius.x,
-                    outline.roundRect.bottomLeftCornerRadius.x,
-                )
-                is Outline.Generic -> with(density) { GtjShape.xlRadius.toPx() }
             }
 
             // ②' 用户 tint 渐变（150° 方向近似：右下斜向，尺寸相关 → 缓存块内构造）
@@ -274,169 +203,93 @@ fun Modifier.liquidGlass(
                 )
             }
 
-            // ① 柔和外投影（BlurMaskFilter 高斯模糊，色来自 glassShadow token）
-            val shadowPaint = Paint().apply {
-                color = p.glassShadow
-                asFrameworkPaint().maskFilter =
-                    android.graphics.BlurMaskFilter(
-                        14.dp.toPx(),
-                        android.graphics.BlurMaskFilter.Blur.NORMAL,
-                    )
+            // ① 外层柔和投影（web --g-shadow 双影，styles.css:18/40）：
+            // 远影 `0 14px 40px rgba(110,70,30,.18)`（暗 rgba(0,0,0,.5)）→ CSS blur 40px ≈ 2σ
+            // = σ20dp、位移 14dp、色取 glassShadow；近影 `0 2px 6px rgba(110,70,30,.1)`（暗色
+            // web 无次条 → glassShadowNear 全透明，alpha==0 直接不画，零开销）。顶栏/输入栏的
+            // Mica box-shadow 是整条覆盖（styles.css:535/539）→ 调用方传 Transparent 关近影，
+            // 改用自己的栏级阴影色 + 位移 8dp。alpha==0 的影一律不建 Paint。
+            val farColor = shadowColor ?: p.glassShadow
+            val shadowPaint = if (farColor.alpha > 0f) {
+                Paint().apply {
+                    color = farColor
+                    asFrameworkPaint().maskFilter =
+                        android.graphics.BlurMaskFilter(
+                            shadowFeather.toPx(),
+                            android.graphics.BlurMaskFilter.Blur.NORMAL,
+                        )
+                }
+            } else {
+                null
             }
-            val shadowDy = 5.dp.toPx()
-
-            // ② 玻璃填充
-            val fillPaint = Paint().apply {
-                color = if (strong) p.glassFillStrong else p.glassFill
-                isAntiAlias = true
+            val shadowDy = shadowLift.toPx()
+            val nearColor = shadowNearColor ?: p.glassShadowNear
+            val shadowNearPaint = if (nearColor.alpha > 0f) {
+                Paint().apply {
+                    color = nearColor
+                    asFrameworkPaint().maskFilter =
+                        android.graphics.BlurMaskFilter(
+                            shadowNearFeather.toPx(),
+                            android.graphics.BlurMaskFilter.Blur.NORMAL,
+                        )
+                }
+            } else {
+                null
             }
+            val shadowNearDy = shadowNearLift.toPx()
 
-            // ②'' v1.9.4 玻璃厚度层（材质升级）：顶部多停靠 specular + 底部内阴影
-            // specular：方向性高光（顶部最亮 → 22% 处衰减 → 68% 处回光），基色 token glassSpecular
-            val specularColor = p.glassSpecular
-            val specularBrush = Brush.verticalGradient(
-                colorStops = arrayOf(
-                    0f to specularColor,
-                    0.07f to specularColor.copy(alpha = specularColor.alpha * 0.45f),
-                    0.22f to specularColor.copy(alpha = 0f),
-                    0.68f to specularColor.copy(alpha = 0f),
-                    1f to specularColor.copy(alpha = specularColor.alpha * 0.35f),
-                ),
-            )
-            // 底部内阴影（token glassInnerShade，62% 以下渐入）
-            val innerShadeColor = p.glassInnerShade
-            val bottomShadeBrush = Brush.verticalGradient(
-                colorStops = arrayOf(
-                    0f to innerShadeColor.copy(alpha = 0f),
-                    1f to innerShadeColor,
-                ),
-                startY = size.height * 0.62f,
-                endY = size.height,
-            )
-
-            // ②''' v1.9.4 磨砂颗粒：BitmapShader 双线性平铺（REPEAT）+ 低 alpha 叠进玻璃填充，
-            // Paint 跨帧复用（颗粒位图/着色器与动画无关，缓存块内一次构建）
-            val grainPaint = Paint().apply {
-                asFrameworkPaint().shader = android.graphics.BitmapShader(
-                    grainBitmap,
-                    android.graphics.Shader.TileMode.REPEAT,
-                    android.graphics.Shader.TileMode.REPEAT,
-                )
-                // 双线性滤波：颗粒在非整数倍缩放时平滑（"双线性平铺"）
-                asFrameworkPaint().isFilterBitmap = true
-                asFrameworkPaint().alpha = (GRAIN_ALPHA * 255).toInt()
-                isAntiAlias = true
+            // ② 玻璃填充：v1.9.4 Mica 两组填充（web cautions：色相不同勿混用）——
+            // Frost（默认）= frost 版 --glass 直色（亮 rgb(253,249,242)/暗 rgb(46,36,28) 均 .300，
+            // 对应侧栏/胶囊/用户气泡/弹层/toast 组）；Card = --wy-card-light/dark 纵向渐变
+            // （styles.css:526-531，仅顶栏/输入栏）。统一走纵向渐变绘制，Frost 双停靠点同色即平涂
+            val fillBrush = when (fill) {
+                GlassFill.Frost -> Brush.verticalGradient(listOf(p.glassFill, p.glassFill))
+                GlassFill.Card -> Brush.verticalGradient(listOf(p.glassCardFillTop, p.glassCardFillBottom))
             }
 
-            // ③ 顶部高光线（静态降级方案）
-            val edgeHeight = 2.dp.toPx()
+            // ③ 顶边内高光（内凹改版·只沿顶边一条渐变细线）= web .edge::before：
+            // `top:0;left:10%;right:10%;height:1.5px;border-radius:99px;
+            //  background:linear-gradient(90deg,transparent,var(--edge),transparent)`
+            // （styles.css:93）。web 的「内凹面」= 这一条顶边高光 + 向下柔和投影；旧版另有
+            // 一圈内发丝（innerPath 全路径 stroke），四边亮线成环读作外凸珠边，已删。
+            val edgeHeight = 1.5.dp.toPx()
             val edgeRect = Rect(
                 left = size.width * 0.1f,
                 top = 0f,
                 right = size.width * 0.9f,
                 bottom = edgeHeight,
             )
-            val edgeBrush = Brush.verticalGradient(
-                colorStops = arrayOf(0f to p.glassEdgeHighlight, 1f to Color.Transparent),
-                startY = 0f,
-                endY = edgeHeight,
+            val edgeBrush = Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0f to Color.Transparent,
+                    0.5f to p.glassEdgeHighlight,
+                    1f to Color.Transparent,
+                ),
+                startX = edgeRect.left,
+                endX = edgeRect.right,
             )
 
-            // ④ v1.9.4 双发丝描边：外圈深线（hairlineOuter，borderColor 可覆盖）+ 内圈亮线
-            // （hairlineInner）。外圈 1dp 居中描边不裁剪（一半溢出圆角形成外缘发丝）；
-            // 内圈 0.75dp 描边在 clip 内画，紧贴边缘内侧（对应桌面 inset 0 1px 内高光）。
-            val hairlineOuterWidth = 1.dp.toPx()
-            val hairlineOuterColor = borderColor ?: p.glassHairlineOuter
-            val hairlineInnerWidth = 0.75.dp.toPx()
-            val hairlineInnerColor = p.glassHairlineInner
-            // 内圈路径：整体内缩 hairlineInnerWidth/2 后的 outline（构造逻辑与 lensEdgePath 一致）
-            val innerInset = hairlineInnerWidth / 2
-            val innerPath: Path = when (val innerOutline = shape.createOutline(
-                Size(size.width - innerInset * 2, size.height - innerInset * 2),
-                layoutDirection,
-                this,
-            )) {
-                is Outline.Rectangle -> Path().apply { addRect(innerOutline.rect.translate(Offset(innerInset, innerInset))) }
-                is Outline.Rounded -> Path().apply {
-                    val r = innerOutline.roundRect
-                    addRoundRect(
-                        androidx.compose.ui.geometry.RoundRect(
-                            left = r.left + innerInset,
-                            top = r.top + innerInset,
-                            right = r.right - innerInset,
-                            bottom = r.bottom - innerInset,
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r.topLeftCornerRadius.x, r.topLeftCornerRadius.y),
-                        ),
-                    )
-                }
-                is Outline.Generic -> Path().apply { addPath(innerOutline.path, Offset(innerInset, innerInset)) }
-            }
-
-            // v1.8.0：API 33+ 使用 RuntimeShader 实现折射 + 动态高光 + 边缘透镜
-            val useRuntimeShader = supportsRuntimeShader && refractionStrength > 0f
-
-            // v1.9.4 根因②配套：lensEdgePath 从 onDrawBehind 移入缓存块——路径只依赖 size/shape，
-            // 与动画无关；原先每帧绘制都新建 Path（违背每帧零分配）。inset 0.75dp 与内发丝一致。
-            val lensEdgeWidth = 1.5.dp.toPx()
-            val lensEdgePath: Path = run {
-                val inset = lensEdgeWidth / 2
-                when (val outline = shape.createOutline(
-                    Size(size.width - inset * 2, size.height - inset * 2),
-                    layoutDirection,
-                    this,
-                )) {
-                    is Outline.Rectangle -> Path().apply { addRect(outline.rect.translate(Offset(inset, inset))) }
-                    is Outline.Rounded -> Path().apply {
-                        val r = outline.roundRect
-                        addRoundRect(
-                            androidx.compose.ui.geometry.RoundRect(
-                                left = r.left + inset,
-                                top = r.top + inset,
-                                right = r.right - inset,
-                                bottom = r.bottom - inset,
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r.topLeftCornerRadius.x, r.topLeftCornerRadius.y),
-                            ),
-                        )
-                    }
-                    is Outline.Generic -> Path().apply { addPath(outline.path, Offset(inset, inset)) }
-                }
-            }
-
-            // v1.9.4：边缘透镜色（RuntimeShader 与静态降级分支共用）
-            val lensEdgeColor = if (isDarkMode) {
-                p.glowA.copy(alpha = 0.3f)
-            } else {
-                Color.White.copy(alpha = 0.5f)
-            }
-
-            // v1.9.4 根因①②配套：lensEdgeShader 与其 Paint 移入缓存块真正创建一次（跨帧复用）。
-            // （v1.8.1 B2 的注释宣称"缓存块内创建一次"，实际代码在 onDrawBehind 内每帧重建——
-            // 本次一并落实。）createLensEdgeShader 失败返回 null（个别 ROM AGSL 编译失败）
-            // → 回退静态亮边分支；time 初始 0f，onDrawBehind 内每帧覆写 uTime uniform。
-            val lensEdgeShader = if (useRuntimeShader) {
-                LiquidGlassShaders.createLensEdgeShader(
-                    size = size,
-                    cornerRadius = cornerRadiusPx,
-                    edgeColor = lensEdgeColor,
-                    glowColor = if (isDarkMode) p.glowA else Color.White,
-                    isDarkMode = isDarkMode,
-                    refractionStrength = refractionStrength,
-                )
-            } else {
-                null
-            }
-            val lensEdgeShaderPaint = lensEdgeShader?.let {
-                Paint().apply {
-                    this.shader = it
-                    isAntiAlias = true
-                }
-            }
+            // ④ 外圈描边 1dp（= web `border:1px solid var(--glass-border)`，styles.css:82/39）：
+            // 读 glassBorder（borderColor 可覆盖——用户气泡传棕色 --uborder 同 web）。
+            // 居中描边不裁剪：一半溢出圆角形成外缘发丝，随投影一同浮出。
+            val outerBorderWidth = 1.dp.toPx()
+            val outerBorderColor = borderColor ?: p.glassBorder
 
             onDrawBehind {
-                // ① 软投影：先画，溢出圆角无碍
-                translate(top = shadowDy) {
-                    drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawPath(fillPath.asAndroidPath(), shadowPaint.asFrameworkPaint())
+                // ① 软投影：远影 + 近影（web --g-shadow 双影；任一 alpha==0 时对应 Paint 为 null 不画）。
+                // 先画，溢出圆角无碍
+                if (shadowPaint != null) {
+                    translate(top = shadowDy) {
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawPath(fillPath.asAndroidPath(), shadowPaint.asFrameworkPaint())
+                        }
+                    }
+                }
+                if (shadowNearPaint != null) {
+                    translate(top = shadowNearDy) {
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawPath(fillPath.asAndroidPath(), shadowNearPaint.asFrameworkPaint())
+                        }
                     }
                 }
 
@@ -462,27 +315,10 @@ fun Modifier.liquidGlass(
                     }
                 }
 
-                // ② 玻璃填充（半透明 → 底下光斑/背景透出；backdrop 模糊层由独立 modifier 垫在本层之下）
-                drawPath(fillPath, fillPaint.color)
+                // ② 玻璃填充（Mica 纵向渐变 → 底下光斑/背景透出；backdrop 模糊层由独立 modifier 垫在本层之下）
+                drawPath(fillPath, fillBrush)
 
-                // ②· v1.9.4 磨砂颗粒：低 alpha 噪声平铺叠进玻璃填充（fill 之上、厚度层之下）
-                withTransform({
-                    clipPath(fillPath)
-                }) {
-                    drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawPath(fillPath.asAndroidPath(), grainPaint.asFrameworkPaint())
-                    }
-                }
-
-                // ②' v1.9.4 厚度层：顶部多停靠 specular + 底部内阴影（原上微光/下微影升级）
-                withTransform({
-                    clipPath(fillPath)
-                }) {
-                    drawRect(brush = specularBrush)
-                    drawRect(brush = bottomShadeBrush)
-                }
-
-                // ②'' 用户 tint 渐变（在 fill/厚度层之上、高光/描边之下）
+                // ②' 用户 tint 渐变（在 fill 之上、高光/描边之下）
                 if (tintBrush != null) {
                     withTransform({
                         clipPath(fillPath)
@@ -491,39 +327,7 @@ fun Modifier.liquidGlass(
                     }
                 }
 
-                // v1.8.0：RuntimeShader 伪折射效果（API 33+）
-                // v1.9.4 根因②：每帧覆写 uTime uniform（shader/Paint 均为缓存块内复用对象，
-                // 本帧零分配）；frameNanos → 秒，reducedMotion 时恒 0 静态帧。
-                // 本块读 lensTimeNanos state → 仅触发本节点重绘，不触发重组（v1.8.1 B4）。
-                if (lensEdgeShader != null && lensEdgeShaderPaint != null) {
-                    lensEdgeShader.setFloatUniform(
-                        "uTime",
-                        if (reduced) 0f else lensTimeNanos / 1e9f,
-                    )
-                    withTransform({
-                        clipPath(fillPath)
-                    }) {
-                        drawIntoCanvas { canvas ->
-                            canvas.nativeCanvas.drawRect(
-                                0f, 0f, size.width, size.height,
-                                lensEdgeShaderPaint.asFrameworkPaint(),
-                            )
-                        }
-                    }
-                } else {
-                    // 降级：静态边缘亮边（API < 33 / 折射关闭 / AGSL 编译失败）
-                    withTransform({
-                        clipPath(fillPath)
-                    }) {
-                        drawPath(
-                            path = lensEdgePath,
-                            color = lensEdgeColor,
-                            style = Stroke(width = lensEdgeWidth),
-                        )
-                    }
-                }
-
-                // ③ 顶部高光（静态降级：API < 33 或未启用折射）
+                // ③ 顶边内高光（= web .edge，只沿顶边一条；内凹面的「上沿受光」）
                 withTransform({
                     clipPath(fillPath)
                 }) {
@@ -534,19 +338,9 @@ fun Modifier.liquidGlass(
                     )
                 }
 
-                // ④ v1.9.4 双发丝描边：外圈深线（hairlineOuter，不裁剪——一半溢出圆角形成外缘
-                // 发丝，随投影一同浮出）+ 内圈亮线（hairlineInner，clip 内紧贴边缘内侧）。
-                // 替代 v1.7.6 单色 1dp 描边（borderColor 仍可覆盖外圈色，签名向后兼容）。
-                drawPath(fillPath, hairlineOuterColor, style = Stroke(width = hairlineOuterWidth))
-                withTransform({
-                    clipPath(fillPath)
-                }) {
-                    drawPath(
-                        path = innerPath,
-                        color = hairlineInnerColor,
-                        style = Stroke(width = hairlineInnerWidth),
-                    )
-                }
+                // ④ 外圈描边（单线 = web `1px solid var(--glass-border)`；整圈内发丝已删，见类注释
+                // 「内凹改版」）。居中描边不裁剪——一半溢出圆角形成外缘发丝，随投影一同浮出。
+                drawPath(fillPath, outerBorderColor, style = Stroke(width = outerBorderWidth))
             }
         }
     }
@@ -555,26 +349,31 @@ fun Modifier.liquidGlass(
  * v1.8.0 玻璃容器：内容置于玻璃绘制之上。
  * 带 onClick 时内部先 clip 再 clickable，保证涟漪不溢出圆角而投影保持完整。
  *
+ * @param fill 填充组（默认 [GlassFill.Frost]，语义同 [liquidGlass]；顶栏/输入栏走 Card）
  * @param backdrop v1.9.4 卡片透光磨砂开关（默认 true，语义同 [liquidGlass]）
+ * @param shadow 外层投影开关（默认 true = web .glass 双影）。false 用于 web 里本就没有
+ * box-shadow 的玻璃面（侧栏行 .sb-item / 新建会话 .sb-new 等面板内行）——两条影都以
+ * Transparent 传入，引擎 alpha==0 直接跳过，零开销
  */
 @Composable
 fun GlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = GtjShape.xl,
-    strong: Boolean = false,
+    fill: GlassFill = GlassFill.Frost,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
-    refractionStrength: Float = 0.5f,
     enablePressAnimation: Boolean = true,
     backdrop: Boolean = true,
+    shadow: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val glass = Modifier.liquidGlass(
         shape = shape,
-        strong = strong,
-        refractionStrength = refractionStrength,
+        fill = fill,
         enablePressAnimation = enablePressAnimation,
         backdrop = backdrop,
+        shadowColor = if (shadow) null else Color.Transparent,
+        shadowNearColor = if (shadow) null else Color.Transparent,
     )
     if (onClick != null) {
         Box(

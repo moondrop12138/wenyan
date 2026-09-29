@@ -44,12 +44,28 @@ object GtjShape {
         topStart = bubbleRadius, topEnd = bubbleRadius,
         bottomEnd = bubbleRadius, bottomStart = bubbleTailSmRadius,
     )
-    /** v1.7.0 弹层顶部大圆角 28（原型 sheet radius 28px） */
-    val sheetTopRadius = 28.dp
+    /**
+     * v1.7.0 弹层顶部圆角（原型 sheet radius 28px → v1.9.4 对齐 web 增强段 26：
+     * `.sheet{border-radius:26px 26px 0 0}`，styles.css:319）。
+     */
+    val sheetTopRadius = 26.dp
     val sheetTop = RoundedCornerShape(topStart = sheetTopRadius, topEnd = sheetTopRadius)
-    /** v1.7.0 输入胶囊圆角 28（原型 inbar radius 28px，悬浮形态） */
-    val inputBarRadius = 28.dp
+    /**
+     * v1.9.4 Mica 对齐：输入栏圆角 26（web 规格 radii.inputBar=26，.input-bar）。
+     * 固定值不用 pill：多行输入时高度变化，pill 的圆角会随高度膨胀成巨大胶囊；
+     * 28 → 26 对齐 web 增强段。
+     */
+    val inputBarRadius = 26.dp
     val inputBar = RoundedCornerShape(inputBarRadius)
+    /** v1.9.4 Mica 对齐：顶栏圆角 20（web .topbar border-radius 20px，styles.css:146） */
+    val topBarRadius = 20.dp
+    val topBar = RoundedCornerShape(topBarRadius)
+    /** v1.9.4 Mica 对齐：会话行圆角 14（web 规格 radii.sessionRow=14，.sb-item） */
+    val sessionRowRadius = 14.dp
+    val sessionRow = RoundedCornerShape(sessionRowRadius)
+    /** v1.9.4 Mica 对齐：侧栏容器圆角 24（web 规格 radii.sidebar=24，.sidebar 悬浮卡） */
+    val sidebarRadius = 24.dp
+    val sidebar = RoundedCornerShape(sidebarRadius)
 }
 
 /** Material3 Shapes 映射。注意：extraLarge 不可用 pill（CircleShape）——

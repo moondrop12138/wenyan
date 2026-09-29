@@ -95,7 +95,10 @@ fun ErrorCard(
                 Text(ui.title, style = GtjType.Subtitle, color = p.fg)
             }
             Spacer(Modifier.padding(top = 6.dp))
-            Text(ui.body, style = GtjType.BodySm, color = p.fgSecondary)
+            // v1.9.4 评审修复：卡片正文层由 fgSecondary 改 fg——Mica 对齐把玻璃填充收到 frost .30 后，
+            // 浅色 fgSecondary 在本卡（Frost 组）流光最深色之上的卡内实色实测 4.46:1（hue0）/ 全量程
+            // 最坏 4.15:1 <AA 4.5；同条件 fg 为 6.95/6.47 达标。token 未动（web 对齐优先），改正文用色。
+            Text(ui.body, style = GtjType.BodySm, color = p.fg)
             Spacer(Modifier.padding(top = 12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Spacer(Modifier.weight(1f))

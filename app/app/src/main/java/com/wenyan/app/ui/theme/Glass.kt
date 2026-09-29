@@ -56,6 +56,23 @@ val DarkSendGradient: List<Pair<Float, Color>> = listOf(
 val DarkSendIcon: Color = Color(0xFF17120E)
 
 /**
+ * v1.9.4 Mica 发送键内高光 / 投影（原型 .send-btn box-shadow：
+ * `inset 0 1px 0 rgba(255,255,255,.35), 0 6px 14px rgba(164,85,28,.35)`，styles.css:234）。
+ * 桌面**无暗色覆盖**（styles.css 全文只有这一条 .send-btn 阴影规则）→ 两主题同值，
+ * 与 --send1/--send2/--sendic 一样属「跨主题固定」的发送键参数。
+ */
+val SendHighlight: Color = Color(0x59FFFFFF) // 0.35 × 255 ≈ 89 = 0x59
+val SendShadow: Color = Color(0x59A4551C) // rgba(164,85,28,0.35)
+
+/** 当前主题的发送键内高光色（两主题同值，见 [SendHighlight]）。 */
+@Composable
+fun rememberSendHighlight(): Color = SendHighlight
+
+/** 当前主题的发送键投影色（两主题同值，见 [SendShadow]）。 */
+@Composable
+fun rememberSendShadow(): Color = SendShadow
+
+/**
  * 当前主题是否为深色（按背景色与 LightPalette 比对，跨组件零额外状态）。
  * 供 Glass 组件在选择浅/深两套衍生参数时使用。
  */

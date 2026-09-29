@@ -118,7 +118,10 @@ fun ChatEmptyState(
                             Text(
                                 text = text,
                                 style = GtjType.Body.copy(fontSize = 15.5f.sp, lineHeight = 25f.sp),
-                                color = p.fgSecondary,
+                                // v1.9.4 评审修复：示例问题正文层由 fgSecondary 改 fg——浅色 fgSecondary
+                                // 在 Mica frost .30 的玻璃面/流光上均不足 AA（玻璃面全量程最坏 4.15:1），
+                                // 正文层统一用 fg（web 该处为 --fg-sec，此处按可读性优先的有意偏差）
+                                color = p.fg,
                             )
                         }
                         if (index < EMPTY_INDEX.lastIndex) {

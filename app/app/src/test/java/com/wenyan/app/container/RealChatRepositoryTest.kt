@@ -23,7 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 流式状态归属回归测试（v1.9.5 用户报障：新会话 AI 回答完成后打字气泡不消失、发送键卡「停止生成」）。
+ * 流式状态归属回归测试（v1.9.4 用户报障：新会话 AI 回答完成后打字气泡不消失、发送键卡「停止生成」）。
  *
  * 根因（修复前）：新会话首条消息以 PENDING_SESSION_KEY(-1) 注册流并置状态归属 null，
  * sendTextFlow 拿到真实 sid 后只改了「状态归属」，事件应用时 ownerKey 仍是 -1 →

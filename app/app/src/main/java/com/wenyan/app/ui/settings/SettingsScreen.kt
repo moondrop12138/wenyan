@@ -71,6 +71,7 @@ import com.wenyan.app.ui.components.Tag
 import com.wenyan.app.ui.components.TagKind
 import com.wenyan.app.ui.components.ThickDivider
 import com.wenyan.app.ui.components.glass.FluidBackground
+import com.wenyan.app.ui.components.glass.GlassFill
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
@@ -182,18 +183,28 @@ fun SettingsScreen(
         containerColor = Color.Transparent,
         topBar = {
             // v1.8.0 液态玻璃 2.0：顶栏悬浮胶囊（v1.8.1 B4 移除光斑 dead path）
+            // v1.9.4 Mica：与聊天顶栏同一配方——r20 + --wy-card-* 渐变填充 + 栏级
+            // 0 8px 28px 投影（web `[data-wy-glass=on] .main .topbar`，styles.css:533-536）；
+            // 近影关掉（web 对 Mica 栏的 box-shadow 是整条覆盖）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .liquidGlass(shape = GtjShape.inputBar)
-                        .clip(GtjShape.inputBar),
+                        .liquidGlass(
+                            shape = GtjShape.topBar,
+                            fill = GlassFill.Card,
+                            shadowColor = p.glassShadowTopBar,
+                            shadowFeather = 14.dp,
+                            shadowLift = 8.dp,
+                            shadowNearColor = Color.Transparent,
+                        )
+                        .clip(GtjShape.topBar),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

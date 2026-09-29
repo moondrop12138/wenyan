@@ -125,7 +125,10 @@ fun CoachCard(
             Text(
                 text = card.empathy,
                 style = GtjType.Body.copy(lineHeight = 26.sp),
-                color = p.fgSecondary,
+                // v1.9.4 评审修复：正文层改 fg（原 fgSecondary）——浅色 fgSecondary 在 Mica frost .30
+                // 的玻璃面上全量程最坏 4.15:1 <AA 4.5；本卡直接铺在流光背景上（非玻璃填充），同属
+                // 正文层，一并统一为 fg（正文对比由 fg 承担，token 未动）
+                color = p.fg,
                 modifier = Modifier
                     .fillMaxWidth()
                     .drawBehind {
@@ -184,7 +187,8 @@ fun CoachCard(
                 card.reasons.forEachIndexed { index, reason ->
                     Row(Modifier.padding(bottom = 6.dp)) {
                         Text("${index + 1}.", style = EditorialType.No, color = p.accent, modifier = Modifier.width(24.dp))
-                        Text(reason, style = GtjType.BodySm.copy(lineHeight = 23.sp), color = p.fgSecondary, modifier = Modifier.weight(1f))
+                        // v1.9.4 评审修复：理由正文同 [card.empathy]，fgSecondary → fg
+                        Text(reason, style = GtjType.BodySm.copy(lineHeight = 23.sp), color = p.fg, modifier = Modifier.weight(1f))
                     }
                 }
             }

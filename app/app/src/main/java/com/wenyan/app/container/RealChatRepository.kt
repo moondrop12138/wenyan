@@ -115,7 +115,7 @@ class RealChatRepository(
             // M17 修复：发送链路无协程异常兜底——原 appScope 无 CoroutineExceptionHandler，
             // sendTextFlow/analyzeImagesFlow 中任何未捕获异常（DB 写失败、解析异常等）
             // 沿 appScope.launch 直接崩溃进程。兜底：记日志。
-            // v1.9.5：原先还在这里无条件复位流式状态，但该兜底拿到不到归属 key，会把
+            // v1.9.4：原先还在这里无条件复位流式状态，但该兜底拿到不到归属 key，会把
             // 「别的会话正在跑的流」也一起复位（同一类跨会话串状态问题）。异常流的收尾
             // 改由 task 结束回调按归属复位，见 StreamStateHost.onFinished。
             CoroutineExceptionHandler { _, e ->
@@ -125,7 +125,7 @@ class RealChatRepository(
 
     /**
      * v1.3.1 流式状态中枢：async 发送族在 appScope 收集后推送，ViewModel 订阅映射。
-     * v1.9.5：状态与任务注册表下沉到 [StreamStateHost]（归属 key 与状态同源，可被 JVM 单测覆盖）。
+     * v1.9.4：状态与任务注册表下沉到 [StreamStateHost]（归属 key 与状态同源，可被 JVM 单测覆盖）。
      */
     private val streamHost = StreamStateHost(appScope)
     override val streamingState: StateFlow<StreamingState> = streamHost.state
@@ -230,7 +230,7 @@ class RealChatRepository(
 
     /**
      * v1.3.1 persistUser=false 供失败重试：用户消息首次已落库，重试不重复落库、不重复更新状态机。
-     * v1.9.5 [owner] = 本流的归属句柄（async 入口传入；直接 collect 的同步入口传 null，不参与
+     * v1.9.4 [owner] = 本流的归属句柄（async 入口传入；直接 collect 的同步入口传 null，不参与
      * 流式状态归属）：新会话首次落库后由它把状态归属与任务注册 key 一起迁移（见 [StreamStateHost.Handle.retag]）。
      */
     private fun sendTextFlow(
@@ -370,7 +370,7 @@ class RealChatRepository(
 
     /**
      * v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库。
-     * v1.9.5 [owner] 同 [sendTextFlow]：async 入口传入归属句柄，同步入口传 null。
+     * v1.9.4 [owner] 同 [sendTextFlow]：async 入口传入归属句柄，同步入口传 null。
      */
     private fun analyzeImagesFlow(
         uris: List<Uri>,
@@ -468,7 +468,7 @@ class RealChatRepository(
     override fun confirmTranscription(transcription: String, sid: Long?): Flow<StreamEvent> =
         confirmTranscriptionFlow(transcription, sid, owner = null)
 
-    /** v1.9.5：实现体带 [StreamStateHost.Handle]（async 入口经 launchStream 传入；同步入口传 null） */
+    /** v1.9.4：实现体带 [StreamStateHost.Handle]（async 入口经 launchStream 传入；同步入口传 null） */
     private fun confirmTranscriptionFlow(
         transcription: String,
         sid: Long?,
@@ -555,7 +555,7 @@ class RealChatRepository(
         // 把刚被删除的会话 id 赋回内存（FK 约束下会导致该条消息静默丢失）
         sessionChosenByUser = true
         // M18：删除会话时取消其进行中的流式任务（回复不再静默落已删除会话）
-        // v1.9.5：同时复位归属该会话的流式状态——取消是异步生效的（协程真正结束才走
+        // v1.9.4：同时复位归属该会话的流式状态——取消是异步生效的（协程真正结束才走
         // invokeOnCompletion 兜底），不同步复位会留下僵尸 {streaming=true}：
         // 被删会话不再有任何事件来复位它，用户停在「停止生成/思考中」的假态上。
         streamHost.cancelFor(sessionId)
@@ -572,7 +572,7 @@ class RealChatRepository(
         // 原实现取消的是唯一 streamJob，stop 掉的可能是旧会话的流。
         // M15 修复：状态机完整复位——原仅 streaming=false，残留 transcribing 与 error：
         // 转述中断后状态机残留；错误卡「取消」按钮点击无效（错误码不清、再 cancel 是 no-op）。
-        // v1.9.5：key 解析（状态归属优先，与任务注册 key 同源）与复位收进 StreamStateHost.cancel
+        // v1.9.4：key 解析（状态归属优先，与任务注册 key 同源）与复位收进 StreamStateHost.cancel
         // ——原实现按 sessionId.value 取 job，新会话首条消息的 job 注册在 PENDING key 下，
         // 点停止只复位 UI、LLM 协程照跑。
         streamHost.cancel(sessionId.value)
@@ -1004,7 +1004,7 @@ class RealChatRepository(
 }
 
 /**
- * 流式状态主机（v1.9.5）：[ChatRepository.streamingState] 的唯一写入方。
+ * 流式状态主机（v1.9.4）：[ChatRepository.streamingState] 的唯一写入方。
  *
  * 职责：持有流式状态中枢 + 按会话 key 注册的流任务表，并保证**状态归属 sessionId 与任务注册
  * key 同源同步**——M18 归属校验（「状态归属 == ownerKey」才应用事件）成立的前提。
@@ -1046,7 +1046,7 @@ internal class StreamStateHost(private val scope: CoroutineScope) {
         }
         handle.job = job
         jobs[key] = job
-        // v1.9.5 兜底：流结束（正常/取消/异常）都要复位——原来只摘除注册表项，
+        // v1.9.4 兜底：流结束（正常/取消/异常）都要复位——原来只摘除注册表项，
         // 事件没走到收尾时状态就永久卡在 {streaming=true}
         job.invokeOnCompletion { onFinished(handle) }
         job.start()

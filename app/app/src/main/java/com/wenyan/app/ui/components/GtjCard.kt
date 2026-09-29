@@ -22,7 +22,7 @@ import com.wenyan.app.ui.theme.LocalGtjColors
 
 /**
  * 卡片体系（design-tokens.json component.card / divider / tag）。
- * v1.7.0：卡片 = 玻璃材质（glassFill + 顶高光 + 描边 + 软影），圆角 md。
+ * v1.7.0：卡片 = 玻璃材质（v1.9.4 起 Mica 渐变填充 glassCardFill* + 顶高光 + 描边 + 软影），圆角 md。
  */
 @Composable
 fun GtjCard(
@@ -58,7 +58,15 @@ fun ThickDivider(modifier: Modifier = Modifier) {
 }
 
 /** 能力/状态标签（component.tag）：accent / neutral / warm / danger 四色，文字+色双通道 */
-enum class TagKind { ACCENT, NEUTRAL, WARM, DANGER }
+enum class TagKind {
+    ACCENT,
+    NEUTRAL,
+    WARM,
+    DANGER,
+
+    /** v1.9.4 半透明 accent chip 底 + accent 字（web `--chip`，styles.css:20/42；模型弹层徽章用） */
+    CHIP,
+}
 
 @Composable
 fun Tag(
@@ -74,6 +82,7 @@ fun Tag(
         TagKind.NEUTRAL -> p.borderSoft to p.muted
         TagKind.WARM -> p.warmSoft to p.warmOn
         TagKind.DANGER -> p.dangerSoft to p.danger
+        TagKind.CHIP -> p.glassChip to p.accent
     }
     Surface(modifier = modifier, shape = RoundedCornerShape(9999.dp), color = bg, contentColor = fg) {
         Row(

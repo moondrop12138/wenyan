@@ -83,11 +83,14 @@ fun SessionDrawerContent(
             Spacer(Modifier.height(2.dp))
             Text("恋爱决策支持", style = GtjType.Caption, color = p.meta)
         }
-        // v1.7.1-4：新建会话 = 液态玻璃胶囊（strong 玻璃 + accent 字，与玻璃侧栏同材质）
+        // v1.7.1-4：新建会话 = 液态玻璃胶囊（accent 字，与玻璃侧栏同材质；
+        // v1.9.4 默认 Frost 组 = web frost --glass，侧栏组与 web cautions 一致）
+        // v1.9.4：投影关掉——web .sb-new（styles.css:126）只有 hover 底色，无 box-shadow；
+        // 侧栏内的行若套卡片级软影（σ20/位移14）会读成一片浮起的卡片
         GlassSurface(
             onClick = onNewSession,
             shape = RoundedCornerShape(22.dp),
-            strong = true,
+            shadow = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
@@ -218,23 +221,27 @@ private fun SessionItem(
 ) {
     val p = LocalGtjColors.current
     // v1.7.0：会话行 = 玻璃（未选中）；当前会话保持 accentSoft + accent 边强调
+    // v1.9.4 Mica 对齐：会话行圆角 14（web .sb-item border-radius 14px，styles.css:128）
     if (isCurrent) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-            shape = GtjShape.md,
+            shape = GtjShape.sessionRow,
             color = p.accentSoft,
             border = BorderStroke(1.dp, p.accent.copy(alpha = 0.35f)),
         ) {
             SessionItemContent(session, p)
         }
     } else {
+        // v1.9.4：投影关掉（shadow=false）——web .sb-item（styles.css:129）只有 hover 底色，
+        // 无 box-shadow；侧栏内行套卡片级软影会读成一片浮起的小卡
         GlassSurface(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-            shape = GtjShape.md,
+            shape = GtjShape.sessionRow,
+            shadow = false,
         ) {
             SessionItemContent(session, p)
         }

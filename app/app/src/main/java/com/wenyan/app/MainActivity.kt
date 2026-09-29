@@ -6,11 +6,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import com.wenyan.app.ui.components.glass.hueRotateColorMatrix
 import com.wenyan.app.ui.navigation.AppRoot
 import com.wenyan.app.ui.navigation.rememberViewModel
+import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
 import com.wenyan.app.ui.theme.GtjTheme
 import com.wenyan.app.ui.theme.LocalBgBrightness
 import com.wenyan.app.ui.theme.LocalFluidBackground
@@ -52,7 +61,48 @@ class MainActivity : ComponentActivity() {
                     LocalFluidHue provides fluidHue,
                     LocalBgBrightness provides bgBrightness,
                 ) {
-                    AppRoot(container = container, appViewModel = appViewModel)
+                    // v1.9.4 四改 色相全局跟随：对齐桌面 styles.css:493 把
+                    // `filter: hue-rotate(var(--wy-fluid-hue))` 挂在整个 body 上的语义——
+                    // 流光、玻璃、文字整树一起转（此前只转流光基色，UI 层固定色不跟随）。
+                    // 矩阵 = W3C 亮度保持 hue-rotate（hueRotateColorMatrix，与旧逐色旋转
+                    // 同一条算子）；色相 = 0（默认）直接透传绘制，零开销。
+                    // 实现注（javap 实测，非推测）：本项目 Compose BOM 2025.06.01 → ui 1.8.3，
+                    // `Modifier.graphicsLayer {}` 的 GraphicsLayerScope 无 colorFilter 成员
+                    // （仅 scaleX/alpha/renderEffect/compositingStrategy 等；GraphicsLayer
+                    // 类本身有 setColorFilter，但 modifier 作用域未暴露），故用
+                    // drawWithContent + saveLayer(paint.colorFilter) 在图层合成时套同一矩阵——
+                    // saveLayer 的 paint 滤镜作用于整层合成结果，与「整树套 filter」语义等价。
+                    // 全局层是 LocalFluidHue 的消费方（CompositionLocal 下发链路的唯一读取点）。
+                    // 已知偏差（web 无此概念）：Compose Dialog/ModalBottomSheet 等独立窗口
+                    // 不在本层子树内，不随全局色相旋转。
+                    val hue = LocalFluidHue.current
+                    val huePaint = remember(hue) {
+                        if (hue == FLUID_HUE_DEFAULT) {
+                            null
+                        } else {
+                            android.graphics.Paint().apply {
+                                colorFilter = android.graphics.ColorMatrixColorFilter(
+                                    hueRotateColorMatrix(hue.toFloat()).values,
+                                )
+                            }
+                        }
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxSize().drawWithContent {
+                            if (huePaint == null) {
+                                drawContent()
+                            } else {
+                                drawIntoCanvas { canvas ->
+                                    val native = canvas.nativeCanvas
+                                    val save = native.saveLayer(null, huePaint)
+                                    drawContent()
+                                    native.restoreToCount(save)
+                                }
+                            }
+                        },
+                    ) {
+                        AppRoot(container = container, appViewModel = appViewModel)
+                    }
                 }
             }
         }
