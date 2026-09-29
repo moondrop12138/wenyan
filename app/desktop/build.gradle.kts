@@ -36,6 +36,8 @@ tasks.processResources {
     from(rootProject.file("app/src/main/assets/knowledge")) {
         into("knowledge")
     }
+    // 工具本地状态目录（Mimosa 的 .mimosa/ 会话/账本数据）绝不随 jar 发布
+    exclude("**/.mimosa/**")
 }
 
 // Room schema 导出（desktop 侧独立导出，与 Android schemas 交叉验证）

@@ -83,3 +83,10 @@ app/*.txt
 
 # 桌面版打包产物（安装包/绿色版/裁剪 JRE，体积大且可重生成）
 app/desktop/dist-package/
+
+# ===== 工具本地状态（不入库：安全扫描/会话数据，且 static/.mimosa 会被 processResources 打进 jar）=====
+.mimosa/
+.zcode/
+.zcodeignore
+.zcode-tmp-*.json
+nul
