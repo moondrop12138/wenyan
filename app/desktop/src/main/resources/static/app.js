@@ -1254,7 +1254,8 @@ async function renderSettings(col){
   memExRow.onclick = async () => {
     try {
       const data = await api.get('/api/memory/export');
-      if (!data || data.ok === false){ toast((data && data.error) || '导出失败'); return; }
+      // 成功响应是裸记忆 JSON（无 ok 字段，必有 targets 数组）；403/失败体没有 targets
+      if (!data || data.error || !Array.isArray(data.targets)){ toast((data && data.error) || '导出失败'); return; }
       const d = new Date();
       const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1290,8 +1291,8 @@ async function renderSettings(col){
     if (!json || typeof json !== 'object'){ toast('文件内容不是记忆档案 JSON'); return; }
     try {
       const r = await api.post('/api/memory/import', json);
-      // 后端契约（ApiRoutes.kt POST /api/memory/import）：{ok, message=合并摘要, error=失败原因}
-      if (r && r.ok === false){ toast(r.error || '导入失败'); return; }
+      // 后端契约（ApiRoutes.kt POST /api/memory/import）：成功 {ok:true,...}；失败 {ok:false,...} 或 403 {error:...}（无 ok 字段，按真值判定）
+      if (!r || !r.ok){ toast((r && r.error) || '导入失败'); return; }
       await Promise.all([refreshTargets(), refreshSessions()]);
       renderSidebar(); renderSettings(col);
       toast((r && r.message) || '记忆已合并导入');
