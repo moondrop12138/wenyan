@@ -49,8 +49,11 @@ import com.wenyan.app.ui.theme.LocalGtjColors
  *   rgb(22,25,34) 均 frost×0.50）——仅顶栏/输入栏两个悬浮栏（styles.css:534/538）。
  */
 enum class GlassFill {
-    /** frost 版 --glass 直色（web 默认组：侧栏/胶囊/用户气泡/弹层/toast） */
+    /** frost 版 --glass 直色（web 默认组：侧栏/胶囊/用户气泡/toast） */
     Frost,
+
+    /** frost 版 --glass-strong 直色（frost+0.17/.29：弹层 .sheet glass-strong 组，styles.css:86-91） */
+    Strong,
 
     /** --wy-card-* 纵向渐变（仅顶栏/输入栏悬浮栏） */
     Card,
@@ -244,6 +247,7 @@ fun Modifier.liquidGlass(
             // （styles.css:526-531，仅顶栏/输入栏）。统一走纵向渐变绘制，Frost 双停靠点同色即平涂
             val fillBrush = when (fill) {
                 GlassFill.Frost -> Brush.verticalGradient(listOf(p.glassFill, p.glassFill))
+                GlassFill.Strong -> Brush.verticalGradient(listOf(p.glassFillStrong, p.glassFillStrong))
                 GlassFill.Card -> Brush.verticalGradient(listOf(p.glassCardFillTop, p.glassCardFillBottom))
             }
 

@@ -6,12 +6,13 @@ import android.view.Window
 import android.view.WindowManager
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,8 +24,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -33,9 +32,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -46,10 +50,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
-import com.wenyan.app.ui.components.glass.GlassSurface
+import com.wenyan.app.ui.components.glass.GlassFill
+import com.wenyan.app.ui.components.glass.hueRotated
+import com.wenyan.app.ui.components.glass.hueRotateColorMatrix
+import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.ModelInfo
+import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
+import com.wenyan.app.ui.theme.LocalFluidHue
 import com.wenyan.app.ui.theme.LocalGtjColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -128,10 +137,15 @@ private fun SheetWindowBlurBehind() {
 
 /**
  * 模型选择底部弹层（design-pages 页面4，AC-10）：
- * v1.9.4 Mica：容器 = web `.sheet glass-strong edge refract`——frost 版 `--glass-strong` 填充 +
- * 顶圆角 26 + 窗口级 4dp 背景模糊（API 31+，低版本降级 scrim 压暗）+ dragHandle；
- * 提供商分组、能力徽标（chip 语言）、选中态双通道（chip 半透明 accent 底 + 1px --l2b 描边 +
- * 实心对勾），切换即生效并收起。
+ * v1.9.4 对齐 web `.sheet.glass-strong.edge.refract`——liquidGlass 玻璃卡片容器
+ * （Strong 填充 frost+0.17 + glassBorder 发丝描边 + 顶边内高光 + --g-shadow 双影）+
+ * 顶圆角 26 + 窗口级 4dp 背景模糊（API 31+，低版本降级不透明 elevated 面）+ muted 拖拽条；
+ * **色相跟随**：弹层是独立窗口，主窗口全局色相层罩不到——本组件内容自套同一 hue-rotate
+ * 矩阵（LocalFluidHue 随 composition 传播进 Dialog，填充挪进内容层自绘随层一起转），
+ * 色相≠0 时弹层与主界面同步变色（web .sheet 是 body 子节点天然被转，此处对齐该语义）；
+ * 头部 = 标题 15sp/500 + 副文案 11sp muted（web .sheet-head）；
+ * 模型行 = web `.mrow` 无卡片扁平行（r16 透明底，选中 chip 底 + 1px l2b 描边 + 20dp
+ * 勾选圈常驻；标题 13sp / 副文案 11sp muted「提供商 · 支持图片 · 默认」），切换即生效并收起。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,15 +167,24 @@ fun ModelSheet(
     // = frost + 0.17/+0.29（styles.css:484/488，Mica 下即 glassFillStrong .47/.59）；
     // 增强段给 .sheet 的 backdrop-filter 与其余 8 类玻璃面同款（styles.css:515-518）。
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val sheetColor = if (canBlur) p.glassFillStrong else p.surfaceElevated
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         // v1.7.0：顶圆角 + 半透明玻璃容器（透出背后光斑）
         // v1.9.4 Mica：顶圆角 28 → 26（web `.sheet{border-radius:26px 26px 0 0}`，styles.css:319）
+        // 容器色改 Transparent：填充挪进内容层自绘（见下方色相层）——ModalBottomSheet 是
+        // 独立窗口，挂在主窗口内容根上的全局色相层罩不到本窗口，若填充仍由容器参数绘制，
+        // 色相≠0 时弹层保持暖白而主界面整体变色（v1.9.4 曾作为已知取舍，现消掉）
         shape = GtjShape.sheetTop,
-        containerColor = sheetColor,
-        dragHandle = { Surface(color = p.borderSoft, modifier = Modifier.size(width = 36.dp, height = 4.dp), shape = GtjShape.pill) {} },
+        containerColor = Color.Transparent,
+        // 拖拽条 = web ::before（muted 35%）；色相跟随：值旋转（近中性色，偏移极小，保持一致语义）
+        dragHandle = {
+            Surface(
+                color = hueRotated(p.muted, LocalFluidHue.current.toFloat()).copy(alpha = 0.35f),
+                modifier = Modifier.size(width = 36.dp, height = 4.dp),
+                shape = GtjShape.pill,
+            ) {}
+        },
     ) {
         // v1.9.4 Mica 弹层背后真实高斯模糊：必须挂在本 lambda 内（弹层自己的 composition）——
         // ModalBottomSheet 是**独立窗口**，内容由 ModalBottomSheetDialogLayout.setContent 承载
@@ -174,16 +197,73 @@ fun ModelSheet(
         // AndroidComposeView，parent 链止于 Activity DecorView（其 parent 是 ViewRootImpl、
         // 非 View）→ 永远拿不到弹层窗口，FLAG_BLUR_BEHIND 静默不生效（曾是死路径）。
         SheetWindowBlurBehind()
-        Column(Modifier.padding(horizontal = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("选择模型", style = GtjType.Title, color = p.fg, modifier = Modifier.weight(1f))
-                GtjIconButton(icon = Icons.Outlined.Close, contentDescription = "关闭", onClick = onDismiss, tint = p.muted)
+        // v1.9.4 弹层跟随全局色相：对齐 web 语义——styles.css:493 的 hue-rotate 挂在 body 上，
+        // .sheet 作为 body 子节点整层被转；安卓弹层是独立窗口，主窗口的全局层（MainActivity）
+        // 罩不到这里，故在弹层自己的 composition 里套**同一个矩阵**（CompositionLocal 会随
+        // composition 传播进 Dialog 内容，LocalFluidHue 在此可读）。写法与主窗口一致：
+        // saveLayer(paint.colorFilter) 在图层合成时套矩阵，色相 = 0 直接透传零开销。
+        // 填充由本层自绘（containerColor=Transparent）：填充/行/文字随层一起转，不会双重旋转。
+        val hue = LocalFluidHue.current
+        val huePaint = remember(hue) {
+            if (hue == FLUID_HUE_DEFAULT) {
+                null
+            } else {
+                android.graphics.Paint().apply {
+                    colorFilter = android.graphics.ColorMatrixColorFilter(
+                        hueRotateColorMatrix(hue.toFloat()).values,
+                    )
+                }
             }
-            val current = models.firstOrNull { it.id == currentModelId }
-            if (current != null) {
-                Text("当前：${current.name}", style = GtjType.Caption, color = p.muted)
+        }
+        // v1.9.4：容器 = 真玻璃卡片（liquidGlass 引擎全套：Strong 填充 + glassBorder 1px 发丝
+        // 描边 + 顶边内高光线 + --g-shadow 双影，= web `.glass-strong.edge` 完整层叠，
+        // styles.css:86-93）；backdrop=false——真实磨砂由窗口级 FLAG_BLUR_BEHIND 承担，
+        // 不跨窗口取样页面层；API<31 无窗口模糊时降级不透明 elevated 面（可读性优先）
+        val sheetSurface = if (canBlur) {
+            Modifier.liquidGlass(
+                shape = GtjShape.sheetTop,
+                fill = GlassFill.Strong,
+                backdrop = false,
+                enablePressAnimation = false,
+            )
+        } else {
+            Modifier.background(p.surfaceElevated, GtjShape.sheetTop)
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawWithContent {
+                    if (huePaint == null) {
+                        drawContent()
+                    } else {
+                        drawIntoCanvas { canvas ->
+                            val native = canvas.nativeCanvas
+                            val save = native.saveLayer(null, huePaint)
+                            drawContent()
+                            native.restoreToCount(save)
+                        }
+                    }
+                }
+                .then(sheetSurface),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+            // v1.9.4 对齐 web .sheet-head（styles.css:326-328）：标题 15px/500 左 + 副文案 11px muted 右
+            // （margin 14px 4px 10px）；关闭走 scrim 点按/下拉/返回键，不再放 X 按钮，「当前」行取消
+            // （选中态由行内勾选圈表达，与 web 一致）
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, top = 14.dp, bottom = 10.dp),
+            ) {
+                Text(
+                    "选择模型",
+                    style = GtjType.Subtitle.copy(fontSize = 15.sp),
+                    color = p.fg,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("点按切换，实时生效", style = GtjType.Caption.copy(fontSize = 11.sp), color = p.muted)
             }
-            Spacer(Modifier.height(8.dp))
             // v1.6.3 只展示模型管理里"可见"的模型（showInSheet 开关控制）
             val visible = models.filter { it.showInSheet }
             if (visible.isEmpty()) {
@@ -194,21 +274,18 @@ fun ModelSheet(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                 )
             } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    visible.groupBy { it.providerName }.forEach { (providerName, list) ->
-                        item(key = "header_$providerName") {
-                            Text(providerName, style = GtjType.Label, color = p.muted, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
-                        }
-                        items(list, key = { "model_${it.id}" }) { model ->
-                            ModelRow(
-                                model = model,
-                                selected = model.id == currentModelId,
-                                onClick = {
-                                    onSelect(model.id)
-                                    scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
-                                },
-                            )
-                        }
+                // v1.9.4 对齐 web .sheet-body（gap:3px）与 renderModelSheet('main')：不分组——
+                // 提供商名并入行副文案，无分组头
+                LazyColumn(modifier = Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    items(visible, key = { "model_${it.id}" }) { model ->
+                        ModelRow(
+                            model = model,
+                            selected = model.id == currentModelId,
+                            onClick = {
+                                onSelect(model.id)
+                                scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+                            },
+                        )
                     }
                 }
             }
@@ -216,6 +293,7 @@ fun ModelSheet(
                 GhostButton(text = "管理模型服务", onClick = onManageProviders, minHeight = 48.dp)
             }
             Spacer(Modifier.height(16.dp))
+            }
         }
     }
 }
@@ -227,37 +305,22 @@ private fun ModelRow(
     onClick: () -> Unit,
 ) {
     val p = LocalGtjColors.current
-    // v1.9.4 Mica：模型行 = 现行玻璃语言（与 CrisisCard 等同一 GlassSurface：Frost 填充
-    // glassFill + 外圈 glassBorder + 顶边内高光；旧版是 accentSoft 黄底 + accent 实边）。
-    // 选中态对齐 web `.mrow.on`（styles.css:332）：`background:var(--chip)` 半透明 accent 底
-    // + `border:1px solid var(--l2b)` 描边（--l2b 与输入栏聚焦环同一个 token = glassFocusRing，
-    // web 侧 :focus-within 环与 .on 行描边共用该变量）+ 行尾实心对勾。
-    val rowModifier = Modifier
-        .fillMaxWidth()
-        .heightIn(min = 72.dp)
-        .semantics {
-            role = Role.RadioButton
-            this.selected = selected
-        }
-    if (selected) {
-        Surface(
-            onClick = onClick,
-            modifier = rowModifier,
-            shape = GtjShape.lg,
-            color = p.glassChip,
-            border = BorderStroke(1.dp, p.glassFocusRing),
-        ) {
-            ModelRowContent(model, selected, p)
-        }
-    } else {
-        GlassSurface(
-            onClick = onClick,
-            modifier = rowModifier,
-            shape = GtjShape.lg,
-            enablePressAnimation = true,
-        ) {
-            ModelRowContent(model, selected, p)
-        }
+    // v1.9.4 对齐 web .mrow（styles.css:330-332）：**无卡片背景的扁平行**（radius 16、透明底），
+    // 选中态 = --chip 半透明 accent 底 + 1px --l2b 描边（glassFocusRing 同 token）；未选中不再
+    // 包 GlassSurface 玻璃卡（旧观感：暖白玻璃盒与 web 扁平列表不一致，读作"黄卡片"）
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                role = Role.RadioButton
+                this.selected = selected
+            },
+        shape = GtjShape.lg,
+        color = if (selected) p.glassChip else Color.Transparent,
+        border = if (selected) BorderStroke(1.dp, p.glassFocusRing) else null,
+    ) {
+        ModelRowContent(model, selected, p)
     }
 }
 
@@ -267,63 +330,63 @@ private fun ModelRowContent(
     selected: Boolean,
     p: com.wenyan.app.ui.theme.GtjPalette,
 ) {
-    // v1.5：图标缩写（前两位字母，如 DS / GPT），40dp r12 容器
-    // v1.9.4 Mica：改为 web `.mrow .sic` 语言——chip 半透明 accent 底 + accent 字
-    // （styles.css:333：`background:var(--chip);color:var(--accent);font-size:11px`），
-    // 不再用不透明陶土棕/灰底
+    // v1.9.4 逐项对齐 web .mrow 内部（styles.css:333-340 + app.js renderModelSheet）：
+    // sic 40px r12 chip 底 accent 缩写 / t 13px fg / d 11px muted（提供商 · 支持图片 · 默认
+    // 并入副文案，无徽章 chip）/ check 20px 圆常驻（未选中 muted 空圈，选中 accent 实底 + 对勾）；
+    // 行内边距 11/12（web padding:11px 12px）
     val abbrev = model.name.take(2).uppercase()
     Row(
-            verticalAlignment = Alignment.CenterVertically,
-            // v1.7.1 二改：fillMaxSize 让 72dp 最小行高内内容垂直居中（此前内容贴顶）；
-            // v1.9.4：左右内边距 14 → 12（web .mrow `padding:11px 12px`）
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+    ) {
+        Surface(
+            shape = GtjShape.md,
+            color = p.glassChip,
+            modifier = Modifier.size(40.dp),
         ) {
-            // 模型图标容器：40dp r12 chip 底 + accent 字
-            Surface(
-                shape = GtjShape.md,
-                color = p.glassChip,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        abbrev,
-                        style = GtjType.Label.copy(fontSize = 11.sp),
-                        color = p.accent,
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Box(contentAlignment = Alignment.Center) {
                 Text(
-                    model.name,
-                    style = GtjType.Body,
-                    color = p.fg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    abbrev,
+                    style = GtjType.Label.copy(fontSize = 11.sp, letterSpacing = 0.sp),
+                    color = p.accent,
                 )
-                Spacer(Modifier.height(2.dp))
-                // 描述行：提供商 + 能力徽标（v1.5 副标题）
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(model.providerName, style = GtjType.Caption, color = p.muted, maxLines = 1)
-                    if (model.supportsVision) {
-                        Spacer(Modifier.width(6.dp))
-                        // v1.9.4 Mica：徽章同 chip 语言（半透明 accent 底 + accent 字）
-                        Tag(text = "视觉", kind = TagKind.CHIP, icon = Icons.Outlined.Image)
-                    }
-                }
-            }
-            if (model.isDefault) {
-                Spacer(Modifier.width(6.dp))
-                Tag(text = "默认", kind = TagKind.CHIP)
-            }
-            // v1.5：选中态——实心圆 + 对勾；v1.9.4 对齐 web `.check`（20px 圆 + accent 实底 + 白勾）
-            if (selected) {
-                Spacer(Modifier.width(8.dp))
-                Surface(shape = CircleShape, color = p.accent, modifier = Modifier.size(20.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.Check, contentDescription = "已选择", modifier = Modifier.size(12.dp), tint = p.accentOn)
-                    }
-                }
             }
         }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                model.name,
+                style = GtjType.Body.copy(fontSize = 13.sp),
+                color = p.fg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            val desc = buildString {
+                append(model.providerName)
+                if (model.supportsVision) append(" · 支持图片")
+                if (model.isDefault) append(" · 默认")
+            }
+            Text(
+                desc,
+                style = GtjType.Caption.copy(fontSize = 11.sp),
+                color = p.muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        // 勾选圈常驻（web .check：20px 圆 + 1.5px muted 描边；.on 才 accent 实底 + 对勾）
+        if (selected) {
+            Surface(shape = CircleShape, color = p.accent, modifier = Modifier.size(20.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Check, contentDescription = "已选择", modifier = Modifier.size(12.dp), tint = p.accentOn)
+                }
+            }
+        } else {
+            Box(modifier = Modifier.size(20.dp).border(1.5.dp, p.muted, CircleShape))
+        }
+    }
 }
