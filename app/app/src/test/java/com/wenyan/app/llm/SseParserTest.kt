@@ -87,8 +87,12 @@ class SseParserTest {
     }
 
     @Test
-    fun `empty choices returns null chunk`() {
+    fun `empty choices marks parse error fatal chunk`() {
+        // F72/F99 修复：原断言 assertNull(chunk?.contentDelta) 在「返回 null（忽略该帧）」与
+        // 实际生产的「返回 parseError=true 致命块（LlmClient settle(Fatal(PARSE_ERROR)) 终结
+        // 整流）」两种相反行为下都通过。现按生产行为显式锁定 parseError 契约
         val chunk = SseParser.parseDataLine("""{"choices":[]}""")
-        assertNull(chunk?.contentDelta)
+        assertEquals(null, chunk?.contentDelta)
+        assertEquals(true, chunk?.parseError)
     }
 }

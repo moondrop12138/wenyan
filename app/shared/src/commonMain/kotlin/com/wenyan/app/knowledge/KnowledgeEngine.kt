@@ -108,8 +108,8 @@ class KnowledgeEngine(
     }
 
     private fun extractKeywords(input: String): List<String> {
-        // 取 2-4 字词作为命中关键词（去掉空白与标点后切分）
-        val cleaned = input.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'“”]"), "")
+        // 取 2-4 字词作为命中关键词（去掉空白与标点后切分，正则与 Bm25Scorer 统一口径）
+        val cleaned = input.replace(PUNCT_CLEAN_REGEX, "")
         if (cleaned.isEmpty()) return emptyList()
         // M3: 仅对前 N 字符生成 n-gram，避免长输入 O(n²) 子串爆炸
         val head = cleaned.take(KEYWORD_SCAN_CHAR_LIMIT)

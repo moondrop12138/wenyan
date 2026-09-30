@@ -14,7 +14,8 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
     READ_TIMEOUT("连接中断，可重试或停止", true),
     // v1.7.1 终检：公网地址必须 https；本地模型服务（LM Studio/Ollama）用 http://localhost
     UNSUPPORTED_URL("仅支持 https:// 地址；本地服务请填 http://localhost", false),
-    STREAM_ERROR("模型返回错误：", false),
+    // F126: 原文案「模型返回错误：」冒号悬空——安卓聊天链路不拼 detail，冒号后无内容；桌面端拼「（detail）」也无冒号
+    STREAM_ERROR("模型返回错误", false),
     EMPTY_CONTENT("模型未返回内容，请重试", true),
     PARSE_ERROR("响应格式异常，请重试或更换模型", false),
     // H2: finish_reason=length，回答被模型按长度上限截断，不可重试（重试仍会截断）
@@ -25,8 +26,6 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
     BAD_REQUEST("请求参数有误，请检查输入或更换模型", false),
     UNKNOWN("请求失败，请稍后重试", true),
     ;
-
-    val code: Int = ordinal
 }
 
 /**

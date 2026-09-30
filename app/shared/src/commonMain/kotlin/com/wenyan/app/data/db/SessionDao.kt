@@ -19,9 +19,6 @@ interface SessionDao {
     @Query("SELECT * FROM session ORDER BY id DESC")
     fun observeAll(): Flow<List<SessionEntity>>
 
-    @Query("SELECT * FROM session ORDER BY id DESC LIMIT :limit")
-    suspend fun recent(limit: Int): List<SessionEntity>
-
     @Query("DELETE FROM session WHERE id = :id")
     suspend fun deleteById(id: Long)
 

@@ -4,6 +4,7 @@ import com.wenyan.app.data.db.ModelDao
 import com.wenyan.app.data.db.ModelEntity
 import com.wenyan.app.data.db.ProviderDao
 import com.wenyan.app.data.db.ProviderEntity
+import com.wenyan.app.data.security.AesGcmCipher
 import com.wenyan.app.data.security.KeystoreAesGcmCipher
 import kotlinx.coroutines.flow.Flow
 
@@ -34,7 +35,10 @@ class ProviderRepository(
 
     suspend fun getModel(id: Long): ModelEntity? = modelDao.getById(id)
 
-    /** 新增提供商；apiKey 明文传入，内部加密存储；baseUrl 经规范化（非法字符时原样兜底，由 UI 层预检拦截） */
+    /** 新增提供商；apiKey 明文传入，内部加密存储；baseUrl 经规范化（非法字符时原样兜底，由 UI 层预检拦截）。
+     *  F21 修复：Keystore 不可用时加密异常不再裸抛击穿 viewModelScope（进程崩溃）——
+     *  统一归一为 KeyUnavailableException 向上传递，UI 可展示「密钥不可用，请重新输入 API Key」，
+     *  与解密路径 decryptApiKey 的 catch 防御对称 */
     suspend fun addProvider(
         name: String,
         baseUrl: String,
@@ -42,7 +46,7 @@ class ProviderRepository(
         isPreset: Boolean = false,
         sortOrder: Int = 0,
     ): Long {
-        val encrypted = apiKey?.takeIf { it.isNotBlank() }?.let { cipher.encrypt(it) }
+        val encrypted = apiKey?.takeIf { it.isNotBlank() }?.let { encryptOrThrow(it) }
         return providerDao.insert(
             ProviderEntity(
                 name = name,
@@ -56,10 +60,19 @@ class ProviderRepository(
 
     suspend fun updateProvider(entity: ProviderEntity) = providerDao.update(entity)
 
-    /** 仅更新 API Key（重新加密） */
+    /** 仅更新 API Key（重新加密；F21 同款加密异常归一） */
     suspend fun updateProviderApiKey(providerId: Long, apiKey: String) {
         val current = providerDao.getById(providerId) ?: return
-        providerDao.update(current.copy(apiKeyEncrypted = cipher.encrypt(apiKey)))
+        providerDao.update(current.copy(apiKeyEncrypted = encryptOrThrow(apiKey)))
+    }
+
+    /** F21：加密失败统一归一为 KeyUnavailableException（Keystore 故障给出可恢复提示，而非崩溃） */
+    private fun encryptOrThrow(plain: String): String = try {
+        cipher.encrypt(plain)
+    } catch (e: AesGcmCipher.KeyUnavailableException) {
+        throw e
+    } catch (e: Exception) {
+        throw AesGcmCipher.KeyUnavailableException("密钥不可用，请重新输入 API Key").apply { initCause(e) }
     }
 
     /** L30 修复：清除已存密文（编辑页清空 Key 输入框并保存 = 真删除，而非「null 不覆盖」） */

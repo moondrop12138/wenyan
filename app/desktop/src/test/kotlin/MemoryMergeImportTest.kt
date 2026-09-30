@@ -30,7 +30,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.InetSocketAddress
-import java.net.ServerSocket
 import java.net.Socket
 import java.net.URI
 import java.net.http.HttpClient
@@ -559,9 +558,11 @@ class MemoryMergeImportTest {
         val db = newDb()
         db.targetDao().insert(TargetEntity(codeName = "小A"))
         val token = "test-token-9f2c"
-        val port = ServerSocket(0).use { it.localPort }
         val svc = service(db)
-        val engine = embeddedServer(CIO, port = port, host = "127.0.0.1") {
+        // 与生产 Main.kt 的 L19 教训一致：bind→close→稍后重绑的临时端口存在 TOCTOU——
+        // 探测与实际绑定的窗口期可被并行进程/测试 JVM 抢走。改 port=0 由系统分配，
+        // start 后经 resolvedConnectors() 取真实端口（resolvedConnectors 为挂起函数，本用例在 runBlocking 内）。
+        val engine = embeddedServer(CIO, port = 0, host = "127.0.0.1") {
             // 与 Main.kt 同配置：拦截器的 403（respond(status, mapOf(...))）需要内容协商才能序列化
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true; prettyPrint = false })
@@ -569,6 +570,7 @@ class MemoryMergeImportTest {
             routing { apiRoutes(svc, ChatEngine(svc), token) }
         }
         engine.start(wait = false)
+        val port = engine.resolvedConnectors().first().port
         try {
             awaitServer(port)
             val client = HttpClient.newHttpClient()

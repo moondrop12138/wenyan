@@ -79,7 +79,7 @@ class ConversationStateTracker {
      *
      * 高置信度信号（命中即同题）：
      * - 追问/指代词：那、还有、然后呢、所以、该、要不要、是不是、怎么办
-     * - 与话题摘要共享关键词（"她/他/我们"等关系代词延续）
+     * - 与话题摘要共享 2 字片段（bigram 去停用词后取交集；F88 修复：原整段分词对无标点中文失效）
      *
      * 明确新话题信号（命中即新题）：完整的另一段聊天记录粘贴、明显的换题开场、
      * 长输入且与话题摘要无共享实义词（M6 修复）。
@@ -111,11 +111,16 @@ class ConversationStateTracker {
         return topicTokens.any { it in inputClean }
     }
 
-    /** 粗粒度分词：提取 2 字以上中文/英文实义片段，去停用代词 */
+    /**
+     * F88 修复：原分词只按标点/空白切整段，无标点中文长句成单 token，共享关键词判定失效
+     * （≥30 字的同题长输入被误判新话题、防复读状态被整体重置）。改为 2 字滑窗 bigram
+     * （对齐 MemoryConflictDetector.bigrams 的「共享片段」口径）并去停用词。
+     */
     private fun tokenize(text: String): List<String> {
-        val cleaned = text.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'“”]"), " ")
-        return cleaned.split(" ")
-            .filter { it.length >= 2 }
+        val cleaned = text.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'“”]"), "")
+        if (cleaned.length < 2) return emptyList()
+        return (0..cleaned.length - 2)
+            .map { cleaned.substring(it, it + 2) }
             .filter { it !in STOP_TOKENS }
     }
 

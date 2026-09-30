@@ -300,4 +300,37 @@ class AnalysisParserTest {
         assertEquals("", c.sessionTitle)
         assertTrue(c.newFacts.isEmpty())
     }
+
+    @Test
+    fun `parseAny explicit json null fields degrade safely on jvm`() {
+        // F70：此前全部测试套件对「显式 JSON null」零覆盖（唯一 null 夹具 expires_in 恰好
+        // 未被断言），掩盖了仓库 M7 记录过的 Android/桌面双端分歧（shared Json.optStringOrNull
+        // KDoc）。本用例锁定 JVM 侧（org.json Maven）行为：optString 对显式 null 返回 fallback——
+        // text=null 的 new_fact 条目跳过（不再持久化垃圾事实）、kind=null 兜底 "fact"、
+        // expires_in/session_title=null 收敛为 null/空串。
+        // 注意：Android 设备端 libcore org.json 对显式 null 返回字面量 "null"，该分歧的生产
+        // 修复（parseNewFacts 改走 optStringOrNull）在 shared 模块，不在本模块可改范围
+        val json = """{
+          "input_kind": "pasted_chat",
+          "empathy": "",
+          "reply": "",
+          "facts": {"known": [], "assumed": [], "unknown": []},
+          "advice": {"core": "", "styles": []},
+          "actions": [],
+          "citations": [],
+          "safety_override": false,
+          "safety_message": "",
+          "session_title": null,
+          "new_facts": [
+            {"text": null, "kind": "fact", "expires_in": null},
+            {"text": "她最近在备考", "kind": null, "expires_in": null}
+          ]
+        }"""
+        val c = AnalysisParser.parseAny(json)
+        assertEquals("", c.sessionTitle)
+        assertEquals(1, c.newFacts.size)
+        assertEquals("她最近在备考", c.newFacts[0].text)
+        assertEquals("fact", c.newFacts[0].kind)
+        assertEquals(null, c.newFacts[0].expiresIn)
+    }
 }

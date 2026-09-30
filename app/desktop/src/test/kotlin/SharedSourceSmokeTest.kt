@@ -26,8 +26,10 @@ class SharedSourceSmokeTest {
     }
 
     @Test
-    fun `shared security AesGcmCipher round trip`() {
-        // AesGcmCipher 纯 JCE，桌面可直接复用（验证 SecretKeyProvider 接口形态）
+    fun `shared security AesGcmCipher is on classpath`() {
+        // AesGcmCipher 纯 JCE，桌面可直接复用（验证 SecretKeyProvider 接口形态）。
+        // F116：原名 "round trip" 名不副实（本用例只是冒烟断言，从未做过加解密往返）；
+        // 真实加解密往返/篡改检测由 app 模块 AesGcmCipherTest 覆盖。
         assertTrue(AesGcmCipher::class.java.methods.isNotEmpty())
     }
 

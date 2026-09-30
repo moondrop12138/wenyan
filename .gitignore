@@ -90,3 +90,6 @@ app/desktop/dist-package/
 .zcodeignore
 .zcode-tmp-*.json
 nul
+
+# 修复会话编译校验残留（jshell 脚本 + android-all jar，可再生成，不入库）
+.review-tmp/

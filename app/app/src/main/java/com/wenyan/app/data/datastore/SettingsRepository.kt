@@ -158,10 +158,6 @@ class SettingsRepository(private val context: Context) {
         val createdAt: Long,
     )
 
-    /** 最近一次自动写入日志（无则 null） */
-    suspend fun lastMemoryWrite(): MemoryWriteLogEntry? =
-        readMemoryWriteLog().firstOrNull()
-
     /**
      * 撤销最近一次自动写入：返回被撤销的 fact id 列表（空 = 无日志可撤销）。
      * L22 修复：读取原在 edit 事务外——与 recordMemoryWrite（edit 内读）并发时 TOCTOU：
@@ -193,14 +189,14 @@ class SettingsRepository(private val context: Context) {
             createdAt = System.currentTimeMillis(),
         )
         context.settingsDataStore.edit { prefs ->
-            val updated = (listOf(entry) + readMemoryWriteLog()).take(5)
+            // F14 修复：从 edit 事务快照 prefs 读取（与 undoLastMemoryWrite 同款写法），
+            // 不再对同一个 DataStore 发起再入读 data.first()——DataStore 1.1.1 的 transform
+            // 在写锁持有期内执行，再入读的正确性完全依赖 in-memory cache 快路径这一未写入
+            // 契约的内部实现（1.0.x 单写者 actor 实现下是公开记载的死锁模式）
+            val log = MemoryWriteLogCodec.decode(prefs[Keys.MEMORY_WRITE_LOG] ?: "")
+            val updated = (listOf(entry) + log).take(5)
             prefs[Keys.MEMORY_WRITE_LOG] = MemoryWriteLogCodec.encode(updated)
         }
-    }
-
-    private suspend fun readMemoryWriteLog(): List<MemoryWriteLogEntry> {
-        val raw = context.settingsDataStore.data.map { it[Keys.MEMORY_WRITE_LOG] ?: "" }.first()
-        return MemoryWriteLogCodec.decode(raw)
     }
 
     /** 内存级编解码（纯函数，JVM 可测；格式：targetId,factId:factId,summary,createdAt 换行分隔） */
@@ -233,13 +229,13 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun getCurrentModelId(): Long? = currentModelId.first()
-    suspend fun getVisionModelId(): Long? = visionModelId.first()
-    suspend fun getTheme(): String = theme.first()
-    suspend fun isOnboardingCompleted(): Boolean = onboardingCompleted.first()
-    suspend fun isPrivacyAcked(): Boolean = privacyAck.first()
+    // F13 精简：删除 7 个全仓库无调用方的一次性 suspend 读取封装（lastMemoryWrite/
+    // getCurrentModelId/getVisionModelId/getTheme/isOnboardingCompleted/isPrivacyAcked/
+    // isMemoryAutoEnabled——消费方统一走 Flow 属性；desktop 侧同名方法是 WenyanService
+    // 自己的、与本项目无关），保留真实在用的 getActiveTargetId（getCurrentSessionId
+    // 在上方会话持久化小节）。lastMemoryWrite 已随上方写入日志重构移除，
+    // readMemoryWriteLog 失去最后一个调用方一并删除。
     suspend fun getActiveTargetId(): Long? = activeTargetId.first()
-    suspend fun isMemoryAutoEnabled(): Boolean = memoryAutoEnabled.first()
 
     /**
      * 一键清除全部设置（AC-12 隐私清除；自动覆盖 v1.7.2/v1.9.4 新 key，

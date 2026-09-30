@@ -29,8 +29,6 @@ class MemorySettingsFlowTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun TargetUi.fact() = this
-
     @Test
     fun memoryFlow_addActivateEditDelete() {
         val fake = FakeSettingsRepository().apply {

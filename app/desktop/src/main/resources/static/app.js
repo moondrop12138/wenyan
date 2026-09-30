@@ -26,10 +26,17 @@ const authHeaders = (extra) => {
   if (WENYAN_TOKEN) h['X-Wenyan-Token'] = WENYAN_TOKEN;
   return h;
 };
+// 安全（SSRF/开放跳转防御）：页面由桌面端本机服务托管，所有请求只允许本服务同源
+// 的 /api/ 相对路径——显式拒绝绝对 URL、协议相对地址与外域路径，防任何调用点
+// 把用户可控数据拼进请求地址后发往别处
+const assertApiPath = (p) => {
+  if (typeof p !== 'string' || !p.startsWith('/api/')) throw new Error('非法 API 路径: ' + p);
+  return p;
+};
 const api = {
-  async get(p){ const r = await fetch(p, { headers: authHeaders() }); return r.json(); },
+  async get(p){ const r = await fetch(assertApiPath(p), { headers: authHeaders() }); return r.json(); },
   async send(method, p, body){
-    const r = await fetch(p, { method, headers: authHeaders({'Content-Type':'application/json'}), body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(assertApiPath(p), { method, headers: authHeaders({'Content-Type':'application/json'}), body: body ? JSON.stringify(body) : undefined });
     return r.json();
   },
   post(p,b){ return api.send('POST',p,b); },
@@ -247,6 +254,10 @@ function renderSidebar(){
         toast('军师还在奋笔疾书，写完这一轮再切换');
         return;
       }
+      // F119 修复：流式中点击的正是在流式的当前会话——直接忽略。
+      // 原实现落到下方 S.streamSeq++ 会使在途流令牌过期，此后每个 SSE 帧都被丢弃，
+      // renderChat 还会清掉思考占位，本轮回复从界面静默消失（服务端已落库，须重新点进才可见）。
+      if (S.streaming && s.id === S.sessionId) return;
       S.sessionId = s.id; persistSessionId(s.id); S.streamSeq++; renderSidebar(); renderChat();
     };
     list.appendChild(item);
@@ -266,7 +277,11 @@ function wireSearch(){
       if (!ids.length){ toast('没有匹配的消息'); return; }
       const target = S.sessions.find(s => ids.includes(s.id));
       if (target){
-        S.sessionId = target.id; persistSessionId(target.id); S.streamSeq++; renderSidebar(); renderChat();
+        // F119 修复（同侧栏点击）：流式中命中的正是正在流式的当前会话时不跳转，
+        // S.streamSeq++ / renderChat 会吞掉在途流的回复；提示文案保持一致
+        if (!(S.streaming && target.id === S.sessionId)){
+          S.sessionId = target.id; persistSessionId(target.id); S.streamSeq++; renderSidebar(); renderChat();
+        }
         toast('找到 ' + ids.length + ' 个相关会话，已跳转最近一个');
       }
     } catch(err){ toast('搜索失败'); }
@@ -762,8 +777,48 @@ async function sendMessage(){
   col.appendChild(think);
   scrollBottom();
 
+  // F121：SSE 读取/解析/收尾骨架提炼为 runChatStream（与 confirmTranscription 共用）；
+  // transcription 帧仅本链路存在，经回调转 buildTranscriptionCard
+  await runChatStream('/api/chat/stream',
+    { sessionId: sid, modelId: S.currentModelId, text: text || '[图片]', imageDataUrls: images },
+    think,
+    t => col.appendChild(buildTranscriptionCard(t, sid)));
+}
+
+// ===== 通道 B：转述确认卡片（可编辑 → 确认后走主模型纯文本分析） =====
+function buildTranscriptionCard(text, sid){
+  const card = el('div','msg-ai glass edge');
+  card.appendChild(el('span','sec','截图转述（可修改）'));
+  const ta = el('textarea','transcription-edit');
+  ta.value = text;
+  ta.rows = Math.min(12, Math.max(4, text.split('\n').length + 1));
+  card.appendChild(ta);
+  const row = el('div','transcription-actions');
+  const confirm = el('button','btn-primary','确认，让军师分析');
+  confirm.onclick = () => {
+    const edited = ta.value.trim();
+    if (!edited){ toast('转述内容不能为空'); return; }
+    confirm.disabled = true;
+    card.remove();
+    confirmTranscription(sid, edited);
+  };
+  row.appendChild(confirm);
+  card.appendChild(row);
+  return card;
+}
+
+/**
+ * F121：SSE 流式读取公共骨架（sendMessage 与 confirmTranscription 原各持约 55 行逐字重复）。
+ * 建流式令牌与 AbortController → POST {url}（body 为 JS 对象）→ 逐帧解析 data: JSON 分发：
+ * card/transcription/done/error 四类事件的收尾逻辑两链路完全一致；
+ * transcription 帧仅主链路存在，经 [onTranscription] 回调（传 null 则忽略该帧）。
+ * 含 !live 过期帧丢弃、无收尾帧兜底「回复中断」、异常「连接中断」气泡与 finally 清理。
+ * [think] 为调用方先建好并 append 的思考占位气泡（两链路文案不同）。
+ */
+async function runChatStream(url, body, think, onTranscription){
+  const col = $('chatCol');
   setStreaming(true);
-  S.streamSessionId = sid;
+  S.streamSessionId = body.sessionId;
   const mySeq = ++S.streamSeq;                 // 本轮流的令牌；切会话/删除会使其过期
   const live = () => mySeq === S.streamSeq;    // 事件落地前校验
   let settled = false;                // error/done/transcription 已收尾：流尾兜底不再触发（防误报「回复中断」+ 防 renderChat 抹掉已渲染内容）
@@ -773,9 +828,9 @@ async function sendMessage(){
   S.controller = ctl;
 
   try {
-    const resp = await fetch('/api/chat/stream', {
+    const resp = await fetch(assertApiPath(url), {
       method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-      body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, text: text || '[图片]', imageDataUrls: images }),
+      body: JSON.stringify(body),
       signal: ctl.signal,
     });
     if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
@@ -810,7 +865,6 @@ async function sendMessage(){
     think.remove();
     col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
     setStreaming(false);
-    return;
   } finally {
     if (S.controller === ctl) S.controller = null;
   }
@@ -823,10 +877,11 @@ async function sendMessage(){
       scrollBottom();
     } else if (ev.type === 'transcription'){
       // 通道 B 第一步完成：替换思考占位为可编辑转述卡片，本轮流结束（无 done 帧）
+      if (!onTranscription) return;             // 确认链路无 transcription 帧，防御忽略
       settled = true;
       setStreaming(false);
       think.remove();
-      col.appendChild(buildTranscriptionCard(ev.text || '', sid));
+      onTranscription(ev.text || '');
       scrollBottom();
     } else if (ev.type === 'done'){
       settled = true;
@@ -844,28 +899,6 @@ async function sendMessage(){
   }
 }
 
-// ===== 通道 B：转述确认卡片（可编辑 → 确认后走主模型纯文本分析） =====
-function buildTranscriptionCard(text, sid){
-  const card = el('div','msg-ai glass edge');
-  card.appendChild(el('span','sec','截图转述（可修改）'));
-  const ta = el('textarea','transcription-edit');
-  ta.value = text;
-  ta.rows = Math.min(12, Math.max(4, text.split('\n').length + 1));
-  card.appendChild(ta);
-  const row = el('div','transcription-actions');
-  const confirm = el('button','btn-primary','确认，让军师分析');
-  confirm.onclick = () => {
-    const edited = ta.value.trim();
-    if (!edited){ toast('转述内容不能为空'); return; }
-    confirm.disabled = true;
-    card.remove();
-    confirmTranscription(sid, edited);
-  };
-  row.appendChild(confirm);
-  card.appendChild(row);
-  return card;
-}
-
 /** 通道 B 第二步：确认转述 → 主模型分析（SSE 帧格式与 chat/stream 相同） */
 async function confirmTranscription(sid, transcription){
   const col = $('chatCol');
@@ -874,71 +907,11 @@ async function confirmTranscription(sid, transcription){
   col.appendChild(think);
   scrollBottom();
 
-  setStreaming(true);
-  S.streamSessionId = sid;
-  const mySeq = ++S.streamSeq;
-  const live = () => mySeq === S.streamSeq;
-  let settled = false;
-
-  const ctl = new AbortController();
-  S.controller = ctl;
-
-  try {
-    const resp = await fetch('/api/chat/confirm-transcription', {
-      method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-      body: JSON.stringify({ sessionId: sid, modelId: S.currentModelId, transcription }),
-      signal: ctl.signal,
-    });
-    if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    for(;;){
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (ctl.signal.aborted) break;
-      buf += dec.decode(value, { stream:true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) >= 0){
-        const frame = buf.slice(0, idx); buf = buf.slice(idx+2);
-        const data = frame.split('\n').filter(l => l.startsWith('data:'))
-          .map(l => l.slice(5).replace(/^ /, '')).join('\n');
-        if (!data) continue;
-        let ev; try { ev = JSON.parse(data); } catch(e){ continue; }
-        if (!live()) continue;
-        if (ev.type === 'card'){
-          think.remove();
-          col.appendChild(buildCard(ev.card));
-          scrollBottom();
-        } else if (ev.type === 'done'){
-          settled = true;
-          setStreaming(false);
-          think.remove();
-          refreshSessions().then(renderSidebar);
-        } else if (ev.type === 'error'){
-          settled = true;
-          setStreaming(false);
-          think.remove();
-          col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">${esc(ev.message||'出错了')}</div>`));
-          scrollBottom();
-        }
-      }
-    }
-    if (!live()){ setStreaming(false); return; }
-    if (!settled){
-      think.remove();
-      col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">回复中断，请重试</div>`));
-      setStreaming(false);
-      refreshSessions().then(renderSidebar);
-    }
-  } catch(err){
-    if (!live()){ setStreaming(false); return; }
-    think.remove();
-    col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
-    setStreaming(false);
-  } finally {
-    if (S.controller === ctl) S.controller = null;
-  }
+  // F121：流式骨架与 sendMessage 共用；确认链路不产生 transcription 帧，回调传 null
+  await runChatStream('/api/chat/confirm-transcription',
+    { sessionId: sid, modelId: S.currentModelId, transcription },
+    think,
+    null);
 }
 
 function setStreaming(v){
@@ -1518,19 +1491,26 @@ async function renderProviderDetail(col, pid, autoTest){
   save.onclick = async () => {
     const name = nf.input.value.trim(), baseUrl = uf.input.value.trim();
     if (!name || !baseUrl){ toast('名称和 Base URL 必填'); return; }
-    if (isNew){
-      const r = await api.post('/api/providers', { name, baseUrl, apiKey: kf.input.value.trim() || null });
-      toast('已添加厂商');
-      await refreshProviders();
-      renderProviderDetail(col, r.id, true);   // 重绘为编辑态并自动测连接
-    } else {
-      const body = { name, baseUrl };
-      if (kf.input.value.trim()) body.apiKey = kf.input.value.trim();
-      await api.put('/api/providers/' + pid, body);
-      toast('已保存 · Key 加密存储于本地');
-      await refreshProviders();
-      renderProviderDetail(col, pid, true);    // 重绘并自动测连接
-    }
+    // F120 修复：api.send 不查 r.ok，失败响应（403 {error:forbidden} / 500 非 JSON 体）
+    // 原先照样 toast 成功，且 r.id 为 undefined 重绘回空白表单丢输入；非 JSON 响应 r.json() 抛错静默。
+    // 现检查响应体，失败时提示具体错误并保留表单不重绘。
+    try {
+      if (isNew){
+        const r = await api.post('/api/providers', { name, baseUrl, apiKey: kf.input.value.trim() || null });
+        if (!r || !r.id){ toast('添加失败：' + ((r && r.error) || '请求被拒绝')); return; }
+        toast('已添加厂商');
+        await refreshProviders();
+        renderProviderDetail(col, r.id, true);   // 重绘为编辑态并自动测连接
+      } else {
+        const body = { name, baseUrl };
+        if (kf.input.value.trim()) body.apiKey = kf.input.value.trim();
+        const r = await api.put('/api/providers/' + pid, body);
+        if (!r || !r.ok){ toast('保存失败：' + ((r && r.error) || '请求被拒绝')); return; }
+        toast('已保存 · Key 加密存储于本地');
+        await refreshProviders();
+        renderProviderDetail(col, pid, true);    // 重绘并自动测连接
+      }
+    } catch(err){ toast('保存失败，请重试'); }
   };
   form.appendChild(save);
   form.appendChild(el('span','note','Key 仅保存在本机加密存储中，不会上传服务器'));
@@ -1605,9 +1585,14 @@ async function renderTargetsPage(col){
   btn.onclick = async () => {
     const name = f.input.value.trim();
     if (!name){ toast('填个代号'); return; }
-    const r = await api.post('/api/targets', { codeName: name });
-    await refreshTargets();
-    renderTargetDetail(col, r.id);
+    // F120 修复：同厂商保存——失败响应原样 renderTargetDetail(col, undefined) 会 TypeError 崩溃；
+    // 检查 r.id，失败提示具体错误并保留表单；非 JSON 响应（500）兜底 catch
+    try {
+      const r = await api.post('/api/targets', { codeName: name });
+      if (!r || !r.id){ toast('创建失败：' + ((r && r.error) || '请求被拒绝')); return; }
+      await refreshTargets();
+      renderTargetDetail(col, r.id);
+    } catch(err){ toast('创建失败，请重试'); }
   };
   nf.appendChild(btn);
   col.appendChild(nf);

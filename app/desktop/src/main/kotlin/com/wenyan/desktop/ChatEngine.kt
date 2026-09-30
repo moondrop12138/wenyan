@@ -159,61 +159,22 @@ class ChatEngine(
                 is LlmEvent.Restart -> {
                     // H1: 重试重发。桌面主链路不本地累积增量（Delta 不入 UI），无需清空状态。
                 }
-                is LlmEvent.Done -> {
-                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
-                    if (analysis != null) {
-                        service.addMessage(sessionId, "ASSISTANT", "analysis", event.fullText)
-                        val refs = refDocs.ifEmpty { analysis.citations }
-                        if (refs.isNotEmpty()) service.updateSessionRefDocs(sessionId, JSONArray(refs).toString())
-                        // 状态回填：结论=advice.core（空则 empathy 首句），话术=reply
-                        val newState = stateTracker.onModelReply(
-                            state = state,
-                            topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
-                                summarizeTopic(text, analysis)
-                            } else {
-                                state.topicSummary
-                            },
-                            conclusion = summarizeConclusion(analysis),
-                            reply = analysis.reply,
-                        )
-                        service.updateSessionState(sessionId, newState.toJson())
-                        onEvent(
-                            JSONObject().put("type", "card")
-                                .put("card", analysis.toJson().put("citations", JSONArray(refs)))
-                        )
-                        // O5: 主回复顺带产出标题则直接落库，否则走独立标题生成降级
-                        if (analysis.sessionTitle.isNotBlank()) {
-                            if (service.getSession(sessionId)?.title?.isNotBlank() != true) {
-                                service.updateSessionTitle(sessionId, analysis.sessionTitle.trim().take(20))
-                            }
-                        } else {
-                            sideEffectScope.launch { generateTitleOnce(sessionId, text, event.fullText, resolved) }
-                        }
-                        val targetId = session.targetId
-                        if (targetId != null && shouldExtractMemory(state, text)) {
-                            val source = if (routeByInputShape(text) == InputShape.CHAT_LOG) {
-                                MemoryFactEntity.SOURCE_PASTE
-                            } else {
-                                MemoryFactEntity.SOURCE_CHAT
-                            }
-                            // O5: 主回复顺带产出新事实则直接落库，否则走独立记忆提炼降级
-                            if (analysis.newFacts.isNotEmpty()) {
-                                val facts = analysis.newFacts.map {
-                                    MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
-                                }
-                                sideEffectScope.launch { persistFacts(targetId, facts, source, text) }
-                            } else {
-                                sideEffectScope.launch { extractMemoryOnce(targetId, text, event.fullText, resolved, source) }
-                            }
-                        }
+                is LlmEvent.Done -> handleDone(
+                    sessionId = sessionId,
+                    resolved = resolved,
+                    state = state,
+                    wasNewTopic = wasNewTopic,
+                    targetId = session.targetId,
+                    source = if (routeByInputShape(text) == InputShape.CHAT_LOG) {
+                        MemoryFactEntity.SOURCE_PASTE
                     } else {
-                        // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库（与手机版一致），并报错提示
-                        service.addMessage(sessionId, "ASSISTANT", "freetext", event.fullText)
-                        emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
-                        return@collect
-                    }
-                    onEvent(JSONObject().put("type", "done"))
-                }
+                        MemoryFactEntity.SOURCE_CHAT
+                    },
+                    userText = text,
+                    fullText = event.fullText,
+                    refDocs = refDocs,
+                    onEvent = onEvent,
+                )
                 is LlmEvent.Failed -> {
                     emitError(onEvent, event.error.name, event.error.userMessage + if (event.detail.isNotBlank()) "（${event.detail.take(120)}）" else "")
                 }
@@ -317,53 +278,18 @@ class ChatEngine(
                 is LlmEvent.Delta -> { /* 拼入 accumulator，Done 后解析（不流式展示） */ }
                 is LlmEvent.Thinking -> { /* reasoning 不外传 */ }
                 is LlmEvent.Restart -> { /* H1: 重试重发，无本地累积，忽略 */ }
-                is LlmEvent.Done -> {
-                    val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
-                    if (analysis != null) {
-                        service.addMessage(sessionId, "ASSISTANT", "analysis", event.fullText)
-                        val refs = refDocs.ifEmpty { analysis.citations }
-                        if (refs.isNotEmpty()) service.updateSessionRefDocs(sessionId, JSONArray(refs).toString())
-                        val newState = stateTracker.onModelReply(
-                            state = state,
-                            topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
-                                summarizeTopic(transcription, analysis)
-                            } else {
-                                state.topicSummary
-                            },
-                            conclusion = summarizeConclusion(analysis),
-                            reply = analysis.reply,
-                        )
-                        service.updateSessionState(sessionId, newState.toJson())
-                        onEvent(
-                            JSONObject().put("type", "card")
-                                .put("card", analysis.toJson().put("citations", JSONArray(refs)))
-                        )
-                        if (analysis.sessionTitle.isNotBlank()) {
-                            if (service.getSession(sessionId)?.title?.isNotBlank() != true) {
-                                service.updateSessionTitle(sessionId, analysis.sessionTitle.trim().take(20))
-                            }
-                        } else {
-                            sideEffectScope.launch { generateTitleOnce(sessionId, transcription, event.fullText, resolved) }
-                        }
-                        val targetId = session.targetId
-                        if (targetId != null && shouldExtractMemory(state, transcription)) {
-                            if (analysis.newFacts.isNotEmpty()) {
-                                val facts = analysis.newFacts.map {
-                                    MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
-                                }
-                                sideEffectScope.launch { persistFacts(targetId, facts, MemoryFactEntity.SOURCE_TRANSCRIPTION, transcription) }
-                            } else {
-                                sideEffectScope.launch { extractMemoryOnce(targetId, transcription, event.fullText, resolved, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
-                            }
-                        }
-                    } else {
-                        // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库，并报错提示
-                        service.addMessage(sessionId, "ASSISTANT", "freetext", event.fullText)
-                        emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
-                        return@collect
-                    }
-                    onEvent(JSONObject().put("type", "done"))
-                }
+                is LlmEvent.Done -> handleDone(
+                    sessionId = sessionId,
+                    resolved = resolved,
+                    state = state,
+                    wasNewTopic = wasNewTopic,
+                    targetId = session.targetId,
+                    source = MemoryFactEntity.SOURCE_TRANSCRIPTION,
+                    userText = transcription,
+                    fullText = event.fullText,
+                    refDocs = refDocs,
+                    onEvent = onEvent,
+                )
                 is LlmEvent.Failed -> {
                     emitError(onEvent, event.error.name, event.error.userMessage + if (event.detail.isNotBlank()) "（${event.detail.take(120)}）" else "")
                 }
@@ -439,6 +365,73 @@ class ChatEngine(
     private suspend fun resolveVisionClient(): ResolvedClient? {
         val id = service.getVisionModelId() ?: return null
         return resolveClient(id)
+    }
+
+    /**
+     * LlmEvent.Done 处理（F114 提炼：sendMessage 与 confirmTranscription 原各持约 55 行逐字
+     * 重复的 Done 块——此类双份维护已造成过 L2 漂移）：
+     * 解析落库 → refs 回填 → 状态回填 → card 事件 → 标题降级 → 记忆提炼 → done 帧。
+     * [source] 由调用方决定：文本链路按 routeByInputShape 判定，转述链路固定 SOURCE_TRANSCRIPTION。
+     */
+    private suspend fun handleDone(
+        sessionId: Long,
+        resolved: ResolvedClient,
+        state: ConversationState,
+        wasNewTopic: Boolean,
+        targetId: Long?,
+        source: String,
+        userText: String,
+        fullText: String,
+        refDocs: List<String>,
+        onEvent: (JSONObject) -> Unit,
+    ) {
+        val analysis = runCatching { AnalysisParser.parseAny(fullText) }.getOrNull()
+        if (analysis != null) {
+            service.addMessage(sessionId, "ASSISTANT", "analysis", fullText)
+            val refs = refDocs.ifEmpty { analysis.citations }
+            if (refs.isNotEmpty()) service.updateSessionRefDocs(sessionId, JSONArray(refs).toString())
+            // 状态回填：结论=advice.core（空则 empathy 首句），话术=reply
+            val newState = stateTracker.onModelReply(
+                state = state,
+                topicSummary = if (wasNewTopic || !state.hasActiveTopic) {
+                    summarizeTopic(userText, analysis)
+                } else {
+                    state.topicSummary
+                },
+                conclusion = summarizeConclusion(analysis),
+                reply = analysis.reply,
+            )
+            service.updateSessionState(sessionId, newState.toJson())
+            onEvent(
+                JSONObject().put("type", "card")
+                    .put("card", analysis.toJson().put("citations", JSONArray(refs)))
+            )
+            // O5: 主回复顺带产出标题则直接落库，否则走独立标题生成降级
+            if (analysis.sessionTitle.isNotBlank()) {
+                if (service.getSession(sessionId)?.title?.isNotBlank() != true) {
+                    service.updateSessionTitle(sessionId, analysis.sessionTitle.trim().take(20))
+                }
+            } else {
+                sideEffectScope.launch { generateTitleOnce(sessionId, userText, fullText, resolved) }
+            }
+            if (targetId != null && shouldExtractMemory(state, userText)) {
+                // O5: 主回复顺带产出新事实则直接落库，否则走独立记忆提炼降级
+                if (analysis.newFacts.isNotEmpty()) {
+                    val facts = analysis.newFacts.map {
+                        MemoryExtractor.ExtractedFact(it.text, it.kind, it.expiresIn)
+                    }
+                    sideEffectScope.launch { persistFacts(targetId, facts, source, userText) }
+                } else {
+                    sideEffectScope.launch { extractMemoryOnce(targetId, userText, fullText, resolved, source) }
+                }
+            }
+        } else {
+            // H3/M2: 解析失败不丢内容——原始回复以 freetext 落库（与手机版一致），并报错提示
+            service.addMessage(sessionId, "ASSISTANT", "freetext", fullText)
+            emitError(onEvent, LlmErrorCode.PARSE_ERROR.name, LlmErrorCode.PARSE_ERROR.userMessage)
+            return
+        }
+        onEvent(JSONObject().put("type", "done"))
     }
 
     /** 记忆注入：惰性搬移 note→facts 后，以 facts 拼 note（PromptBuilder 零改动契约） */
@@ -601,7 +594,9 @@ class ChatEngine(
         if (facts.isEmpty()) return
         val existingFacts = service.listFacts(targetId).map { it.text }
         val merged = MemoryExtractor.mergeFacts(existingFacts, facts.map { it.text })
-        val toAdd = merged.drop(existingFacts.size)
+        // L2 修复（persistFacts 漏修补齐，同 migrateNoteToFactsOnce/安卓 RealChatRepository）：
+        // mergeFacts 会先 trim+filter 清洗空白再合并，按原始 size drop 会把新事实错位跳过
+        val toAdd = merged.drop(existingFacts.count { it.isNotBlank() })
         if (toAdd.isEmpty()) return
         val addedIds = mutableListOf<Long>()
         toAdd.forEach { text ->

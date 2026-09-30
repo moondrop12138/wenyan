@@ -67,6 +67,8 @@ fun SessionDrawerContent(
     modifier: Modifier = Modifier,
     searchQuery: String = "",
     searchResults: List<Long> = emptyList(),
+    /** searchResults 所属的查询词（F34：仅当与当前 searchQuery 对应时才并入全文命中） */
+    searchResultsQuery: String = "",
     onSearchQueryChange: (String) -> Unit = {},
 ) {
     val p = LocalGtjColors.current
@@ -144,8 +146,12 @@ fun SessionDrawerContent(
         )
         Spacer(Modifier.height(8.dp))
 
+        // O3: 全文搜索（命中 sessionId 或标题包含关键词）。
+        // F34 修复：searchResults 是 300ms 去抖后上一次查询的结果，直接并入会在窗口期把
+        // 与当前输入无关的旧会话混进列表——只在结果确属当前 searchQuery 时才并入全文命中
         val filtered = if (searchQuery.isBlank()) sessions else sessions.filter {
-            searchResults.contains(it.id) || it.title.contains(searchQuery, ignoreCase = true)
+            it.title.contains(searchQuery, ignoreCase = true) ||
+                (searchResultsQuery == searchQuery && searchResults.contains(it.id))
         }
 
         if (filtered.isEmpty()) {
@@ -167,15 +173,15 @@ fun SessionDrawerContent(
             ) {
                 // v1.7.3 F4 会话按记忆档案分组（v1.7.3-fix：分组键改 targetId，同名档案不再合并）；
                 // 组内保持列表顺序（id DESC = 时间倒序）；每组前加档案名组头（取组内第一条的 targetName）；
-                // 未关联（targetId=null）归最后
-                val grouped = filtered.groupBy { it.targetId }
-                val orderedGroups = grouped.filterKeys { it != null } +
-                    (grouped[null]?.let { mapOf<Long?, List<SessionSummaryUi>>(null to it) } ?: emptyMap())
-                orderedGroups.forEach { (_, groupSessions) ->
+                // 未关联（targetId=null）归最后。
+                // F36 精简：保留 key 的稳定排序（非 null 组按首现顺序在前、null 组殿后），
+                // 替换原先 filterKeys + map 拼装、丢弃 key 再从 firstOrNull 反推的写法
+                val orderedGroups = filtered.groupBy { it.targetId }.entries.sortedBy { it.key == null }
+                orderedGroups.forEach { (targetId, groupSessions) ->
                     // 组头文字：组内第一条的 targetName（空/档案已删 → 回退未关联占位）
                     val groupName = groupSessions.firstOrNull()
                         ?.targetName?.trim()?.takeIf(String::isNotEmpty) ?: UNLINKED_GROUP
-                    item(key = "group_${groupSessions.firstOrNull()?.targetId ?: UNLINKED_GROUP}") {
+                    item(key = "group_${targetId ?: UNLINKED_GROUP}") {
                         GroupHeader(groupName)
                     }
                     items(groupSessions, key = { "session_${it.id}" }) { session ->

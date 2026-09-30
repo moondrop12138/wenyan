@@ -40,8 +40,11 @@ class Bm25ScorerTest {
     @Test
     fun `idf downweights common terms across docs`() {
         val s = Bm25Scorer()
-        // "冷战"只出现在一篇，"方法"出现在多篇 → "冷战"的贡献应更高
-        val docs = listOf("冷战修复", "方法一", "方法二")
+        // F63/F96 修复：原用例 docs[0]="冷战修复" 不含「方法」，score("方法") 在 docs[0] 的
+        // tf=0 → 贡献恒为 0.0，断言退化为 rare[0] > 0.0——把 IDF 换成常数 1.0 也照样通过，
+        // 从未真正检验 IDF 降权。现让 docs[0] 同时含两词且 tf 相等：同文档同词频下，
+        // df 高（3 篇都有）的「方法」得分必须低于 df=1 的「冷战」
+        val docs = listOf("冷战方法", "方法一", "方法二")
         val rare = s.score("冷战", docs)
         val common = s.score("方法", docs)
         assertTrue(rare[0] > common[0])

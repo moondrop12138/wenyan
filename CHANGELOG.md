@@ -2,7 +2,45 @@
 
 「温言」版本历史。版本命名：`vX.Y.Z`（功能）与 `vX.Y.Z-N`（同版本迭代构建）。
 
-## v1.9.4（2026-09-28，09-29 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + Mica 视觉对齐/玻璃扁平化与内凹改版/色相全局跟随/输入栏与弹层对齐 web + 触摸修复
+## v1.9.4（2026-09-28，09-29/09-30 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + Mica 视觉对齐/玻璃扁平化与内凹改版/色相全局跟随/输入栏与弹层对齐 web + 触摸修复 + 全量代码审查修复
+
+**09-30 迭代（全量代码审查与修复）**：206 个源码文件（安卓 + 共享层 + 桌面与内嵌 Web）逐目录审查，全部发现经独立复核确认后修复，修复改动再经独立 diff 验收与 CI 同款门禁（testDebugUnitTest + :desktop:test + assembleDebug + lintDebug）全绿。以下按主题列要点，完整清单（含证据与逐条处置状态：已解决 106 / 部分解决 4 / 留作建议 20）见审查报告。
+
+**数据安全与状态一致性（高危）**：
+- 清空数据/导入备份后内存 `sessionId` 悬空：`wipeAll`/`importBackup` 清库不清 `RealChatRepository.sessionId`，之后发消息复用已删会话 id，用户消息静默丢失或写进恢复出来的无关会话；清库联动复位并走 `ensureSession` 重开
+- 图片预落库类失败（READ_FAILED/TOO_LARGE/COMPRESS_FAILED）后点「重试」仍按「用户消息已落库」发 `persistUser=false`，图片与配文永不写库，AI 回复成孤儿记录；retry 按错误类别区分是否需要补落库
+- 新建提供商「测试连接/添加模型/保存」各插一条 provider 行（最多 3 条重复）：统一走 `ensurePersisted` 首存记忆 id、后续一律 update；新建页模型列表同步补收集器（原先 `models` 收集整体在 `if (!isNew)` 内，加了模型列表也不显示）
+- 20MB 图片大小守卫后置：调用方先 `readBytes()` 全量进内存才检查上限，超大文件在守卫前就可能 OOM；守卫前置到读取路径
+
+**安全**：
+- 桌面端 `http://` 公网地址静默明文发送 API Key：`UNSUPPORTED_URL` 终检依赖 Android 网络策略抛的 cleartext 异常，桌面端无此策略恒放行；双端在请求前显式校验 scheme
+- ProviderRepository 加密写路径对 `cipher.encrypt` 零兜底，Keystore 不可用时保存/测试连接直接崩溃（对称的解密路径有完整兜底）；`KeyUnavailableException` 现达 UI 提示「密钥不可用，请重新输入」
+- Base URL 校验收紧（F22/F23）：空串、含逗号/空格、带 `?`/`#`（query/fragment 会吞掉硬拼的 `/chat/completions` 恒 404）一律拒绝并提示，save/addModel/testConnection 三入口统一预检
+- 桌面端密钥机器指纹：非 Windows 回退读了 Windows 专有的 `COMPUTERNAME`，主机名绑定在 Linux/macOS 恒为常量 `unknown-host`，换同名用户机器即可解密；改按平台取主机名
+
+**健壮性/正确性**：
+- `UpdateChecker.check()` 的 `catch (Exception)` 与桌面 `importAllJson` 的裸 `runCatching` 吞 `CancellationException`，协程取消被转成正常失败返回；两处显式 rethrow
+- 桌面 `DesktopPresetSeed` 补齐安卓 L23 修复（「存在任意 provider 即整体跳过」→ 逐预设按名判重 + 事务，首启写一半被杀不再永久丢预设）；桌面 `DesktopMetricsStore` 补齐 L26 修复（save 共用锁 + tmp+rename 原子写，崩溃不再丢整份指标）
+- `recordMemoryWrite` 在 DataStore `edit{}` 事务内对同一 DataStore 再入读（违反契约的潜伏死锁），改读事务快照 `prefs`
+- `mergeFacts` 同批次内不去重（模型单次输出重复事实双双入库），已保留的新事实并入后续比对；桌面 `persistFacts` 用未清洗数量 `drop` 导致每有一条空白事实就错位丢一条新记忆，双端对齐清洗后 drop
+- EXIF 方向修正补全：安卓 5/7（转置）与 2/4（镜像）不修正；桌面端此前完全不处理 EXIF（竖拍图横置发给模型且重编码丢 EXIF）；桌面压缩管线顺带去掉一次等价的全量 ARGB→RGB 重绘
+- 聊天 UI：切到已有长会话列表停在 index 0、isAtBottom 恒 false 导致后续消息不自动滚底（改 `scrollToItem(count-1)`）；危机卡「我知道了」传空 lambda 点了没反应（接收后收起并持久化）；预落库失败恢复逻辑随 combine 重发射重放、覆盖用户输入找回已删图片（错误态消费一次即清）；会话搜索去抖窗口内新旧结果混显（标题匹配与全文检索按同一关键词口径过滤）
+- 知识库/记忆：`isSameTopic` 对无标点中文整句 token 化失效导致同题长输入误判换题；`BreatheDot` 把 delay 写进 `infiniteRepeatable` 子 tween（周期漂移错峰失效）；`GlowBackground` 用开机绝对帧时间驱动相位（长开机 float32 精度劣化光斑跳格，对齐 FluidBackground 相对化）；Mica 磨砂层与栏级投影绘制顺序颠倒（投影压暗栏内玻璃）；`KnowledgeChunker` 字符预算漏计每块 4 字符渲染头；Bm25 标点清洗正则 4 处漂移收敛为单份预编译；`PromptBuilder.buildUserReply` 末尾硬编码 `safety_override=false` 与系统层危机契约矛盾（改为按场景条件输出）；崩溃兜底 handler 内 `AppLogger.e` 加异常防护（OOM 崩溃时不再阻断 crash 落盘）；`CrashLogStore.clear` 删错目录（cacheDir→filesDir，wipeAll 联动真正删掉已下载 APK）
+- 桌面 Web（app.js）：流式中点击侧栏当前会话使流令牌作废、本轮回复静默消失（同会话点击不再 bump streamSeq）；保存/新增厂商与新建档案不判 API 错误（失败仍弹成功提示、500 无反馈、新建失败 TypeError）——统一走错误分支提示
+- 路由生成门禁 `gen_routes.py` 的「无文档未被覆盖」检查是永假死断言（route_docs 由同一张表构造），改为对 ROUTE_TABLE 与真实文档集合做差集
+
+**假测试清理（名不副实/恒真断言，改为有效覆盖或删除）**：
+- `RouteByInputShapeTest` 从未调用被测函数、断言的是手工复制副本 → 改为直接调用 `routeByInputShape`；`SessionDrawerGroupTest` 未断言组顺序 → 补顺序断言；`MemoryDialogsTest` 删除确认路径从未点击确认键 → 补确认路径
+- 恒真/空断言修正：`Bm25ScorerTest`（IDF 降权断言里 common 恒 0）、`CrisisDetectorTest`（isNotEmpty 与词表纯文本无关）、`SseParserTest`（assertNull 无法区分「返回 null」与「返回致命块」）、`KnowledgeIndexTest`（fixture 仅 3 文档 cap-3 恒真）、`RouteEvaluatorHarnessTest`（queryCount 恒等）、`LlmClientTest` 重启顺序补后半不变量、`PromptBuilderTest` emoji 码点区间补全、`ContrastTest` 记录值 4.29→实测 5.39 并据此收紧阈值、`FluidAppearanceSettingsFlowTest` 死回流操作改为真回流、`SharedSourceSmokeTest` "round trip" 名实相符化
+- 删除严格被 `ErrorMapperFullTest` 覆盖的 `ErrorMapperTest`；`MigrationTest` 中零新增覆盖的逐字重复用例删除；`migrateNoteToFactsOnce` 上限/截断用例改用互不包含数据（适配 `mergeFacts` 同批次去重）并把长段挪进截断窗口使断言真正生效
+
+**死代码与同构精简（行为不变）**：
+- 删除零引用死代码：`ChipSpacer`、`rememberCoachInnerCard` 系列常量、`SettingsRepository` 7 个一次性 suspend 读取、`AppViewModel.setFluidBackground`、`SettingsViewModel.editTarget` 状态机、`SessionDao.recent`、`Converters` List<String> 转换器、`SessionFirstMessage.lastMessageAt` 死投影、`ModelDao.observeByProvider`/`ProfileDao.observeLatest` 死链、Json 抽象的 `getJSONObject`/`getString`/`optScalarString`、`SseFormatException` 不可达 catch、ErrorCard v1.1 死分支、`LlmErrorCode.code` 死属性、`ChatRepository` 非异步流式三成员、aqua-fluid.js 死 uniform 管线、`gen_routes.py` 不可达 makedirs、`routes.json` 重复资产（与 routes-v2.json 字节级相同，11.5KB 随包白拿）
+- 复制粘贴收敛为单份实现：`ChatViewModel.routeByInputShape` 抽 `InputShapeRouter`（同文件测试直测真函数）；三份输入框配色抽 `EditFieldColors`；测试侧四个同包 `FakeSettingsRepository` 合并共享、假 DAO 抽 `FakeDaos`、三份评测脚手架抽 `KnowledgeEvalCorpus`；`MemoryExtractor` 内私有 `takeCodePoints` 复用 `SessionTitle` 同名实现；`UpdateClient`/`UpdateChecker` 死错误码约定注释改为如实描述
+
+**留作建议（20 条未动，需跨模块上提或产品决策）**：记忆导入导出约 130 行双端逐字复制、版本比较函数、Json android/jvm 包装类下沉 `jvmCommonMain`、PresetSeed 数据表下沉、引导页第 4 屏 6 个采集字段提交后被静默丢弃（需产品决策接入或删屏）等，逐条见审查报告。
+
+**09-29 迭代**：
 
 **修复**：
 - 历史会话点击失效与危机卡长按失效：玻璃按压动画旧实现用 `detectTapGestures(onPress)`，会消费 DOWN/UP——GlassSurface 无 onClick 时把按压修饰符放在内层，外层 `combinedClickable` 拿不到未消费的 DOWN，点击/长按静默失效（历史会话行、危机卡长按均中招）；改用 `awaitEachGesture` 纯手势观察器，全程不消费任何事件，与外层 clickable/combinedClickable 共存

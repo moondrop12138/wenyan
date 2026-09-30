@@ -6,7 +6,8 @@ import org.junit.Test
 
 /**
  * ProviderUrlNormalizer 测试（v1.7.x 新增）
- * 覆盖：正常根地址 / 尾斜杠 / 完整端点 / 空格 / 非法字符（逗号、中文）/ 空串 / 不补 /v1
+ * 覆盖：正常根地址 / 尾斜杠 / 完整端点 / 空格 / 非法字符（逗号、中文）/ 空串 / query·fragment / 不补 /v1
+ * F22：空串改为拒绝（原样放行会落库出无 scheme 的相对路径）、含 ?/# 的输入拒绝（硬拼端点恒 404）
  */
 class ProviderUrlNormalizerTest {
 
@@ -74,8 +75,19 @@ class ProviderUrlNormalizerTest {
     }
 
     @Test
-    fun `empty string stays empty`() {
-        assertEquals("", ProviderUrlNormalizer.normalize(""))
-        assertEquals("", ProviderUrlNormalizer.normalize("   "))
+    fun `empty string is rejected`() {
+        assertNull(ProviderUrlNormalizer.normalize(""))
+        assertNull(ProviderUrlNormalizer.normalize("   "))
+    }
+
+    @Test
+    fun `query in url is rejected`() {
+        // F22：带 query 的 baseUrl 硬拼 /chat/completions 会把追加路径吞进 query 恒 404
+        assertNull(ProviderUrlNormalizer.normalize("https://h/v1?api-version=x"))
+    }
+
+    @Test
+    fun `fragment in url is rejected`() {
+        assertNull(ProviderUrlNormalizer.normalize("https://api.kimi.com/v1#frag"))
     }
 }

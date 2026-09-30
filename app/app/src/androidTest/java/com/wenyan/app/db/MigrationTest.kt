@@ -13,9 +13,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * v1.7.3 T1 Room 迁移自动化测试（MigrationTestHelper 读 app/schemas 下 1.json~6.json）：
- * - v1→v2→v3→v4→v5→v6 全链路逐步迁移 + 数据保留断言；
- * - 直接 v1→v6 双路径迁移；
+ * v1.7.3 T1 Room 迁移自动化测试（MigrationTestHelper 读 app/schemas 下 1.json~8.json）：
+ * - v1→v2→…→v6 全链路逐步迁移（逐版本 runMigrationsAndValidate 推进，等价 Room 运行时链式
+ *   升级路径）+ 数据保留断言；
  * - v6 新增 memory_fact 表可查询、target.note 默认空串、session.targetId 可空。
  * 注意：room-testing 2.6.1 的 runMigrationsAndValidate 返回迁移后的数据库（无 getDatabase API）。
  */
@@ -78,22 +78,20 @@ class MigrationTest {
     @Test
     fun migrate1To6_stepwise_retainsData() {
         seedV1()
-        val db = helper.runMigrationsAndValidate(testDb, 6, true, *AppDatabase.MIGRATIONS)
+        // F01 修复：真逐步路径——逐版本 runMigrationsAndValidate 推进（Room 运行时即沿
+        // 1→2→…→6 唯一链式路径升级）；原先的 "direct" 版与这里调用完全相同，是零覆盖的重复
+        val migrations = AppDatabase.MIGRATIONS
+        helper.runMigrationsAndValidate(testDb, 2, true, migrations[0]).close()
+        helper.runMigrationsAndValidate(testDb, 3, true, migrations[1]).close()
+        helper.runMigrationsAndValidate(testDb, 4, true, migrations[2]).close()
+        helper.runMigrationsAndValidate(testDb, 5, true, migrations[3]).close()
+        val db = helper.runMigrationsAndValidate(testDb, 6, true, migrations[4])
         assertRetainedData(db)
         // v6 memory_fact 表可查询
         db.query("SELECT COUNT(*) FROM memory_fact").use { c ->
             assertTrue(c.moveToFirst())
             assertEquals(0, c.getInt(0))
         }
-        db.close()
-    }
-
-    @Test
-    fun migrate1To6_direct_retainsData() {
-        seedV1()
-        // 直接 v1→v6（一次性跑完全部 Migration），与逐步迁移双路径等价
-        val db = helper.runMigrationsAndValidate(testDb, 6, true, *AppDatabase.MIGRATIONS)
-        assertRetainedData(db)
         db.close()
     }
 
@@ -108,8 +106,9 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To8_stepwise_retainsData() {
+    fun migrate1To8_fullChain_retainsData() {
         // v1.9.1：全链路 v1→v8（含 v7→v8 expiresAt/source），数据保留 + 新列默认值正确
+        //（一次性传全量数组走 Room 链式路径；"stepwise" 原命名名不副实，随 F01 更名）
         // v1.9.4 修：v1 库没有 memory_fact 表（v6 才建），迁移后必为空表，原断言对空表
         // moveToFirst() 必失败（真机首跑暴露；仪器测试此前从未实跑过）。改为迁移后按
         // 老式列集插入一行，验证 v7→v8 DDL 的列默认值（expiresAt=NULL、source='manual'）。
@@ -129,17 +128,11 @@ class MigrationTest {
 
     @Test
     fun migrate7To8_keepsKindAndAddsExpiryColumns() {
-        // v7（kind 分层）→ v8（expiresAt/source）：kind 数据保留，新列默认值正确
+        // v7（kind 分层）→ v8（expiresAt/source）：kind 数据保留，新列默认值正确。
+        // F02 修复：删掉手写 CREATE TABLE（createDatabase(testDb, 7) 已按 7.json 自动建好
+        // memory_fact，手写 DDL 是永不生效的死代码且列定义与 7.json 不一致）；schema 一律以
+        // app/schemas/…/7.json 为准，这里只按其列集插数据。
         helper.createDatabase(testDb, 7).apply {
-            execSQL(
-                "CREATE TABLE IF NOT EXISTS `memory_fact` (" +
-                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                    "`targetId` INTEGER NOT NULL, " +
-                    "`text` TEXT NOT NULL, " +
-                    "`kind` TEXT NOT NULL DEFAULT 'fact', " +
-                    "`createdAt` INTEGER NOT NULL, " +
-                    "FOREIGN KEY(`targetId`) REFERENCES `target`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
-            )
             execSQL("INSERT INTO memory_fact (id, targetId, text, kind, createdAt) VALUES (1, 1, '她喜欢猫', 'hypothesis', 1000)")
             close()
         }

@@ -24,11 +24,13 @@ class KnowledgeEngineTest {
 
     private fun makeEngine(reader: FakeReader): KnowledgeEngine = KnowledgeEngine(reader)
 
-    private fun buildRoutesJson(vararg routes: Triple<List<String>, String, String>): String {
-        // Triple(keywords, docPath, docContent)
+    // F66 精简：buildRoutesJson 原签名 Triple(keywords, docPath, docContent) 的第三个分量
+    // 被解构后从未使用（各测试另行设置 reader.docs[docPath]），4 处调用点传入的文档内容
+    // 全部被丢弃——改为 Pair(keywords, docPath)
+    private fun buildRoutesJson(vararg routes: Pair<List<String>, String>): String {
         val files = org.json.JSONObject()
         val routesArr = org.json.JSONArray()
-        for ((keywords, path, content) in routes) {
+        for ((keywords, path) in routes) {
             files.put(path, org.json.JSONObject().put("title", path))
             routesArr.put(
                 org.json.JSONObject()
@@ -48,7 +50,7 @@ class KnowledgeEngineTest {
         val reader = FakeReader()
         val docPath = "practical/实战话术编排器：从一句回复到后续分支.md"
         reader.routesJson = buildRoutesJson(
-            Triple(listOf("怎么回", "回复"), docPath, "# 实战话术编排器\n\n## 时机\n回复要快。")
+            Pair(listOf("怎么回", "回复"), docPath)
         )
         reader.docs[docPath] = "# 实战话术编排器\n\n## 时机\n回复要快。"
 
@@ -64,7 +66,7 @@ class KnowledgeEngineTest {
     fun `no route match returns empty injection`() {
         val reader = FakeReader()
         reader.routesJson = buildRoutesJson(
-            Triple(listOf("怎么回"), "practical/x.md", "# x\n\n## a\nb")
+            Pair(listOf("怎么回"), "practical/x.md")
         )
         reader.docs["practical/x.md"] = "# x\n\n## a\nb"
         val engine = makeEngine(reader)
@@ -78,7 +80,7 @@ class KnowledgeEngineTest {
         val reader = FakeReader()
         val safetyPath = "knowledge/17-中国法律安全与危机转介.md"
         reader.routesJson = buildRoutesJson(
-            Triple(listOf("家暴", "跟踪", "自杀"), safetyPath, "# 安全\n\n## 危机\n先安全。")
+            Pair(listOf("家暴", "跟踪", "自杀"), safetyPath)
         )
         reader.docs[safetyPath] = "# 安全\n\n## 危机\n先安全。"
         val engine = makeEngine(reader)
@@ -91,7 +93,7 @@ class KnowledgeEngineTest {
         val routedPath = "practical/routed.md"
         val variantOnlyPath = "practical/提高气场：从内到外的力量感塑造指南.md"
         reader.routesJson = buildRoutesJson(
-            Triple(listOf("怎么回"), routedPath, "# 路由内\n\n## 内容\n回复。")
+            Pair(listOf("怎么回"), routedPath)
         )
         reader.docs[routedPath] = "# 路由内\n\n## 内容\n回复。"
         reader.docs[variantOnlyPath] = "# 提高气场\n\n## 方法\n稳住自己。"

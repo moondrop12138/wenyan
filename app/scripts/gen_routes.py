@@ -6,7 +6,9 @@
 职责：
 1. 校验 assets/knowledge 恰好 41 份 md（20 knowledge + 21 practical，v1.9.0 含伦理转译）
 2. 按下方 ROUTE_TABLE（文档标题关键词 → 文档路径）生成 routes.json
-3. 校验路由表覆盖与文档完整性；缺失/不匹配 → 非零退出（构建失败）
+3. 文档完整性校验：路由引用不存在的文档 → 非零退出（构建失败）；
+   ROUTE_TABLE 之外的文档不经关键词路由暴露（补充阅读篇目，现状如此），
+   如需「全部文档必被路由」的强约束应另立白名单门禁，勿依赖本脚本
 
 用法：
     python scripts/gen_routes.py   # 在仓库根的 app/ 目录下运行
@@ -51,11 +53,22 @@ ROUTE_TABLE = [
 ]
 
 
+def validate_doc_rel(rel: str) -> str:
+    """路由表文档相对路径必须落在 assets/knowledge 内（防路径穿越，CWE-22）"""
+    normalized = rel.replace("\\", "/")
+    if os.path.isabs(normalized) or ".." in normalized.split("/") or normalized.startswith("/"):
+        raise SystemExit(f"FATAL: 路由表文档路径非法（绝对路径或含越界段）: {rel}")
+    return rel
+
+
 def collect_md_files() -> dict:
     """收集 assets/knowledge 下 md，返回 {相对路径: 绝对路径}"""
     files = {}
+    root_abs = os.path.realpath(ASSETS_KNOWLEDGE)
     for sub in ("knowledge", "practical"):
-        sub_dir = os.path.join(ASSETS_KNOWLEDGE, sub)
+        sub_dir = os.path.realpath(os.path.join(ASSETS_KNOWLEDGE, validate_doc_rel(sub)))
+        if os.path.commonpath([root_abs, sub_dir]) != root_abs:
+            raise SystemExit(f"FATAL: 子目录越界: {sub}")
         if not os.path.isdir(sub_dir):
             raise SystemExit(f"FATAL: 缺少目录 {sub_dir}")
         for name in sorted(os.listdir(sub_dir)):
@@ -92,6 +105,7 @@ def build_routes(files: dict) -> dict:
 
     routes = []
     for keywords, doc in ROUTE_TABLE:
+        validate_doc_rel(doc)
         if doc not in files:
             raise SystemExit(f"FATAL: 路由引用的文档不存在于 assets: {doc}")
         routes.append({"keywords": keywords, "docs": [doc]})
@@ -119,19 +133,17 @@ def extract_title(abs_path: str) -> str:
     return os.path.basename(abs_path)
 
 
-def verify_routes_coverage(files: dict, routes: dict) -> None:
-    """校验路由表引用全部落在现有文档上，且无主题文档未被路由覆盖"""
-    route_docs = set()
-    for r in routes["routes"]:
-        route_docs.update(r["docs"])
-    missing_docs = {d for d in route_docs if d not in files}
-    if missing_docs:
-        raise SystemExit(f"FATAL: routes 引用了不存在的文档: {sorted(missing_docs)}")
+def report_routes_summary(routes: dict) -> None:
+    """输出路由表摘要。
 
-    uncovered = [d for _, d in ROUTE_TABLE if d not in route_docs]
-    if uncovered:
-        raise SystemExit(f"FATAL: 以下主题文档未被路由覆盖: {uncovered}")
-    print(f"[gen_routes] 路由覆盖 OK：{len(routes['routes'])} 条规则，"
+    F117：原 verify_routes_coverage 的两处断言均为死检查——routes 完全由 ROUTE_TABLE
+    一一构造（build_routes 已对 doc 不存在直接 FATAL），故「uncovered 恒为空、
+    missing_docs 与 build_routes 重复」都不可能触发，提供了不存在的覆盖保证。
+    未进入 ROUTE_TABLE 的知识库文档（如 practical 补充阅读篇目）不经关键词路由暴露，
+    属内容设计层面的问题，不应由本脚本的恒真断言来"把守"。
+    """
+    route_docs = {d for r in routes["routes"] for d in r["docs"]}
+    print(f"[gen_routes] 路由表：{len(routes['routes'])} 条规则，"
           f"{len(route_docs)} 份文档被路由引用")
 
 
@@ -139,9 +151,10 @@ def main() -> None:
     files = collect_md_files()
     verify_completeness(files)
     routes = build_routes(files)
-    verify_routes_coverage(files, routes)
+    report_routes_summary(routes)
 
-    os.makedirs(ASSETS_KNOWLEDGE, exist_ok=True)
+    # F118：此处无需 makedirs——collect_md_files 已对 knowledge/practical 子目录 isdir 校验，
+    # 能执行到这说明 ASSETS_KNOWLEDGE 必然已存在
     payload = json.dumps(routes, ensure_ascii=False, indent=2)
 
     # 幂等：内容一致则跳过写入（规避 safe-delete 对反复覆盖文件的写锁）

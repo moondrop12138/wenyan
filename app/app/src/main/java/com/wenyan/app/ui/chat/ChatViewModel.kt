@@ -73,12 +73,24 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
     private val _searchResults = MutableStateFlow<List<Long>>(emptyList())
     val searchResults: StateFlow<List<Long>> = _searchResults.asStateFlow()
 
+    /** F34 修复：searchResults 所属的查询词——抽屉只在两者对应时才并入全文命中，
+     *  消除 300ms 去抖窗口内「旧关键词结果 ∪ 新关键词标题匹配」的混排 */
+    private val _searchResultsQuery = MutableStateFlow("")
+    val searchResultsQuery: StateFlow<String> = _searchResultsQuery.asStateFlow()
+
     /** v1.3.1 待发送图片（v1.6.1 多图：最多 10 张，选图后暂存，点发送才真正发出） */
     private val _pendingImages = MutableStateFlow<List<Uri>>(emptyList())
     val pendingImages: StateFlow<List<Uri>> = _pendingImages.asStateFlow()
 
     /** 最近一次发送（v1.3.1 携带可选图片 uri；v1.6.1 多图列表，供 retry 复用图文重试） */
     private var lastSend: LastSend? = null
+
+    /**
+     * F32 修复：预落库失败的待恢复标记（发送置位、错误到达即消费）。
+     * 错误态在 repo 中长期驻留、combine 任一入流变化即重发射——若恢复逻辑随重发射重放，
+     * 切走再切回该会话会拿 lastSend 覆盖用户此后编辑过的输入并找回已删除的图片。
+     */
+    private var pendingRestore = false
 
     init {
         viewModelScope.launch {
@@ -110,8 +122,11 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
                     if (!_streaming.value) {
                         _confirming.value = false
                     }
-                    // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试
-                    if (!st.streaming && st.error != null && mine) {
+                    // 预落库图片错误（读取/过大/压缩失败）→ 图片未发出，恢复待发送区与配文供重试。
+                    // F32 修复：恢复是一次性动作——pendingRestore 在发送时置位、此处消费；
+                    // 错误驻留 + 切走再切回的 combine 重发射不再重放恢复（不再覆盖当前输入）
+                    if (!st.streaming && st.error != null && mine && pendingRestore) {
+                        pendingRestore = false
                         val last = lastSend
                         if (last?.uris?.isNotEmpty() == true && st.error.code in RESTORE_PENDING_CODES) {
                             _pendingImages.value = last.uris
@@ -144,11 +159,15 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         searchJobs?.cancel()
         if (query.isBlank()) {
             _searchResults.value = emptyList()
+            _searchResultsQuery.value = ""
             return
         }
         searchJobs = viewModelScope.launch {
             kotlinx.coroutines.delay(300)   // 去抖：停顿 300ms 才发起
+            // F34 修复：先落结果、后落归属 query——两发射之间结果仍标记为旧词、
+            // 抽屉不会把旧结果并入新词的过滤
             _searchResults.value = repo.searchSessions(query)
+            _searchResultsQuery.value = query
         }
     }
 
@@ -161,44 +180,13 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
         //  - 转述对方的话（"她说我们只是朋友"）→ RELAYED 先解读对方意图
         //  - 用户自己的简短输入（提问/倾诉）→ REPLY 共情 + 话术
         //  - 纯打招呼 → GREETING 轻量开场
-        val resolved = mode ?: routeByInputShape(text)
+        // （F75：路由逻辑抽到无状态 InputShapeRouter，RouteByInputShapeTest 直接测真实实现）
+        val resolved = mode ?: InputShapeRouter.route(text)
         lastSend = LastSend(emptyList(), text, resolved)
+        pendingRestore = false // 纯文本发送无待恢复图片（F32 标记只服务图文发送）
         _input.value = ""
         repo.sendTextAsync(text, resolved)
     }
-
-    /**
-     * 输入四分路由（v1.2）。
-     *
-     * 优先级：FIVE_STEP > RELAYED > GREETING > REPLY。
-     * 关键修复：把「转述对方的话」从 REPLY 里拆出来——此前"她说我们只是朋友"
-     * 会被当成用户自己的发言走共情+推进话术，方向完全反了（应先解读对方在划清边界）。
-     */
-    internal fun routeByInputShape(text: String): AnalysisMode {
-        val trimmed = text.trim()
-        val isMultiLine = trimmed.contains('\n')
-        val hasQuotes = trimmed.any { it == '"' || it == '“' || it == '”' || it == '\'' || it == '‘' || it == '’' }
-        val looksLikeChatLog = trimmed.contains("：") && trimmed.contains("\n")
-
-        // 完整聊天记录优先，避免大段粘贴被转述信号截胡
-        if (looksLikeChatLog || isMultiLine || hasQuotes || trimmed.length > 40) {
-            return AnalysisMode.FIVE_STEP
-        }
-
-        if (looksLikeRelayedQuote(trimmed)) return AnalysisMode.RELAYED
-        if (looksLikeGreeting(trimmed)) return AnalysisMode.GREETING
-        return AnalysisMode.REPLY
-    }
-
-    /**
-     * 转述信号：第三人称主语 + 引语动词。只覆盖高置信度特征（短句前提下），
-     * 拿不准的仍落 REPLY，由模型在 prompt 里做最终语境判断（uncertain 时反问）。
-     */
-    private fun looksLikeRelayedQuote(text: String): Boolean =
-        RELAYED_PATTERN.containsMatchIn(text)
-
-    private fun looksLikeGreeting(text: String): Boolean =
-        text.length <= 10 && GREETING_PATTERN.containsMatchIn(text)
 
     companion object {
         /** v1.3.1 最近一次发送记录（retry 复用；uris 非空 = 图文/纯图发送） */
@@ -213,17 +201,6 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
 
         /** v1.3.1 预落库错误码：图片尚未写入，失败后恢复待发送区供重试 */
         private val RESTORE_PENDING_CODES = setOf("READ_FAILED", "TOO_LARGE", "COMPRESS_FAILED")
-
-        /** "她说/他说/TA说/对方回/她回了句…" 等第三人称转述信号 */
-        private val RELAYED_PATTERN = Regex(
-            "(他|她|TA|ta|对方|那人|那个|这人|这个)[^，。！？\\n]{0,4}(说|问|回|答|讲|提|发|写)"
-        )
-
-        /** 纯打招呼：你好/hi/在吗 类，长度≤10 字 */
-        private val GREETING_PATTERN = Regex(
-            "^(你好|您好|hi|hello|hey|嗨|喂|在吗|在么|在不在|早|早上好|晚上好|下午好)[！!~。\\s]*$",
-            RegexOption.IGNORE_CASE
-        )
     }
 
     /**
@@ -256,8 +233,10 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
             sendText()
             return
         }
-        val resolved = if (text.isEmpty()) AnalysisMode.FIVE_STEP else routeByInputShape(text)
+        val resolved = if (text.isEmpty()) AnalysisMode.FIVE_STEP else InputShapeRouter.route(text)
         lastSend = LastSend(uris, text, resolved)
+        // F32：图文发送的预落库失败可能需要恢复待发送区，置位一次性恢复标记
+        pendingRestore = true
         _input.value = ""
         _pendingImages.value = emptyList()
         repo.analyzeImagesAsync(uris, text, resolved)
@@ -275,11 +254,16 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
 
     fun retry() {
         val last = lastSend ?: return
-        // v1.3.1 失败重试：persistUser=false——用户消息首次发送已落库，重试不再重复发一遍
+        // v1.3.1 失败重试：persistUser=false——用户消息首次发送已落库，重试不再重复发一遍。
+        // F30 修复：预落库类失败（READ_FAILED/TOO_LARGE/COMPRESS_FAILED）发生在落库之前
+        //（repo analyzeImagesFlow 未写任何消息即报错），重试必须补落库（persistUser=true），
+        // 否则用户图片与配文永远不进库，AI 回复成为没有对应用户消息的孤儿记录
+        val errorCode = _lastError.value?.code
+        val needPersistUser = errorCode != null && errorCode in RESTORE_PENDING_CODES
         if (last.uris.isNotEmpty()) {
-            repo.analyzeImagesAsync(last.uris, last.text, last.mode, persistUser = false)
+            repo.analyzeImagesAsync(last.uris, last.text, last.mode, persistUser = needPersistUser)
         } else {
-            repo.sendTextAsync(last.text, last.mode, persistUser = false)
+            repo.sendTextAsync(last.text, last.mode, persistUser = needPersistUser)
         }
     }
 

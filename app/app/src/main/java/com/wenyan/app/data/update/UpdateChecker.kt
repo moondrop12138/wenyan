@@ -24,8 +24,10 @@ internal inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try 
 /**
  * 更新检查与下载（v1.7.3 T4）：
  * - check()：版本比较统一 versionName 段比较（不再混用 versionCode 两套刻度）；
- * - download()：OkHttp 下载 APK 到 cacheDir/downloads/wenyan-{version}.apk，返回 File/null。
- * 错误归一：UPDATE_NETWORK / UPDATE_PARSE / UPDATE_NO_ASSET / UPDATE_DOWNLOAD / UPDATE_INSTALL。
+ * - download()：OkHttp 下载 APK 到 filesDir/downloads/wenyan-{version}.apk，返回 File/null。
+ * 错误归一（F26 修正过时注释）：实际只产生 UPDATE_NETWORK——网络/解析失败在 UpdateClient 内
+ * 统一收敛为 null 再归一为该码；UPDATE_PARSE/NO_ASSET/DOWNLOAD/INSTALL 等码从未落地，
+ * 消费方（SettingsViewModel）也只展示通用失败文案，不读 code/message。
  */
 class UpdateChecker(
     private val client: UpdateClient,
@@ -37,6 +39,12 @@ class UpdateChecker(
     suspend fun check(): UpdateCheckResult {
         val info = try {
             client.fetchLatest()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // F24 修复：先于 catch (Exception) 重抛取消——fetchLatest 内部业务异常已被
+            // runCatchingCancellable 归一为 null，能逃出它的只有 CancellationException；
+            // 把取消转成 Failed 会在已取消的协程里继续改 toast/状态，破坏取消语义，
+            // 正是本文件 L27 修复声明要消灭的「吞 CE」模式
+            throw e
         } catch (e: Exception) {
             return UpdateCheckResult.Failed("UPDATE_NETWORK", "网络异常，无法检查更新")
         }

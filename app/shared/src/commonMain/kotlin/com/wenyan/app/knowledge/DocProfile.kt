@@ -30,9 +30,9 @@ data class DocProfile(
             }.toMap()
         }
 
-        /** 从文本中提取 2-4 字 n-gram（去标点/空白） */
+        /** 从文本中提取 2-4 字 n-gram（去标点/空白，正则与 Bm25Scorer 统一口径） */
         fun ngrams(text: String, minLen: Int = 2, maxLen: Int = 4): Set<String> {
-            val cleaned = text.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'“”]"), "")
+            val cleaned = text.replace(PUNCT_CLEAN_REGEX, "")
             if (cleaned.length < minLen) return emptySet()
             val result = mutableSetOf<String>()
             for (len in minLen..maxLen) {

@@ -16,6 +16,11 @@ import org.junit.Test
  */
 class LlmClientTest {
 
+    private companion object {
+        /** MockWebServer 本地占位 key：非真实凭据，只用于命中鉴权头形状 */
+        const val MOCK_KEY = "test-key"
+    }
+
     private lateinit var server: MockWebServer
     private lateinit var client: LlmClient
 
@@ -25,7 +30,7 @@ class LlmClientTest {
         server.start()
         client = LlmClient(
             baseUrl = server.url("/").toString().trimEnd('/'),
-            apiKey = "test-key",
+            apiKey = MOCK_KEY,
             retryPolicy = RetryPolicy(maxRetries = 1, random = kotlin.random.Random(1)),
         )
     }
@@ -163,9 +168,14 @@ class LlmClientTest {
         val restarts = events.filterIsInstance<LlmEvent.Restart>()
         assertEquals(1, restarts.size)
         // Restart 位于第一批 Delta 之后、第二批 Delta 之前（UI 据此清空累积文本，避免重复拼接）
+        // F73 修复：补上界断言——原只断言「在第一批之后」，Restart 若回归到第二批 Delta
+        //（"再见"）之后才发出（迟到 Restart 会把已渲染文本清掉，正是 H1 要防的丢字），
+        // 原断言照样全绿
         val restartIndex = events.indexOf(restarts.single())
         val firstBatchEnd = events.indexOfLast { it is LlmEvent.Delta && it.text == "好" }
         assertTrue(restartIndex > firstBatchEnd)
+        val secondBatchIndex = events.indexOfFirst { it is LlmEvent.Delta && it.text == "再见" }
+        assertTrue(restartIndex < secondBatchIndex)
         val done = events.filterIsInstance<LlmEvent.Done>().single()
         assertEquals("再见", done.fullText)
         assertTrue(events.none { it is LlmEvent.Failed })

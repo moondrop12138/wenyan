@@ -243,6 +243,33 @@ class WenyanService(
 
     // ===== 数据管理（导出 / 清空）=====
 
+    // F113：exportAllJson 与 exportMemoryJson 的 targets/facts/profile 三段序列化原本逐字重复，
+    // 提炼为共用构建器（字段保持与两处原实现逐字段一致，改动前已逐字段比对确认）
+
+    private fun targetToJson(t: TargetEntity): org.json.JSONObject =
+        org.json.JSONObject()
+            .put("id", t.id).put("codeName", t.codeName)
+            .put("mbti", t.mbti ?: org.json.JSONObject.NULL)
+            .put("score", t.score ?: org.json.JSONObject.NULL)
+            .put("relationStatus", t.relationStatus ?: org.json.JSONObject.NULL)
+            .put("timeline", t.timeline).put("note", t.note)
+            .put("createdAt", t.createdAt)
+
+    private fun factToJson(f: MemoryFactEntity): org.json.JSONObject =
+        org.json.JSONObject()
+            .put("targetId", f.targetId).put("text", f.text)
+            .put("kind", f.kind)
+            .put("expiresAt", f.expiresAt ?: org.json.JSONObject.NULL)
+            .put("source", f.source)
+            .put("createdAt", f.createdAt)
+
+    private fun profileToJson(p: ProfileEntity): org.json.JSONObject =
+        org.json.JSONObject()
+            .put("mbti", p.mbti ?: org.json.JSONObject.NULL)
+            .put("score", p.score ?: org.json.JSONObject.NULL)
+            .put("strengths", p.strengths ?: org.json.JSONObject.NULL)
+            .put("weaknesses", p.weaknesses ?: org.json.JSONObject.NULL)
+
     /** 全量导出为 JSON（Provider 的 Key 密文脱敏为 hasApiKey 布尔，绝不出密文） */
     suspend fun exportAllJson(): org.json.JSONObject {
         val providers = JSONArray().apply {
@@ -265,26 +292,11 @@ class WenyanService(
             }
         }
         val targets = JSONArray().apply {
-            listTargets().forEach { t ->
-                put(org.json.JSONObject()
-                    .put("id", t.id).put("codeName", t.codeName)
-                    .put("mbti", t.mbti ?: org.json.JSONObject.NULL)
-                    .put("score", t.score ?: org.json.JSONObject.NULL)
-                    .put("relationStatus", t.relationStatus ?: org.json.JSONObject.NULL)
-                    .put("timeline", t.timeline).put("note", t.note)
-                    .put("createdAt", t.createdAt))
-            }
+            listTargets().forEach { t -> put(targetToJson(t)) }
         }
         val facts = JSONArray().apply {
             listTargets().forEach { t ->
-                listFacts(t.id).forEach { f ->
-                    put(org.json.JSONObject()
-                        .put("targetId", f.targetId).put("text", f.text)
-                        .put("kind", f.kind)
-                        .put("expiresAt", f.expiresAt ?: org.json.JSONObject.NULL)
-                        .put("source", f.source)
-                        .put("createdAt", f.createdAt))
-                }
+                listFacts(t.id).forEach { f -> put(factToJson(f)) }
             }
         }
         val sessions = JSONArray().apply {
@@ -296,13 +308,7 @@ class WenyanService(
                     .put("createdAt", s.createdAt))
             }
         }
-        val profile = getLatestProfile()?.let { p ->
-            org.json.JSONObject()
-                .put("mbti", p.mbti ?: org.json.JSONObject.NULL)
-                .put("score", p.score ?: org.json.JSONObject.NULL)
-                .put("strengths", p.strengths ?: org.json.JSONObject.NULL)
-                .put("weaknesses", p.weaknesses ?: org.json.JSONObject.NULL)
-        } ?: org.json.JSONObject.NULL
+        val profile = getLatestProfile()?.let { profileToJson(it) } ?: org.json.JSONObject.NULL
         val messages = JSONArray().apply {
             listSessions().forEach { s ->
                 listMessages(s.id).forEach { m ->
@@ -446,6 +452,9 @@ class WenyanService(
         }
         } // M3: end useWriterConnection/withTransaction
         }.onFailure {
+            // F112：runCatching 会吞 CancellationException（取消后仍返回「失败」，破坏结构化并发）
+            // ——与下方 importMemoryMerge / 安卓 runCatchingCancellable（L27）同修：取消必须原样重抛
+            if (it is kotlinx.coroutines.CancellationException) throw it
             return false to "导入失败：${it.message ?: "数据损坏"}"
         }
         return true to ""
@@ -466,34 +475,13 @@ class WenyanService(
         return org.json.JSONObject()
             .put("app", "wenyan-desktop").put("version", 1)
             .put("exportedAt", System.currentTimeMillis())
-            .put("profile", getLatestProfile()?.let { p ->
-                org.json.JSONObject()
-                    .put("mbti", p.mbti ?: org.json.JSONObject.NULL)
-                    .put("score", p.score ?: org.json.JSONObject.NULL)
-                    .put("strengths", p.strengths ?: org.json.JSONObject.NULL)
-                    .put("weaknesses", p.weaknesses ?: org.json.JSONObject.NULL)
-            } ?: org.json.JSONObject.NULL)
+            .put("profile", getLatestProfile()?.let { profileToJson(it) } ?: org.json.JSONObject.NULL)
             .put("targets", JSONArray().apply {
-                targets.forEach { t ->
-                    put(org.json.JSONObject()
-                        .put("id", t.id).put("codeName", t.codeName)
-                        .put("mbti", t.mbti ?: org.json.JSONObject.NULL)
-                        .put("score", t.score ?: org.json.JSONObject.NULL)
-                        .put("relationStatus", t.relationStatus ?: org.json.JSONObject.NULL)
-                        .put("timeline", t.timeline).put("note", t.note)
-                        .put("createdAt", t.createdAt))
-                }
+                targets.forEach { t -> put(targetToJson(t)) }
             })
             .put("facts", JSONArray().apply {
                 targets.forEach { t ->
-                    listFacts(t.id).forEach { f ->
-                        put(org.json.JSONObject()
-                            .put("targetId", f.targetId).put("text", f.text)
-                            .put("kind", f.kind)
-                            .put("expiresAt", f.expiresAt ?: org.json.JSONObject.NULL)
-                            .put("source", f.source)
-                            .put("createdAt", f.createdAt))
-                    }
+                    listFacts(t.id).forEach { f -> put(factToJson(f)) }
                 }
             })
     }

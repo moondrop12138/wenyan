@@ -47,7 +47,13 @@ class CrisisDetectorTest {
 
     @Test
     fun `keywords are pure text no emoji`() {
+        // F65 修复：原断言 only isNotEmpty——即使词表混入 emoji 关键词也照样通过，且未校验
+        // 命中集合本身。现按 phrases 表顺序固定整条输入的命中集（「威胁」走 compoundKeywords
+        // 白名单不命中；单独的「控制」不命中「控制我/财务控制」），词表被改动/污染时即红
         val all = CrisisDetector.detect("家暴跟踪胁迫自伤自杀威胁控制强奸勒索偷拍")
-        assertTrue(all.isNotEmpty())
+        assertEquals(
+            listOf("家暴", "跟踪", "胁迫", "自伤", "自杀", "强奸", "勒索", "偷拍"),
+            all,
+        )
     }
 }

@@ -98,7 +98,6 @@ import com.wenyan.app.ui.components.glass.FluidBackground
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
 import com.wenyan.app.ui.components.glass.glassBackdropContent
-import com.wenyan.app.ui.components.glass.glassBackdropLayer
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.components.glass.rememberGlassBackdropLayer
@@ -138,6 +137,7 @@ fun ChatScreen(
     val pendingImages by vm.pendingImages.collectAsState()
     val searchQuery by vm.searchQuery.collectAsState()
     val searchResults by vm.searchResults.collectAsState()
+    val searchResultsQuery by vm.searchResultsQuery.collectAsState()
 
     // O10: 草稿输入 + 待发图片 saveable——进程被杀后恢复（发送后清空）
     val savedDraft = rememberSaveable { mutableStateOf("") }
@@ -182,10 +182,23 @@ fun ChatScreen(
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
 
-    // M20 修复：会话切换复位滚动位置——原整表换列表后按索引保留滚动位置，
-    // 新会话停在中部且 isAtBottom=false 使自动跟随永久失效。
+    // M20 修复（F31 再修）：会话切换滚到列表末尾（最新消息）——原 scrollToItem(0) 停在
+    // 最旧消息，长会话下 isAtBottom 恒为 false，此后发送/流式等待/错误卡都不会自动滚入视口。
+    // 等新会话的消息列表真正落地（messages 签名变化，排除旧列表残留）后滚到最后一条；
+    // 只滚这一次（landed 一次性），后续新消息仍由 isAtBottom 门控的自动跟随接管。
+    // 空会话不滚（无消息），首条消息到达时 isAtBottom 自然成立、由自动跟随接手。
     LaunchedEffect(currentSessionId) {
-        listState.scrollToItem(0)
+        var lastSig = messages.size to messages.firstOrNull()?.id
+        var landed = false
+        snapshotFlow { messages.size to messages.firstOrNull()?.id }
+            .collect { sig ->
+                if (!landed && sig != lastSig) {
+                    landed = true
+                    if (messages.isNotEmpty()) {
+                        listState.scrollToItem(messages.size - 1)
+                    }
+                }
+            }
     }
 
     // v1.9.0 自动记忆写入回执 → 一次性 toast（消费后清空，避免重复弹）
@@ -215,6 +228,10 @@ fun ChatScreen(
     var menuOffset by remember { mutableStateOf(Offset.Zero) }
     var confirmDeleteFor by remember { mutableStateOf<ChatMessageUi?>(null) }
     var confirmDeleteSession by remember { mutableStateOf<SessionSummaryUi?>(null) }
+    // F37 修复：危机卡「我知道了」真实收起——此前唯一调用点传空 lambda，点击无任何效果、
+    // 卡片永不消失（违背 CrisisCard 契约「确认后收起」）。本地记住已确认的消息 id，
+    // 确认后该条回落为普通 CoachCard 渲染（内容仍可查看，危机卡不再覆盖展示）
+    var acknowledgedCrisisIds by remember { mutableStateOf(setOf<Long>()) }
     // v1.6.1 文本选择模式：长按菜单"选择文字"进入——气泡文字变为可选中（SelectionContainer），
     // 用户长按文字拖选部分复制；点空白处（Box tap）或滚动列表退出
     var textSelectForId by remember { mutableStateOf<Long?>(null) }
@@ -225,8 +242,8 @@ fun ChatScreen(
     val p = LocalGtjColors.current
 
     // v1.9.4 根因④：真实背景模糊（backdrop blur）。API < 31 返回 null → 全部玻璃面回退现状静态玻璃。
-    // 悬浮栏：顶栏/输入栏经 glassBackdropLayer 显式接入全量磨砂（取样「背景+内容」层，
-    // 消息从栏下穿过被磨砂）；
+    // 悬浮栏：顶栏/输入栏经 liquidGlass 的 backdropLayer 参数显式接入全量磨砂（取样「背景+内容」层，
+    // 消息从栏下穿过被磨砂；F41 修复后磨砂在栏内投影之后、填充之前绘制）；
     // 卡片（v1.9.4 新增）：经 LocalGlassBackdrop provide 分发——本页全部 GlassSurface/
     // liquidGlass（消息气泡、危机卡、错误卡、等待气泡、转录卡、模型 pill、抽屉卡片）内部
     // 自动消费，垫卡片级透光磨砂（取样纯流光背景层，防自反馈）；弹窗层（DropdownMenu/
@@ -312,6 +329,7 @@ fun ChatScreen(
                     onLongPressSession = { confirmDeleteSession = it },
                     searchQuery = searchQuery,
                     searchResults = searchResults,
+                    searchResultsQuery = searchResultsQuery,
                     onSearchQueryChange = vm::onSearchQueryChange,
                 )
             }
@@ -425,8 +443,8 @@ fun ChatScreen(
                                         msg,
                                         text = card?.let { UiMappers.coachCardToSelectableText(it) } ?: msg.content,
                                     )
-                                    card?.safetyOverride == true -> CrisisCard(
-                                        onAcknowledge = {},
+                                    card?.safetyOverride == true && msg.id !in acknowledgedCrisisIds -> CrisisCard(
+                                        onAcknowledge = { acknowledgedCrisisIds = acknowledgedCrisisIds + msg.id },
                                         safetyMessage = card.safetyMessage,
                                         onLongClick = { offset -> openMessageMenu(msg, offset) },
                                     )
@@ -730,19 +748,16 @@ private fun ChatTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                // v1.9.4 根因④：真实背景模糊（Mica 磨砂）垫在玻璃填充之下——
-                // glassBackdropLayer 必须在 liquidGlass 之前（链上靠前的 drawBehind 先画）；
-                // backdrop=false：本面已显式全量磨砂（背景+消息穿透），liquidGlass 内部的
-                // 卡片级磨砂不再叠加，防止盖掉消息穿透成分（v1.9.4 卡片透光磨砂配套）
-                .glassBackdropLayer(backdropLayer, GtjShape.topBar)
-                // v1.8.0 液态玻璃 2.0：边缘透镜（v1.8.1 B4 移除光斑 dead path）
-                // v1.9.4 Mica：圆角 20 + 栏阴影对齐 web（亮 0 8px 28px rgba(110,70,30,.1) /
-                // 暗 0 8px 28px rgba(0,0,0,.3)）；CSS blur 半径 ≈ 2σ → 羽化 14dp，位移 8dp；
-                // fill = Card——顶栏与输入栏同属 web --wy-card-* 渐变组（styles.css:534/538 共用）
+                // v1.9.4 根因④ + F41 修复：全量磨砂（背景+消息穿透）改由 liquidGlass 经
+                // backdropLayer 参数在内部消费——投影之后、填充之前绘制。原先经独立的
+                // glassBackdropLayer modifier 垫在链最底层（链上靠前的 drawBehind 先画），
+                // 不透明磨砂被其上的 α.30 栏级投影整体压暗，与卡片路径层级矛盾；
+                // backdrop=false 保持不变：本面已显式全量磨砂，卡片级磨砂不再叠加
                 .liquidGlass(
                     shape = GtjShape.topBar,
                     fill = GlassFill.Card,
                     backdrop = false,
+                    backdropLayer = backdropLayer,
                     shadowColor = p.glassShadowTopBar,
                     shadowFeather = 14.dp,
                     shadowLift = 8.dp,

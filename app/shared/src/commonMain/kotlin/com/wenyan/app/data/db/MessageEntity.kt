@@ -36,5 +36,4 @@ data class MessageEntity(
 data class SessionFirstMessage(
     val sessionId: Long,
     val firstUserText: String,
-    val lastMessageAt: Long,
 )

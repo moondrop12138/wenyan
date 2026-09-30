@@ -6,9 +6,10 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Repository 接口层编译占位（联调约定：后端在 data/repository 包提供实现，本文件为 UI 侧所需形状）。
- * 流式契约：sendText 返回 Flow<StreamEvent>，增量文本经 Delta 推送（callbackFlow + Main 线程，见 llm-contract.md §3）。
- * v1.3.1：新增 async 发送族（应用级 scope 收集，后台/息屏不中断）+ streamingState 状态中枢；
- * persistUser=false 用于失败重试——用户消息首次发送已落库，重试不再重复落库。
+ * 流式契约：发送走 async 族（应用级 scope 收集），增量经 streamingState 状态中枢推送（llm-contract.md §3）。
+ * v1.3.1：async 发送族（后台/息屏不中断）；persistUser=false 用于失败重试——用户消息首次发送已落库，
+ * 重试不再重复落库。
+ * F45 精简：移除 v1.3.1 后零调用的非异步流式三成员 sendText/analyzeImages/confirmTranscription。
  */
 interface ChatRepository {
     /** 会话消息流（响应式刷新） */
@@ -33,8 +34,9 @@ interface ChatRepository {
     /** M22 修复：一次性提示（解析失败兜底/历史压缩/冲突提示），同上 */
     val noticeEvents: Flow<String>
 
-    /** 发送文本分析（"这句怎么回"用 mode=REPLY，其余 FIVE_STEP） */
-    fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent>
+    /** v1.3.1 后台续跑发送族：应用级 scope 内收集流式事件并推送 streamingState，返回即不阻塞。
+     *  发送文本分析（"这句怎么回"用 mode=REPLY，其余 FIVE_STEP）。 */
+    fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true)
 
     /**
      * 截图分析（双通道分流，AC-07/AC-08）：后端内部做压缩管线（≤1568px/85%）后，
@@ -43,21 +45,6 @@ interface ChatRepository {
      * v1.6.1 多图：uris 最多 10 张，逐张压缩落库后一次 LLM 请求（content 数组多 image_url）；
      * mode 决定通道 A 的回复形态（FIVE_STEP→五步法卡片，其余→freetext 自由文本）。
      */
-    fun analyzeImages(
-        uris: List<Uri>,
-        text: String = "",
-        mode: AnalysisMode = AnalysisMode.FIVE_STEP,
-    ): Flow<StreamEvent>
-
-    /**
-     * 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析。
-     * H5 修复：[sid] = 转述卡来源会话 id（跨会话确认不再落错会话）；null 回退当前会话。
-     */
-    fun confirmTranscription(transcription: String, sid: Long? = null): Flow<StreamEvent>
-
-    /** v1.3.1 后台续跑发送族：应用级 scope 内收集流式事件并推送 streamingState，返回即不阻塞 */
-    fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true)
-
     fun analyzeImagesAsync(
         uris: List<Uri>,
         text: String = "",
@@ -65,6 +52,10 @@ interface ChatRepository {
         persistUser: Boolean = true,
     )
 
+    /**
+     * 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析。
+     * H5 修复：[sid] = 转述卡来源会话 id（跨会话确认不再落错会话）；null 回退当前会话。
+     */
     fun confirmTranscriptionAsync(transcription: String, sid: Long? = null)
 
     /** 删除单条消息（长按菜单删除；Room Flow 自动刷新列表） */

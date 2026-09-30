@@ -71,7 +71,6 @@ uniform vec4 u_color1, u_color2, u_color3;
 uniform float u_colorCount;
 uniform float u_proportion;
 uniform float u_softness;
-uniform float u_shape;
 uniform float u_shapeScale;
 uniform float u_distortion;
 uniform float u_swirl;
@@ -206,7 +205,6 @@ void main() {
       colorCount: gl.getUniformLocation(displayProgram, 'u_colorCount'),
       proportion: gl.getUniformLocation(displayProgram, 'u_proportion'),
       softness: gl.getUniformLocation(displayProgram, 'u_softness'),
-      shape: gl.getUniformLocation(displayProgram, 'u_shape'),
       shapeScale: gl.getUniformLocation(displayProgram, 'u_shapeScale'),
       distortion: gl.getUniformLocation(displayProgram, 'u_distortion'),
       swirl: gl.getUniformLocation(displayProgram, 'u_swirl'),
@@ -357,7 +355,6 @@ void main() {
       gl.uniform1f(display.colorCount, 3);
       gl.uniform1f(display.proportion, p.proportion / 100);
       gl.uniform1f(display.softness, p.softness / 100);
-      gl.uniform1f(display.shape, 0);
       gl.uniform1f(display.shapeScale, p.shapeScale / 100);
       gl.uniform1f(display.distortion, p.distortion / 100);
       gl.uniform1f(display.swirl, p.swirl / 50);
@@ -369,13 +366,6 @@ void main() {
     };
 
     const handle = {
-      setParams: (next) => { current = Object.assign({}, next); },
-      stir: (x, y, vx, vy) => {
-        pointer.x += (x - pointer.x) * 0.35;
-        pointer.y += (y - pointer.y) * 0.35;
-        pointer.svx += (vx - pointer.svx) * 0.3;
-        pointer.svy += (vy - pointer.svy) * 0.3;
-      },
       dispose: () => {
         cancelAnimationFrame(raf);
         window.removeEventListener('resize', resize);
@@ -438,7 +428,6 @@ void main() {
   }
 
   global.AquaFluid = {
-    params: AQUA_FLUID_PARAMS,
     paletteForTheme: paletteForTheme,
     attach: function (canvas, theme) {
       const params = Object.assign({}, AQUA_FLUID_PARAMS, paletteForTheme(theme));

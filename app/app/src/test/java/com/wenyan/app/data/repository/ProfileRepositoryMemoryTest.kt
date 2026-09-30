@@ -1,13 +1,8 @@
 package com.wenyan.app.data.repository
 
-import com.wenyan.app.data.db.MemoryFactDao
 import com.wenyan.app.data.db.MemoryFactEntity
-import com.wenyan.app.data.db.ProfileDao
 import com.wenyan.app.data.db.ProfileEntity
-import com.wenyan.app.data.db.TargetDao
 import com.wenyan.app.data.db.TargetEntity
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -21,6 +16,7 @@ import org.junit.Test
  * v1.7.2 ProfileRepository 多档案 CRUD 测试（fake DAO：内存实现 TargetDao/ProfileDao 接口）
  * v1.7.3 增加：事实表 CRUD + note→facts 惰性搬移幂等测试（fake MemoryFactDao）。
  * 覆盖：save/get by id / observeAll（id DESC）/ update（改名+正文）/ delete / clearAll。
+ * F57 精简：文件尾的私有 Fake DAO 拷贝删除，改用同包共享夹具（FakeDaos.kt）。
  */
 class ProfileRepositoryMemoryTest {
 
@@ -193,7 +189,9 @@ class ProfileRepositoryMemoryTest {
     fun `migrateNoteToFactsOnce caps at 50 and truncates each to 40 chars`() = runTest {
         val repo = newRepo()
         val longSegment = "字".repeat(60)
-        val note = (1..60).joinToString("。") { "事实$it" } + "。" + longSegment
+        // 长段放最前（落在 take(50) 窗口内，40 字截断才真正被断言）；编号文本互不包含，
+        // 避开 mergeFacts 同批次 overlaps 去重（F92）对「事实1/事实10」这类子串对的折叠
+        val note = longSegment + "。" + (1..60).joinToString("。") { "备忘内容${it}号" }
         val id = repo.saveTarget(TargetEntity(codeName = "小A", note = note))
         repo.migrateNoteToFactsOnce(id)
         assertEquals(50, repo.countFacts(id))
@@ -352,124 +350,4 @@ class ProfileRepositoryMemoryTest {
     }
 }
 
-/** 内存 TargetDao（observeAll 用 MutableStateFlow 模拟 Room Flow 响应式刷新） */
-private class FakeTargetDao : TargetDao {
-    private val store = mutableListOf<TargetEntity>()
-    private var nextId = 1L
-    private val _flow = MutableStateFlow<List<TargetEntity>>(emptyList())
-
-    override fun observeAll(): Flow<List<TargetEntity>> = _flow
-
-    /** v1.9.4：DAO 新增全量拉取（id 升序，与生产 SQL 排序一致） */
-    override suspend fun listAll(): List<TargetEntity> = store.sortedBy { it.id }
-
-    override suspend fun getById(id: Long): TargetEntity? = store.firstOrNull { it.id == id }
-
-    override suspend fun insert(entity: TargetEntity): Long {
-        val e = entity.copy(id = nextId++)
-        store.add(e)
-        _flow.value = store.sortedByDescending { it.id }.toList()
-        return e.id
-    }
-
-    override suspend fun update(entity: TargetEntity) {
-        val idx = store.indexOfFirst { it.id == entity.id }
-        if (idx >= 0) store[idx] = entity
-        _flow.value = store.sortedByDescending { it.id }.toList()
-    }
-
-    override suspend fun deleteById(id: Long) {
-        store.removeAll { it.id == id }
-        _flow.value = store.sortedByDescending { it.id }.toList()
-    }
-
-    override suspend fun clearNote(id: Long) {
-        val idx = store.indexOfFirst { it.id == id }
-        if (idx >= 0) store[idx] = store[idx].copy(note = "")
-        _flow.value = store.sortedByDescending { it.id }.toList()
-    }
-
-    override suspend fun clear() {
-        store.clear()
-        _flow.value = emptyList()
-    }
-}
-/** 内存 ProfileDao（MVP 单行：最新一行） */
-private class FakeProfileDao : ProfileDao {
-    private val store = mutableListOf<ProfileEntity>()
-    private var nextId = 1L
-    private val _flow = MutableStateFlow<ProfileEntity?>(null)
-
-    override suspend fun getLatest(): ProfileEntity? = store.lastOrNull()
-
-    override fun observeLatest(): Flow<ProfileEntity?> = _flow
-
-    override suspend fun insert(entity: ProfileEntity): Long {
-        val e = entity.copy(id = nextId++)
-        store.add(e)
-        _flow.value = e
-        return e.id
-    }
-
-    override suspend fun clear() {
-        store.clear()
-        _flow.value = null
-    }
-}
-
-/** v1.7.3 内存 MemoryFactDao（observeByTarget 用 MutableStateFlow 模拟 Room Flow 响应式刷新） */
-private class FakeMemoryFactDao : MemoryFactDao {
-    private val store = mutableListOf<MemoryFactEntity>()
-    private var nextId = 1L
-    private val _flow = MutableStateFlow<List<MemoryFactEntity>>(emptyList())
-
-    private fun refresh() {
-        _flow.value = store.sortedWith(compareByDescending<MemoryFactEntity> { it.createdAt }.thenByDescending { it.id }).toList()
-    }
-
-    override fun observeByTarget(targetId: Long): Flow<List<MemoryFactEntity>> =
-        MutableStateFlow(store.filter { it.targetId == targetId }.sortedByDescending { it.id })
-
-    override fun observeAll(): Flow<List<MemoryFactEntity>> = _flow
-
-    /** v1.9.4：DAO 新增全量拉取（targetId+createdAt+id 升序，与生产 SQL 排序一致） */
-    override suspend fun listAll(): List<MemoryFactEntity> =
-        store.sortedWith(compareBy({ it.targetId }, { it.createdAt }, { it.id }))
-
-    override suspend fun listByTarget(targetId: Long): List<MemoryFactEntity> =
-        store.filter { it.targetId == targetId }.sortedByDescending { it.id }
-
-    override suspend fun countByTarget(targetId: Long): Int = store.count { it.targetId == targetId }
-
-    override suspend fun getById(id: Long): MemoryFactEntity? = store.firstOrNull { it.id == id }
-
-    override suspend fun insert(entity: MemoryFactEntity): Long {
-        // v1.7.4：插入前挂起点模拟真实 Room IO 并发交错（migrate 并发测试依赖：检查-插入非原子）
-        kotlinx.coroutines.yield()
-        val e = entity.copy(id = nextId++)
-        store.add(e)
-        refresh()
-        return e.id
-    }
-
-    override suspend fun update(entity: MemoryFactEntity) {
-        val idx = store.indexOfFirst { it.id == entity.id }
-        if (idx >= 0) store[idx] = entity
-        refresh()
-    }
-
-    override suspend fun deleteById(id: Long) {
-        store.removeAll { it.id == id }
-        refresh()
-    }
-
-    override suspend fun deleteByTarget(targetId: Long) {
-        store.removeAll { it.targetId == targetId }
-        refresh()
-    }
-
-    override suspend fun clear() {
-        store.clear()
-        refresh()
-    }
-}
+// F57 精简：内存假 DAO 改用同包共享夹具（FakeDaos.kt；原 Fake* 私有拷贝删除）

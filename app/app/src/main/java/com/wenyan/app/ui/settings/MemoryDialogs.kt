@@ -51,7 +51,7 @@ fun MemoryNameDialog(
                 textStyle = GtjType.Body,
                 singleLine = true,
                 shape = GtjShape.md,
-                colors = memoryFieldColors(),
+                colors = editFieldColors(),
             )
         },
         confirmButton = {
@@ -95,16 +95,6 @@ fun MemoryDeleteDialog(
         },
     )
 }
-
-/** 记忆弹窗输入框配色（对齐 ProviderEditScreen.EditField：accent 聚焦边 / surface 底） */
-@Composable
-private fun memoryFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = LocalGtjColors.current.accent,
-    unfocusedBorderColor = LocalGtjColors.current.border,
-    focusedContainerColor = LocalGtjColors.current.surface,
-    unfocusedContainerColor = LocalGtjColors.current.surface,
-    cursorColor = LocalGtjColors.current.accent,
-)
 
 /** v1.7.3 T2 @Preview：新建记忆弹窗 */
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFFF6F0E6)

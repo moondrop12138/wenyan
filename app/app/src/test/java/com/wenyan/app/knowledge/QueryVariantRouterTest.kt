@@ -1,56 +1,29 @@
 package com.wenyan.app.knowledge
 
-import org.json.JSONArray
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * O7 重方案评测：LLM 生成的 query 变体库路由 vs contains / BM25 / 画像精排。
+ * F68/F28 修复：脚手架改用共享 [KnowledgeEvalCorpus]（原为第四份逐字拷贝；且本测试原先读的
+ * routes.json 是与 routes-v2.json 字节级相同的冻结副本——副本已删除，统一读生产使用的 v2，
+ * 消除「改 v2 忘了 v1」的双份静默分叉）。
  */
 class QueryVariantRouterTest {
 
-    private val userDir = System.getProperty("user.dir") ?: "."
-    private val roots = listOf(File(userDir), File(userDir, "app"))
-
     @Test
     fun `evaluate query variant routing`() {
-        val routesFile = roots.map { File(it, "src/main/assets/knowledge/routes.json") }.firstOrNull { it.exists() }
-            ?: error("routes.json not found")
-        val queriesFile = roots.map { File(it, "src/test/resources/route_eval_queries.json") }.firstOrNull { it.exists() }
-            ?: error("route_eval_queries.json not found")
-        val variantsFile = roots.map { File(it, "src/test/resources/route_query_variants.json") }.firstOrNull { it.exists() }
-            ?: error("route_query_variants.json not found")
-
-        val index = KnowledgeIndex(routesFile.readText(Charsets.UTF_8))
-        val docTexts = mutableMapOf<String, String>()
-        for (doc in index.allDocs()) {
-            val f = File(routesFile.parentFile, doc)
-            if (f.exists()) docTexts[doc] = f.readText(Charsets.UTF_8)
-        }
+        val index = KnowledgeEvalCorpus.loadIndex()
+        val docTexts = KnowledgeEvalCorpus.loadDocTexts(index)
         val profiles = DocProfile.build(index, docTexts)
+        val variants = KnowledgeEvalCorpus.loadVariants()
+        val queries = KnowledgeEvalCorpus.loadQueries()
 
-        val variantsRoot = JSONObject(variantsFile.readText(Charsets.UTF_8))
-        val variants = variantsRoot.keys().asSequence().associateWith { key ->
-            val arr = variantsRoot.getJSONArray(key)
-            (0 until arr.length()).map { arr.getString(it) }
-        }
-
-        val routesRoot = JSONObject(routesFile.readText(Charsets.UTF_8))
-        val allFileKeys = routesRoot.getJSONObject("files").keys().asSequence().toList()
+        val allFileKeys = KnowledgeEvalCorpus.loadRouteFileKeys()
         assertEquals("query 变体库应覆盖全部 41 份文档", allFileKeys.size, variants.size)
         assertTrue("query 变体库缺少文档", allFileKeys.all { variants.containsKey(it) })
         assertTrue("每份文档应至少有 20 条变体", variants.values.all { it.size >= 20 })
-
-        val root = JSONArray(queriesFile.readText(Charsets.UTF_8))
-        val queries = (0 until root.length()).map { i ->
-            val obj = root.getJSONObject(i)
-            val expectedArr = obj.optJSONArray("expectedDocs") ?: JSONArray()
-            val expected = (0 until expectedArr.length()).map { j -> expectedArr.getString(j) }
-            RouteEvaluator.EvalQuery(obj.getString("query"), expected)
-        }
 
         val variantRouter = QueryVariantRouter(variants)
         val hybridRouter = HybridVariantRouter(index, variants)
@@ -96,8 +69,5 @@ class QueryVariantRouterTest {
         assertTrue("hybridRouter(fillOne) should beat contains on F1", f1(hybridRouterRes) > f1(containsRes))
     }
 
-    private fun f1(r: RouteEvaluator.EvalResult): Double {
-        val sum = r.precisionAtK + r.recallAtK
-        return if (sum <= 0.0) 0.0 else 2.0 * r.precisionAtK * r.recallAtK / sum
-    }
+    private fun f1(r: RouteEvaluator.EvalResult): Double = KnowledgeEvalCorpus.f1(r)
 }

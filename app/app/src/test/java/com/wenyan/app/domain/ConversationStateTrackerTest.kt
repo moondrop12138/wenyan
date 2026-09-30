@@ -145,8 +145,15 @@ class ConversationStateTrackerTest {
 
     @Test
     fun `共享关键词判为同题`() {
+        // F60 修复：原用例（输入「那个相亲对象终于回了」）由 FOLLOW_UP_PATTERN 的 ^那 分支
+        // 短路（删掉 ^那 后又落在 <30 字的默认兜底 true 上），且 sharesKeyword 对该组输入实际
+        // 返回 false——关键词共享正路径全测试集零覆盖，用例名不副实。现改为 ≥30 字、
+        // 无追问/换题开场、仅靠共享 bigram「相亲」命中（≥30 字时兜底分支会判 false，
+        // sharesKeyword / F88 分词回归本用例必红）
         val state = ConversationState(topicSummary = "相亲对象三天没回消息")
-        assertTrue(tracker.isSameTopic(state, "那个相亲对象终于回了"))
+        assertTrue(
+            tracker.isSameTopic(state, "今天想起来还是很难受，相亲这件事让我整晚睡不着，不知道还能不能补救"),
+        )
     }
 
     @Test

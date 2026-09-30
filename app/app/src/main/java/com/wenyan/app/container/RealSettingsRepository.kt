@@ -40,12 +40,16 @@ import kotlinx.coroutines.flow.toList
 class RealSettingsRepository(
     private val context: Context,
     private val dataStore: DataStoreSettings,
+    /** F11：容器注入的进程内共享 OkHttpClient（testConnection 逐模型新建 LlmClient 复用连接池） */
+    private val httpClient: okhttp3.OkHttpClient,
     private val providerRepository: ProviderRepository,
     private val profileRepository: ProfileRepository,
     private val conversationRepository: ConversationRepository,
     private val backupRepository: BackupRepository,
     private val crashLogStore: CrashLogStore,
     private val updateChecker: UpdateChecker,
+    /** F10 修复：清库/备份恢复后复位聊天侧内存会话态（由容器注入 RealChatRepository 联动） */
+    private val onChatSessionInvalidated: () -> Unit = {},
 ) : SettingsRepository {
 
     override val providers: Flow<List<ProviderInfo>> =
@@ -98,14 +102,8 @@ class RealSettingsRepository(
         return id
     }
 
-    /**
-     * v1.7.2 改名兼容入口（v1.7.3 起 note 代码层废弃：只改名称，不再写入 note——防旧数据污染）；
-     * 档案详情页编辑走 updateTargetDetails（全字段）。
-     */
-    override suspend fun updateTarget(id: Long, name: String, note: String) {
-        val e = profileRepository.getTarget(id) ?: return
-        profileRepository.updateTarget(e.copy(codeName = name.trim()))
-    }
+    // F52 精简：移除 updateTarget(id, name, note) override——v1.7.3 编辑弹窗移除后契约方法
+    // 零调用（档案编辑走 updateTargetDetails 全字段方法）
 
     /**
      * v1.7.2 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条，id DESC=最新）；无剩余 → null
@@ -231,6 +229,11 @@ class RealSettingsRepository(
             dataStore.setCurrentModelId(null)
             dataStore.setVisionModelId(null)
             dataStore.setActiveTargetId(null)
+            // F10 修复：current_session_id 同类失效槽位（M16 清单漏项）——旧会话行已被
+            // restore 清空重建、id 重排，残留键指向不存在/无关的行；置空并复位聊天侧
+            // 内存会话态，防下一条消息复用悬空 id 触发外键静默失败
+            dataStore.setCurrentSessionId(null)
+            onChatSessionInvalidated()
             AppLogger.i("backup_restore_ok")
         } else {
             AppLogger.i("backup_restore_fail")
@@ -333,7 +336,8 @@ class RealSettingsRepository(
         val models = providerRepository.listModels(providerId)
         if (models.isEmpty()) return LlmError("no_model", "该提供商还没有模型，请先添加模型", false)
         return testAllModels(models.map { it.name }) { name ->
-            val events = LlmClient(provider.baseUrl, apiKey).stream(
+            // F11：复用容器共享 OkHttpClient（原模型循环内每模型各建一个全新 client）
+            val events = LlmClient(provider.baseUrl, apiKey, client = httpClient).stream(
                 ChatRequest(
                     model = name,
                     system = "你好",
@@ -412,6 +416,9 @@ class RealSettingsRepository(
         dataStore.clearAll()
         // v1.7.3 隐私联动：删除崩溃日志目录与下载缓存（含事实表，随 profileRepository.clearAll 的 memoryFactDao.clear）
         crashLogStore.clear()
+        // F10 修复：聊天侧内存 sessionId 未复位会让下一条消息复用已删除的会话 id，
+        // addMessage 违反外键静默失败（用户消息丢失且无提示）；复位回空态
+        onChatSessionInvalidated()
         AppLogger.i("privacy_wipe_all")
     }
 }

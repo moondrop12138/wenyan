@@ -7,6 +7,7 @@ import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
 import com.wenyan.app.data.db.MemoryFactEntity
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.image.ImageCompressor
+import com.wenyan.app.data.image.ImageSpec
 import com.wenyan.app.data.repository.ConversationRepository
 import com.wenyan.app.data.repository.ProfileRepository
 import com.wenyan.app.data.repository.ProviderRepository
@@ -32,6 +33,7 @@ import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.contract.StreamEvent
 import com.wenyan.app.ui.contract.StreamingState
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -72,6 +74,9 @@ import java.util.concurrent.ConcurrentHashMap
 class RealChatRepository(
     private val context: Context,
     private val dataStore: DataStoreSettings,
+    /** F11：容器注入的进程内共享 OkHttpClient（LlmClient 默认参数每次 build 新实例，
+     *  独立 ConnectionPool/Dispatcher——跨请求重新 TCP+TLS 握手 + 线程池 churn） */
+    private val httpClient: OkHttpClient,
     private val conversationRepository: ConversationRepository,
     private val profileRepository: ProfileRepository,
     private val providerRepository: ProviderRepository,
@@ -225,8 +230,9 @@ class RealChatRepository(
             models.firstOrNull { it.id == id }?.name ?: "未配置"
         }
 
-    override fun sendText(text: String, mode: AnalysisMode): Flow<StreamEvent> =
-        sendTextFlow(text, mode, persistUser = true, owner = null)
+    // F45 精简：删除 sendText/analyzeImages/confirmTranscription 三个非异步流式薄包装——
+    // v1.3.1 async 族引入后全仓库零调用（消费方统一走 *Async + streamingState 中枢），
+    // 契约与实现一并移除；私有 *Flow 实现保留（被 async 入口复用）
 
     /**
      * v1.3.1 persistUser=false 供失败重试：用户消息首次已落库，重试不重复落库、不重复更新状态机。
@@ -362,12 +368,6 @@ class RealChatRepository(
         }
     }
 
-    override fun analyzeImages(
-        uris: List<Uri>,
-        text: String,
-        mode: AnalysisMode,
-    ): Flow<StreamEvent> = analyzeImagesFlow(uris, text, mode, persistUser = true, owner = null)
-
     /**
      * v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库。
      * v1.9.4 [owner] 同 [sendTextFlow]：async 入口传入归属句柄，同步入口传 null。
@@ -398,6 +398,17 @@ class RealChatRepository(
         // v1.6.1 多图：全部压缩成功才进入落库（任一失败 → 整体报错，未写任何消息，ViewModel 恢复整批待发送）
         val dataUrls = mutableListOf<String>()
         for (uri in uris) {
+            // F18 修复：读取前置大小预检——原实现先把整个文件 readBytes() 读进内存，
+            // ImageCompressor 才做 20MB 检查；超过堆上限的超大图在守卫生效前就可能 OOM，
+            // 20MB 上限实际只防「解码」不防「读取」。openAssetFileDescriptor 拿不到长度
+            // （-1 = 未知/流式提供方）时回退原全量读取路径
+            val declaredBytes = runCatching {
+                context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
+            }.getOrNull()
+            if (declaredBytes != null && declaredBytes >= 0 && ImageSpec.isTooLarge(declaredBytes)) {
+                emit(StreamEvent.Error(LlmError("TOO_LARGE", ImageSpec.IMAGE_TOO_LARGE_MESSAGE, false)))
+                return@flow
+            }
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: run {
                     emit(StreamEvent.Error(LlmError("READ_FAILED", "图片读取失败，请重试", false)))
@@ -464,9 +475,6 @@ class RealChatRepository(
             }
         }
     }
-
-    override fun confirmTranscription(transcription: String, sid: Long?): Flow<StreamEvent> =
-        confirmTranscriptionFlow(transcription, sid, owner = null)
 
     /** v1.9.4：实现体带 [StreamStateHost.Handle]（async 入口经 launchStream 传入；同步入口传 null） */
     private fun confirmTranscriptionFlow(
@@ -540,6 +548,22 @@ class RealChatRepository(
         // v1.9.4 用户主动选择会话：标记竞态 + 写穿持久化（冷启动可恢复）
         sessionChosenByUser = true
         persistSessionIdAsync(sessionId)
+    }
+
+    /**
+     * F10 修复：清库/备份恢复后的会话态复位（供 RealSettingsRepository 联动调用，
+     * 不上 ChatRepository 契约）。wipeAll/importBackup 清空重建 session 表后，内存
+     * sessionId 若仍指向已删除行，下一条消息 ensureSession 会直接复用悬空 id →
+     * addMessage 违反 message.sessionId 外键（PRAGMA foreign_keys=ON）静默失败，
+     * 用户消息丢失且 UI 无任何提示。这里与 startNewSession 同语义回空态：
+     * 置空内存 id + 写穿清持久化键，下次发送时 ensureSession 新建会话；
+     * 同步复位冷启动恢复竞态标记。persistSessionIdAsync 自带「写前复核当前值」
+     * 竞态护栏，期间用户已切新会话则该写自动放弃。
+     */
+    fun invalidateSessionState() {
+        sessionChosenByUser = false
+        sessionId.value = null
+        persistSessionIdAsync(null)
     }
 
     override suspend fun startNewSession() {
@@ -694,7 +718,8 @@ class RealChatRepository(
         val model = resolveModel() ?: return null
         val provider = providerRepository.getProvider(model.providerId) ?: return null
         val apiKey = providerRepository.decryptApiKey(provider.id) ?: return null
-        return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey))
+        // F11：复用容器共享 OkHttpClient（原每次调用经默认参数新建，连接池零复用）
+        return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey, client = httpClient))
     }
 
     private suspend fun resolveModel() = currentModelId.first()?.let { providerRepository.getModel(it) }
@@ -704,7 +729,7 @@ class RealChatRepository(
         val model = providerRepository.getModel(id) ?: return null
         val provider = providerRepository.getProvider(model.providerId) ?: return null
         val apiKey = providerRepository.decryptApiKey(provider.id) ?: return null
-        return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey))
+        return ResolvedClient(model.name, LlmClient(provider.baseUrl, apiKey, client = httpClient))
     }
 
     /**

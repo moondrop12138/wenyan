@@ -31,7 +31,6 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
@@ -62,7 +61,7 @@ enum class GlassFill {
 /**
  * 液态玻璃引擎 · v1.9.4 扁平化对齐 web 增强 Mica——只保留 web 有的五层，逐层对应：
  * 1. 渐变填充：[GlassFill] 两组（Frost/Card，styles.css --glass / --wy-card-*）；
- * 2. backdrop 模糊：[BackdropGlass.kt]（glassBackdropContent/glassBackdropLayer + 卡片透光磨砂，
+ * 2. backdrop 模糊：[BackdropGlass.kt]（glassBackdropContent + [backdropLayer]/卡片透光磨砂，
  *    对应 web backdrop-filter: blur() saturate(170%)）；
  * 3. 1px 描边：外圈读 glassBorder（= web 1px solid var(--glass-border)，borderColor 可覆盖）；
  * 4. 顶边内高光：**只沿顶边一条**渐变细线（= web .edge::before），见下方「内凹改版」；
@@ -106,8 +105,13 @@ enum class GlassFill {
  * @param backdrop v1.9.4 卡片透光磨砂开关（默认 true）：页面 [LocalGlassBackdrop] 有层且
  *  API 31+ 时，在玻璃填充之下垫真实高斯模糊（取样页面 record 的流光背景层，防自反馈见
  *  BackdropGlass.kt）；null/低版本自动回退现状半透明，无设置开关。已显式接入全量磨砂的
- *  悬浮面（ChatScreen 顶栏/输入栏，glassBackdropLayer 取样背景+内容）与本玻璃内部小件
+ *  悬浮面（ChatScreen 顶栏/输入栏，经 [backdropLayer] 取样背景+内容）与本玻璃内部小件
  *  （顶栏模型 pill/状态点）传 false 防双重模糊/观感割裂
+ * @param backdropLayer F41 修复：悬浮栏显式传入的全量磨砂层（[rememberGlassBackdropLayer]
+ *  创建，取样「背景+内容」层）。原实现经独立的 glassBackdropLayer modifier 垫在链最底层，
+ *  磨砂画在本面栏级投影**之前**——不透明磨砂被 α.30/.40 投影整体压暗，与卡片路径
+ *  （投影之后、填充之前）层级矛盾。现由本函数在 onDrawBehind 内紧随投影之后绘制磨砂，
+ *  两条路径层级统一；null 时回退 [backdrop] 的卡片级磨砂逻辑
  *
  * v1.8.1 B4：移除 glowPositions/glowIntensities——dead path（接收后从未使用）且引发 60fps 重组。
  * v1.9.4 评审修复：移除 scrollVelocity 死参数（接收后从未消费）与死 API liquidGlassScrollAware
@@ -121,6 +125,7 @@ fun Modifier.liquidGlass(
     borderColor: Color? = null,
     enablePressAnimation: Boolean = true,
     backdrop: Boolean = true,
+    backdropLayer: GlassBackdropLayer? = null,
     shadowColor: Color? = null,
     shadowFeather: Dp = 20.dp,
     shadowLift: Dp = 14.dp,
@@ -162,11 +167,15 @@ fun Modifier.liquidGlass(
                 scaleY = pressScale
             }
         }
-        // v1.9.4 卡片透光磨砂：玻璃面 root 位置由 onGloballyPositioned 写入 holder（snapshot
-        // 等值短路），onDrawBehind 读——滚动/布局变化只触发该玻璃重绘，不触发重组
+        // v1.9.4 卡片透光磨砂 + F41 悬浮栏全量磨砂：玻璃面 root 位置由 onGloballyPositioned
+        // 写入 holder（snapshot 等值短路），onDrawBehind 读——滚动/布局变化只触发该玻璃重绘，
+        // 不触发重组
         .then(
-            if (cardBackdropLayer != null) {
-                Modifier.onGloballyPositioned { cardBackdropLayer.barPositionInRoot = it.positionInRoot() }
+            if (cardBackdropLayer != null || backdropLayer != null) {
+                Modifier.onGloballyPositioned {
+                    backdropLayer?.barPositionInRoot = it.positionInRoot()
+                    cardBackdropLayer?.barPositionInRoot = it.positionInRoot()
+                }
             } else {
                 Modifier
             },
@@ -297,26 +306,16 @@ fun Modifier.liquidGlass(
                     }
                 }
 
-                // v1.9.4 卡片透光磨砂：把模糊后的背景层 clip 进玻璃形状，垫在玻璃填充之下
-                // （投影之后、填充之前）。recordBlur 读 barPositionInRoot/backdrop position
-                // state（draw 阶段观察）；模糊层 display list 持久引用背景层 RenderNode——
-                // 流光动画每帧更新背景层，卡片静止时无需重录即得最新模糊（除本 record 外零分配）。
-                if (cardBackdropLayer != null) {
-                    cardBackdropLayer.recordBlur(
-                        density = this,
-                        layoutDirection = layoutDirection,
-                        barSize = size,
-                        barPositionInRoot = cardBackdropLayer.barPositionInRoot,
-                    )
-                    // v1.9.4 评审修复（磨砂影像偏移）：record 时玻璃左上角的内容在层内
-                    // (cardPad,cardPad)，drawLayer 把层的 (0,0) 画在玻璃 (0,0)——不反向平移
-                    // 则卡片磨砂影像整体向右下偏移一个 cardSamplePadding（8dp）。translate(-pad)
-                    // 后层内 (pad,pad) 落回玻璃 (0,0)；pad 由 recordBlur 写入 recordedPadPx 缓存。
-                    clipPath(fillPath) {
-                        translate(-cardBackdropLayer.recordedPadPx, -cardBackdropLayer.recordedPadPx) {
-                            drawLayer(cardBackdropLayer.blurLayer)
-                        }
-                    }
+                // 磨砂垫层：投影之后、玻璃填充之前（卡片路径的原有层级）。
+                // F41 修复：显式传入的悬浮栏全量磨砂层优先——原独立 glassBackdropLayer modifier
+                // 把不透明磨砂垫在链最底层，本面的 α.30/.40 栏级投影画在磨砂之上把整条栏压暗；
+                // 现与卡片路径同序。未传入时回退卡片透光磨砂（取样纯背景层防自反馈）：
+                // recordBlur 读 barPositionInRoot/backdrop position state（draw 阶段观察）；
+                // 模糊层 display list 持久引用取样层 RenderNode——流光动画每帧更新取样层，
+                // 玻璃静止时无需重录即得最新模糊（除本 record 外零分配）。
+                val activeBackdropLayer = backdropLayer ?: cardBackdropLayer
+                if (activeBackdropLayer != null) {
+                    drawBackdropBlur(activeBackdropLayer, fillPath)
                 }
 
                 // ② 玻璃填充（Mica 纵向渐变 → 底下光斑/背景透出；backdrop 模糊层由独立 modifier 垫在本层之下）

@@ -74,8 +74,15 @@ fun GlowBackground(
 
     if (!reduced) {
         LaunchedEffect(Unit) {
+            // F42 修复：t 起点取首帧（自挂载起的相对时间），不再直接用开机纪元绝对帧时间——
+            // 长开机后 t 达上万，float32 ulp(t) 大于每帧相位增量，sin 大参数精度劣化使
+            // 光斑漂移变成可见的跳格（同 FluidBackground 已修的同根因，两文件统一写法）
+            var startNanos = 0L
             while (currentCoroutineContext().isActive) {
-                withInfiniteAnimationFrameNanos { frameNanos = it }
+                withInfiniteAnimationFrameNanos { now ->
+                    if (startNanos == 0L) startNanos = now
+                    frameNanos = now - startNanos
+                }
             }
         }
     }

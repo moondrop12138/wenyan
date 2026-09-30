@@ -15,12 +15,14 @@ class KnowledgeIndexTest {
           "files": {
             "practical/实战话术编排器：从一句回复到后续分支.md": {"title": "实战话术编排器"},
             "knowledge/07-沟通冲突与修复.md": {"title": "沟通冲突与修复"},
-            "knowledge/17-中国法律安全与危机转介.md": {"title": "安全转介"}
+            "knowledge/17-中国法律安全与危机转介.md": {"title": "安全转介"},
+            "knowledge/08-嫉妒与吃醋.md": {"title": "嫉妒与吃醋"}
           },
           "routes": [
             {"keywords": ["回复", "怎么回", "话术"], "docs": ["practical/实战话术编排器：从一句回复到后续分支.md"]},
             {"keywords": ["冲突", "吵架", "矛盾"], "docs": ["knowledge/07-沟通冲突与修复.md"]},
-            {"keywords": ["家暴", "跟踪", "自杀"], "docs": ["knowledge/17-中国法律安全与危机转介.md"]}
+            {"keywords": ["家暴", "跟踪", "自杀"], "docs": ["knowledge/17-中国法律安全与危机转介.md"]},
+            {"keywords": ["吃醋", "嫉妒"], "docs": ["knowledge/08-嫉妒与吃醋.md"]}
           ]
         }
     """.trimIndent()
@@ -50,7 +52,10 @@ class KnowledgeIndexTest {
     @Test
     fun `route returns at most 3 docs`() {
         val index = KnowledgeIndex(fakeRoutesJson)
-        val docs = index.route("话术冲突怎么回")
+        // F67 修复：原 fixture 全部路由合计只有 3 份文档（cap-3 被删掉该断言也不会失败，
+        // 恒真）。现 fixture 增加第 4 条路由/文档，输入命中全部 4 条路由——无 cap 实现会
+        // 返回 4 份，cap-3 上限逻辑真正被测到
+        val docs = index.route("回复冲突跟踪吃醋")
         assertTrue(docs.size <= 3)
         assertEquals(docs.size, docs.distinct().size)
     }

@@ -131,17 +131,16 @@ fun StepFourGoal(draft: OnboardingDraft, onChange: (OnboardingDraft) -> Unit) {
             // 对比度：浅色 warn(#D97706) 白底仅 3.2:1，改用 warmOn(#B45309) 5.0:1 达标
             Text("会先安抚再给完整分析", style = GtjType.BodySm, color = LocalGtjColors.current.warmOn)
         }
-        var urgent by remember { mutableStateOf(draft.urgentReply) }
+        // F49 精简：删除 draft.urgentReply 的冗余本地镜像（remember 副本 + 双写双读）——
+        // vm.draft 本身是 mutableStateOf，直读即可订阅重组；副本此前靠「步骤切换时离开组合
+        // 重建」这一隐含机制重新同步
         androidx.compose.foundation.layout.Row(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
             Text("眼下有没有必须马上回的话", style = GtjType.Label, color = LocalGtjColors.current.fg, modifier = Modifier.weight(1f))
             Switch(
-                checked = urgent,
-                onCheckedChange = {
-                    urgent = it
-                    onChange(draft.copy(urgentReply = it))
-                },
+                checked = draft.urgentReply,
+                onCheckedChange = { onChange(draft.copy(urgentReply = it)) },
                 // 无障碍：Switch 无相邻文本语义，显式关联 label
                 modifier = Modifier.semantics { contentDescription = "眼下有没有必须马上回的话" },
                 colors = SwitchDefaults.colors(
@@ -151,7 +150,7 @@ fun StepFourGoal(draft: OnboardingDraft, onChange: (OnboardingDraft) -> Unit) {
                 ),
             )
         }
-        if (urgent) {
+        if (draft.urgentReply) {
             DraftTextField(
                 value = draft.urgentText,
                 placeholder = "要回的那句话",

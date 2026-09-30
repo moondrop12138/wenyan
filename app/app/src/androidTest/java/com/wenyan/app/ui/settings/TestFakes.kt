@@ -26,7 +26,6 @@ class FakeSettingsRepository : SettingsRepository {
     val created = mutableListOf<String>()
     val activated = mutableListOf<Long>()
     val deleted = mutableListOf<Long>()
-    val edited = mutableListOf<Triple<Long, String, String>>()
 
     override val providers = MutableStateFlow<List<ProviderInfo>>(emptyList())
     override val models = MutableStateFlow<List<ModelInfo>>(emptyList())
@@ -52,18 +51,18 @@ class FakeSettingsRepository : SettingsRepository {
         return id
     }
 
-    override suspend fun updateTarget(id: Long, name: String, note: String) {
-        edited.add(Triple(id, name, note))
-        targetsFlow.value = targetsFlow.value.map {
-            if (it.id == id) it.copy(name = name.trim()) else it
-        }
-    }
-
     override suspend fun deleteTarget(id: Long) {
         deleted.add(id)
         targetsFlow.value = targetsFlow.value.filterNot { it.id == id }
         if (activeFlow.value == id) {
-            activeFlow.value = targetsFlow.value.firstOrNull()?.id
+            // F08 修复：与 RealSettingsRepository 契约对齐——回退目标取 id 最大的剩余档案
+            //（observeTargets 按 id DESC「最新在前」，真实实现取 firstOrNull 即最新一条），
+            // 并同步重映射 isActive（真实实现每次发射由 it.id == activeId 派生，
+            // 删激活档案后剩余档案必有一个 isActive=true），不再留下「activeFlow 指向
+            // 剩余档案但无人 isActive」的悬空选中态
+            val fallback = targetsFlow.value.maxByOrNull { it.id }?.id
+            activeFlow.value = fallback
+            targetsFlow.value = targetsFlow.value.map { it.copy(isActive = it.id == fallback) }
         }
     }
 
@@ -161,9 +160,6 @@ class FakeAppContainer(
         override val currentModelName: Flow<String> = MutableStateFlow("未配置")
         override val memoryReceiptEvents: Flow<String> = kotlinx.coroutines.flow.emptyFlow()
         override val noticeEvents: Flow<String> = kotlinx.coroutines.flow.emptyFlow()
-        override fun sendText(text: String, mode: com.wenyan.app.ui.contract.AnalysisMode) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
-        override fun analyzeImages(uris: List<Uri>, text: String, mode: com.wenyan.app.ui.contract.AnalysisMode) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
-        override fun confirmTranscription(transcription: String, sid: Long?) = kotlinx.coroutines.flow.flowOf(com.wenyan.app.ui.contract.StreamEvent.Done)
         override fun sendTextAsync(text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean) = Unit
         override fun analyzeImagesAsync(uris: List<Uri>, text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean) = Unit
         override fun confirmTranscriptionAsync(transcription: String, sid: Long?) = Unit

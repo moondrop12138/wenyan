@@ -73,7 +73,7 @@ object SseParser {
         // 遇 "error":null、字符串 error、content 为数组等畸形结构抛 JSONException 冲出监听器，
         // 进 okhttp-sse onFailure → 已收 200+response → UNKNOWN（可重试）→ 整流重发最多
         // 3 次重复计费，违反「非法 chunk = 不可重试 PARSE_ERROR」契约。
-        // 现全改 opt*/isNull 防御取值；类型不符的结构一律归一为 parseError（不可重试）。
+        // 现全改 opt*/isNull 防御取值；结构级类型不符（缺 choices / 元素非对象）归一为 parseError（不可重试）。
 
         // 顶层含 error 键：流中错误（llm-contract §3.4）；值为 null 的 error 是部分网关的
         // 心跳/占位帧——既非错误也非非法，忽略该帧
@@ -86,13 +86,13 @@ object SseParser {
                     finishReason = null,
                     streamError = StreamError(
                         message = err.optString("message", ""),
-                        // type 桌面端 org.json 的 getString 对非字符串会抛异常 → opt+toString 兜底
-                        type = if (err.has("type") && !err.isNull("type")) err.optScalarString("type") else null,
+                        // type 桌面端 org.json 的 getString 对非字符串会抛异常 → optStringOrNull 兜底
+                        type = if (err.has("type") && !err.isNull("type")) err.optStringOrNull("type") else null,
                     ),
                 )
             } else {
                 // error 为字符串/数字等非对象：字面量即错误消息
-                Chunk(null, null, StreamError(message = json.optScalarString("error") ?: "", type = null))
+                Chunk(null, null, StreamError(message = json.optStringOrNull("error") ?: "", type = null))
             }
         }
 
@@ -103,31 +103,25 @@ object SseParser {
             return Chunk(contentDelta = null, finishReason = null, streamError = null, parseError = true)
         }
 
-        return try {
-            val delta = first.optJSONObject("delta")
-            // delta.content 为 null 或缺失时跳过（部分模型第一帧只有 role）；类型不符 → parseError
-            fun readTextField(obj: JsonObject, key: String): String? {
-                if (!obj.has(key) || obj.isNull(key)) return null
-                // M9: 数字等标量也宽容收下（optScalarString），仅缺失/显式 null 才跳过——
-                // 个别网关把 content 序列化成数字字面量时不再整帧 PARSE_ERROR
-                return obj.optScalarString(key)
-            }
-            val content = delta?.let { readTextField(it, "content") }
-            // reasoning_content（深度思考模型）单独抽出：拼入推理通道，不进正文（llm-contract §3.2）
-            val reasoning = delta?.let { readTextField(it, "reasoning_content") }
-            val finishReason = readTextField(first, "finish_reason")
-
-            Chunk(
-                contentDelta = content,
-                finishReason = finishReason,
-                streamError = null,
-                reasoningDelta = reasoning,
-            )
-        } catch (e: SseFormatException) {
-            Chunk(contentDelta = null, finishReason = null, streamError = null, parseError = true)
+        // F98 清理：原 try/catch(SseFormatException) 永不可达——防御取值后全链路无抛出点，删除。
+        val delta = first.optJSONObject("delta")
+        // delta.content 为 null 或缺失时跳过（部分模型第一帧只有 role）；数字等标量宽容收下
+        fun readTextField(obj: JsonObject, key: String): String? {
+            if (!obj.has(key) || obj.isNull(key)) return null
+            // M9: 数字等标量也宽容收下（optStringOrNull），仅缺失/显式 null 才跳过——
+            // 个别网关把 content 序列化成数字字面量时不再整帧 PARSE_ERROR
+            return obj.optStringOrNull(key)
         }
+        val content = delta?.let { readTextField(it, "content") }
+        // reasoning_content（深度思考模型）单独抽出：拼入推理通道，不进正文（llm-contract §3.2）
+        val reasoning = delta?.let { readTextField(it, "reasoning_content") }
+        val finishReason = readTextField(first, "finish_reason")
+
+        return Chunk(
+            contentDelta = content,
+            finishReason = finishReason,
+            streamError = null,
+            reasoningDelta = reasoning,
+        )
     }
 }
-
-/** M9: 字段类型不符契约（期望字符串）——上层捕获后归一为 parseError */
-private class SseFormatException(val field: String) : Exception("field '$field' has unexpected type")

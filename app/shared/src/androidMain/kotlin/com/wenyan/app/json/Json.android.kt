@@ -22,13 +22,8 @@ private class AndroidJsonObject(internal val delegate: org.json.JSONObject) : Js
     override fun optBoolean(key: String, fallback: Boolean): Boolean = delegate.optBoolean(key, fallback)
     override fun optJSONObject(key: String): JsonObject? = delegate.optJSONObject(key)?.let { AndroidJsonObject(it) }
     override fun optJSONArray(key: String): JsonArray? = delegate.optJSONArray(key)?.let { AndroidJsonArray(it) }
-    override fun getJSONObject(key: String): JsonObject = AndroidJsonObject(delegate.getJSONObject(key))
     override fun has(key: String): Boolean = delegate.has(key)
-    override fun optScalarString(key: String): String? =
-        if (delegate.isNull(key)) null else delegate.opt(key)?.toString()
-
     override fun isNull(key: String): Boolean = delegate.isNull(key)
-    override fun getString(key: String): String = delegate.getString(key)
     override fun keys(): List<String> = delegate.keys().asSequence().toList()
     override fun toString(): String = delegate.toString()
 }
@@ -36,10 +31,18 @@ private class AndroidJsonObject(internal val delegate: org.json.JSONObject) : Js
 private class AndroidJsonArray(internal val delegate: org.json.JSONArray) : JsonArray {
     override fun length(): Int = delegate.length()
     override fun optJSONObject(index: Int): JsonObject? = delegate.optJSONObject(index)?.let { AndroidJsonObject(it) }
-    override fun getJSONObject(index: Int): JsonObject = AndroidJsonObject(delegate.getJSONObject(index))
     override fun opt(index: Int): Any? = wrap(delegate.opt(index))
-    override fun optString(index: Int, fallback: String): String = delegate.optString(index, fallback)
-    override fun getString(index: Int): String = delegate.getString(index)
+
+    // F123 修复：Android org.json 对数组中显式 null 元素的 optString 返回字面量 "null"
+    // （桌面端返回 fallback，M7 同款平台分歧）——isNull 预检后双端一致，
+    // 模型产出的 null 元素不再变成 "null" 字符串混进解析结果。
+    override fun optString(index: Int, fallback: String): String =
+        if (delegate.isNull(index)) fallback else delegate.optString(index, fallback)
+
+    /** 显式 null 按缺失处理返回空串（桌面端 org.json 此处抛 JSONException；本端不再产出 "null" 字面量） */
+    override fun getString(index: Int): String =
+        if (delegate.isNull(index)) "" else delegate.getString(index)
+
     override fun put(value: Any?): JsonArray {
         delegate.put(unwrap(value))
         return this

@@ -111,9 +111,6 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _showNameDialog = MutableStateFlow(false)
     val showNameDialog: StateFlow<Boolean> = _showNameDialog.asStateFlow()
 
-    private val _editTarget = MutableStateFlow<TargetUi?>(null)
-    val editTarget: StateFlow<TargetUi?> = _editTarget.asStateFlow()
-
     private val _deleteTarget = MutableStateFlow<TargetUi?>(null)
     val deleteTarget: StateFlow<TargetUi?> = _deleteTarget.asStateFlow()
 
@@ -262,11 +259,10 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.createTarget(name) }
     }
 
-    /** 改名 + 编辑记忆正文 */
-    fun updateTarget(id: Long, name: String, note: String) {
-        _editTarget.value = null
-        viewModelScope.launch { repo.updateTarget(id, name, note) }
-    }
+    // F52 精简：v1.7.3 移除「编辑记忆弹窗」后，editTarget 状态机（_editTarget/editTarget/
+    // requestEditTarget/dismissEditTarget/updateTarget）在生产代码中零引用（唯一调用方是给
+    // 死链路续命的测试），一并删除；repo.updateTarget 契约方法同步收敛（档案行「编辑」走
+    // onEditTarget 导航 → MemoryEdit 页的 updateTargetDetails，不再经此方法）
 
     /** 删除记忆档案（确认后；删激活项自动回退在 repo 内完成） */
     fun deleteTarget(id: Long) {
@@ -333,14 +329,6 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     fun dismissCreateTarget() {
         _showNameDialog.value = false
-    }
-
-    fun requestEditTarget(target: TargetUi) {
-        _editTarget.value = target
-    }
-
-    fun dismissEditTarget() {
-        _editTarget.value = null
     }
 
     fun requestDeleteTarget(target: TargetUi) {

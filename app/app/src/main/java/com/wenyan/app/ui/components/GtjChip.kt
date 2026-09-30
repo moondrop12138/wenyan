@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -112,10 +111,4 @@ fun ChoiceChips(
             )
         }
     }
-}
-
-/** 通用占位行间距 */
-@Composable
-fun ChipSpacer(modifier: Modifier = Modifier) {
-    Spacer(modifier = modifier.height(8.dp))
 }

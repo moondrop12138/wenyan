@@ -45,7 +45,10 @@ private fun errorUi(code: String, fallback: String): ErrorUi = when (code) {
         ErrorUi("模型不存在", "请检查模型名（可能已退役）", hasSettings = true, showRetry = false)
     LlmErrorCode.RATE_LIMITED.name -> ErrorUi("请求过于频繁或额度已用尽", "稍后重试", showCancel = true)
     LlmErrorCode.SERVER_ERROR.name -> ErrorUi("模型服务异常", "请稍后重试", showCancel = true)
-    LlmErrorCode.CONNECT_TIMEOUT.name, LlmErrorCode.READ_TIMEOUT.name, "timeout", "disconnect" ->
+    // F38 精简：删除 v1.1 遗留的裸字符串 "timeout"/"disconnect" 死分支——当前 LlmError.code
+    // 全部产出方（toLlmError 传枚举 name / LlmClient IOException 归一 / repo ad-hoc 码）均不会
+    // 产出这两个小写字面量
+    LlmErrorCode.CONNECT_TIMEOUT.name, LlmErrorCode.READ_TIMEOUT.name ->
         ErrorUi("连接中断", "可重试或停止", showCancel = true)
     // v1.7.1 终检：非 localhost 明文地址被网络安全策略拦截（对应 LlmErrorCode.UNSUPPORTED_URL）
     LlmErrorCode.UNSUPPORTED_URL.name ->

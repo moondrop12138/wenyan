@@ -22,7 +22,7 @@ interface MessageDao {
     /** 取每个会话首条 USER 消息（抽屉列表当标题用）；无消息的会话不返回 */
     @Query(
         """
-        SELECT m.sessionId AS sessionId, m.content AS firstUserText, m.createdAt AS lastMessageAt
+        SELECT m.sessionId AS sessionId, m.content AS firstUserText
         FROM message m
         INNER JOIN (
             SELECT sessionId, MIN(id) AS firstUserId

@@ -4,6 +4,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import com.wenyan.app.container.SessionTitle
 import com.wenyan.app.json.Json
 import com.wenyan.app.json.JsonObject
 
@@ -50,13 +51,13 @@ object MemoryExtractor {
         append("- expires_in：仅当信息明确有时效（如\"今天\"\"这周\"\"今晚\"相关），填 today（次日零点失效）或 week（下周一零点失效）；无时效信息填 null 或省略；\n")
         append("- 只提炼客观、可长期记住的信息，不提炼一次性情绪或建议；\n")
         if (existingNote.isNotBlank()) {
-            append("- 以下事实已记住，重复内容不要再输出：\n").append(takeCodePoints(existingNote, 2000)).append("\n")
+            append("- 以下事实已记住，重复内容不要再输出：\n").append(SessionTitle.takeCodePoints(existingNote, 2000)).append("\n")
         } else {
             append("- 没有已记住的内容。\n")
         }
         append("- 没有新事实时输出 {\"facts\":[]}。\n\n")
-        append("用户输入：").append(takeCodePoints(userInput, 1000)).append("\n")
-        append("军师回复：").append(takeCodePoints(replyText, 2000)).append("\n")
+        append("用户输入：").append(SessionTitle.takeCodePoints(userInput, 1000)).append("\n")
+        append("军师回复：").append(SessionTitle.takeCodePoints(replyText, 2000)).append("\n")
         append("输出：")
     }
 
@@ -86,7 +87,7 @@ object MemoryExtractor {
                                 val expiresIn = (item.optStringOrNull("expires_in") ?: "").trim()
                                 add(
                                     ExtractedFact(
-                                        text = takeCodePoints(text, 40),   // L5: 防切断代理对
+                                        text = SessionTitle.takeCodePoints(text, 40),   // L5: 防切断代理对
                                         kind = if (kind == KIND_HYPOTHESIS) KIND_HYPOTHESIS else KIND_FACT,
                                         expiresIn = if (expiresIn == EXPIRES_TODAY || expiresIn == EXPIRES_WEEK) expiresIn else null,
                                     ),
@@ -95,7 +96,7 @@ object MemoryExtractor {
                         }
                         is String -> {
                             val text = item.trim()
-                            if (text.isNotEmpty()) add(ExtractedFact(takeCodePoints(text, 40), KIND_FACT))   // L5
+                            if (text.isNotEmpty()) add(ExtractedFact(SessionTitle.takeCodePoints(text, 40), KIND_FACT))   // L5
                         }
                     }
                 }
@@ -157,6 +158,7 @@ object MemoryExtractor {
     /**
      * v1.7.3 事实列表合并（替代 mergeNote 的新链路）：
      * trim+去空；facts 逐条与 existing 全部片段做 overlaps 判定去重（保序追加）；
+     * 同批次内已保留的新事实也并入比对（F92 修复：模型单次输出重复事实不再双双入库）；
      * 总条数 take(limit)（默认 50）。幂等兜底：重复触发不会重复追加。
      * 纯函数，JVM 可测。
      */
@@ -168,8 +170,15 @@ object MemoryExtractor {
         val cleanExisting = existing.map { it.trim() }.filter { it.isNotEmpty() }
         val cleanFacts = facts.map { it.trim() }.filter { it.isNotEmpty() }
         if (cleanFacts.isEmpty()) return cleanExisting.take(limit)
-        val segments = cleanExisting.flatMap { splitSegments(it) }.ifEmpty { cleanExisting }
-        val toAppend = cleanFacts.filter { fact -> segments.none { seg -> overlaps(seg, fact) } }
+        val segments = cleanExisting.flatMap { splitSegments(it) }.ifEmpty { cleanExisting }.toMutableList()
+        val toAppend = buildList {
+            for (fact in cleanFacts) {
+                if (segments.none { seg -> overlaps(seg, fact) }) {
+                    add(fact)
+                    segments.addAll(splitSegments(fact))   // F92: 已保留的新事实参与后续同批次比对
+                }
+            }
+        }
         return (cleanExisting + toAppend).take(limit)
     }
 
@@ -178,7 +187,7 @@ object MemoryExtractor {
      * 按 \n。；切分 + trim + 去空 + 单条 ≤40 字。原 splitSegments 提为 public 工具。
      */
     fun splitNoteToFacts(note: String): List<String> =
-        splitSegments(note).map { takeCodePoints(it, 40) }   // L5: 防切断代理对
+        splitSegments(note).map { SessionTitle.takeCodePoints(it, 40) }   // L5: 防切断代理对
 
     /** 重叠判定：整句互含 或 长度 ≥6 字片段包含（幂等兜底，确定性可测） */
     private fun overlaps(a: String, b: String): Boolean {
@@ -186,14 +195,6 @@ object MemoryExtractor {
         if (a.contains(b) || b.contains(a)) return true
         val prefix = b.take(6)
         return prefix.length >= 6 && a.contains(prefix)
-    }
-
-    /** L10: codePoint 安全截断（不切断 UTF-16 代理对，如 emoji） */
-    private fun takeCodePoints(text: String, max: Int): String {
-        if (text.length <= max) return text
-        var end = max
-        if (end < text.length && Character.isLowSurrogate(text[end])) end--
-        return text.substring(0, end)
     }
 
     /** 去掉 ```json 围栏（对齐 AnalysisParser.stripFence） */

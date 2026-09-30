@@ -38,6 +38,15 @@ class LlmClient(
 ) {
 
     fun stream(request: ChatRequest): Flow<LlmEvent> = callbackFlow {
+        // F125/安全终检：发请求前校验 baseUrl——公网地址必须 https，否则 API Key 随明文 HTTP 上线。
+        // 此前该拦截只由 Android 网络安全配置兜底，桌面端 http:// 公网地址会静默明文发送。
+        endpointPolicyViolation(baseUrl)?.let { reason ->
+            AppLogger.w("llm_request_blocked", "reason" to reason)
+            UsageMetrics.recordFailure(LlmErrorCode.UNSUPPORTED_URL.name)
+            trySend(Failed(LlmErrorCode.UNSUPPORTED_URL, reason))
+            close()
+            return@callbackFlow
+        }
         var attempt = 0
         val startedAt = System.currentTimeMillis()
         var deltaCount = 0
@@ -270,6 +279,53 @@ class LlmClient(
     }
 
     companion object {
+        /** F125: 允许的 URL scheme（仅 http/https） */
+        private val ALLOWED_SCHEMES = setOf("http", "https")
+
+        /**
+         * F125/安全终检：仅允许 http/https；https 直接放行；http 仅放行
+         * localhost/环回/私有与链路本地网段（LM Studio/Ollama 等本地模型服务），
+         * 公网明文一律拒绝。返回 null 表示放行，否则返回拒绝原因（作 Failed.detail 上报）。
+         */
+        private fun endpointPolicyViolation(baseUrl: String): String? {
+            val scheme = baseUrl.trim().substringBefore(':').lowercase()
+            if (scheme !in ALLOWED_SCHEMES) return "unsupported scheme"
+            if (scheme == "https") return null
+            val host = extractHost(baseUrl) ?: return "missing host"
+            return if (isLocalHttpHost(host)) null else "cleartext http to public host is not allowed"
+        }
+
+        /** 从 URL 提取 host（IPv6 字面量保留方括号；失败返回 null） */
+        private fun extractHost(url: String): String? {
+            val rest = url.trim().substringAfter("://", "")
+            if (rest.isEmpty()) return null
+            val authority = rest.substringBefore('/').substringBefore('?').substringBefore('#')
+            val hostPort = if ('@' in authority) authority.substringAfterLast('@') else authority
+            if (hostPort.isEmpty()) return null
+            return if (hostPort.startsWith("[")) {
+                val end = hostPort.indexOf(']')
+                if (end < 0) null else hostPort.substring(0, end + 1)
+            } else {
+                hostPort.substringBefore(':')
+            }
+        }
+
+        /** http 放行清单：localhost / 127.0.0.0-8 / [::1] / 10-8 / 172.16-31 / 192.168-16 / 169.254-16 */
+        private fun isLocalHttpHost(host: String): Boolean {
+            val h = host.lowercase()
+            if (h == "localhost" || h == "[::1]") return true
+            if (h.startsWith("127.")) return true
+            val parts = h.split('.')
+            if (parts.size == 4 && parts.all { it.isNotEmpty() && it.length <= 3 && it.all { c -> c.isDigit() } }) {
+                val o = parts.map { it.toInt() }
+                return o[0] == 10 ||
+                    (o[0] == 172 && o[1] in 16..31) ||
+                    (o[0] == 192 && o[1] == 168) ||
+                    (o[0] == 169 && o[1] == 254)
+            }
+            return false
+        }
+
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)

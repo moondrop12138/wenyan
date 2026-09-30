@@ -62,7 +62,7 @@ import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.MemoryFactUi
-import com.wenyan.app.ui.navigation.rememberViewModel
+import com.wenyan.app.ui.navigation.rememberEphemeralViewModel
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -82,7 +82,10 @@ fun MemoryEditScreen(
     targetId: Long,
     onBack: () -> Unit,
 ) {
-    val vm: MemoryEditViewModel = rememberViewModel("MemoryEdit_$targetId") {
+    // F07 修复：改用页面级 VM（离开页面即取消常驻收集并丢弃）——原先按实体 key 存进
+    // Activity store 只放不取删，每个编辑过的档案都在 Activity 生命周期内滞留一个
+    // 带 Room Flow 常驻收集的 VM
+    val vm: MemoryEditViewModel = rememberEphemeralViewModel("MemoryEdit_$targetId") {
         MemoryEditViewModel(container.settingsRepository, targetId)
     }
     val p = LocalGtjColors.current
@@ -510,12 +513,4 @@ private fun ConflictResolutionDialog(
     )
 }
 
-/** 编辑页输入框配色（对齐 ProviderEditScreen） */
-@Composable
-private fun editFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = LocalGtjColors.current.accent,
-    unfocusedBorderColor = LocalGtjColors.current.border,
-    focusedContainerColor = LocalGtjColors.current.surface,
-    unfocusedContainerColor = LocalGtjColors.current.surface,
-    cursorColor = LocalGtjColors.current.accent,
-)
+// F53 精简：私有 editFieldColors 副本删除，改用包内共享实现（EditFieldColors.kt）

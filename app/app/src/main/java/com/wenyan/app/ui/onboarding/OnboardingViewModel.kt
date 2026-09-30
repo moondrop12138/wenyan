@@ -31,6 +31,11 @@ class OnboardingViewModel(private val repo: OnboardingRepository) : ViewModel() 
     var completed by mutableStateOf(false)
         private set
 
+    /** F48 修复：提交/跳过失败的可见反馈——原先挂起调用无任何异常处理，存储层异常
+     *  （磁盘满/IO 失败/DB 损坏）会击穿 viewModelScope 直接崩溃进程，且无用户可见提示 */
+    var actionError by mutableStateOf<String?>(null)
+        private set
+
     val totalSteps = 4
 
     fun updateDraft(newDraft: OnboardingDraft) {
@@ -61,18 +66,33 @@ class OnboardingViewModel(private val repo: OnboardingRepository) : ViewModel() 
     fun confirmSkip() {
         showSkipDialog = false
         viewModelScope.launch {
-            repo.skip()
-            completed = true
+            try {
+                repo.skip()
+                completed = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // F48：失败回滚（completed 不置位、可重试），错误交 UI 展示
+                actionError = "保存失败，请重试"
+            }
         }
     }
 
     private fun submit() {
         if (submitting) return
         submitting = true
+        actionError = null
         viewModelScope.launch {
-            repo.submit(draft)
-            submitting = false
-            completed = true
+            try {
+                repo.submit(draft)
+                completed = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = "建档保存失败，请重试"
+            } finally {
+                submitting = false
+            }
         }
     }
 }

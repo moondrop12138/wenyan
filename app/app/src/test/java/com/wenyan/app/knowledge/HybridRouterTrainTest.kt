@@ -1,44 +1,24 @@
 package com.wenyan.app.knowledge
 
-import org.json.JSONArray
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 import java.util.Random
 
 /**
  * O7 新方案二：Hybrid 路由（contains 优先 + 画像精排补漏 + 否定过滤 + 阈值）。
- * 使用 618 条真实素材评测集，70/30 划分；固定使用画像精排器已有权重，仅搜索补漏阈值。
+ * 使用真实素材评测集（route_eval_queries.json），70/30 划分；固定使用画像精排器已有权重，
+ * 仅搜索补漏阈值。F64/F68 修复：脚手架改用共享 [KnowledgeEvalCorpus]。
  */
 class HybridRouterTrainTest {
 
-    private val userDir = System.getProperty("user.dir") ?: "."
-    private val roots = listOf(File(userDir), File(userDir, "app"))
     private val rerankerWeights = doubleArrayOf(1.5, 1.0, 1.0, 2.0, 0.5, -1.0)
 
     @Test
     fun `train hybrid threshold and compare`() {
-        val routesFile = roots.map { File(it, "src/main/assets/knowledge/routes-v2.json") }.firstOrNull { it.exists() }
-            ?: error("routes-v2.json not found from $userDir")
-        val queriesFile = roots.map { File(it, "src/test/resources/route_eval_queries.json") }.firstOrNull { it.exists() }
-            ?: error("route_eval_queries.json not found from $userDir")
-
-        val index = KnowledgeIndex(routesFile.readText(Charsets.UTF_8))
-        val docTexts = mutableMapOf<String, String>()
-        for (doc in index.allDocs()) {
-            val f = File(routesFile.parentFile, doc)
-            if (f.exists()) docTexts[doc] = f.readText(Charsets.UTF_8)
-        }
+        val index = KnowledgeEvalCorpus.loadIndex()
+        val docTexts = KnowledgeEvalCorpus.loadDocTexts(index)
         val profiles = DocProfile.build(index, docTexts)
-
-        val root = JSONArray(queriesFile.readText(Charsets.UTF_8))
-        val queries = (0 until root.length()).map { i ->
-            val obj = root.getJSONObject(i)
-            val expected = (0 until obj.optJSONArray("expectedDocs").length()).map { j ->
-                obj.optJSONArray("expectedDocs").getString(j)
-            }
-            RouteEvaluator.EvalQuery(obj.getString("query"), expected)
-        }
+        val queries = KnowledgeEvalCorpus.loadQueries()
 
         val reranker = RouteReranker(index, docTexts, profiles, rerankerWeights)
         val indices = queries.indices.toMutableList()
@@ -97,8 +77,5 @@ class HybridRouterTrainTest {
             f1Of(rerankerTest) <= maxOf(f1Of(containsTest), f1Of(hybridTest)) + 0.05)
     }
 
-    private fun f1Of(r: RouteEvaluator.EvalResult): Double {
-        val sum = r.precisionAtK + r.recallAtK
-        return if (sum <= 0.0) 0.0 else 2.0 * r.precisionAtK * r.recallAtK / sum
-    }
+    private fun f1Of(r: RouteEvaluator.EvalResult): Double = KnowledgeEvalCorpus.f1(r)
 }

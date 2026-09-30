@@ -98,8 +98,8 @@ interface SettingsRepository {
     /** 创建档案；当前无激活档案 → 自动激活该档案 */
     suspend fun createTarget(name: String): Long
 
-    /** 改名 + 编辑记忆正文 */
-    suspend fun updateTarget(id: Long, name: String, note: String)
+    // F52 精简：移除 updateTarget(id, name, note)——v1.7.3 编辑弹窗移除后全仓库零调用
+    //（档案编辑走 updateTargetDetails 全字段方法；桌面侧 WenyanService 为独立链路不经此契约）
 
     /** 删除档案；删激活项 → 自动激活剩余第一个（observeAll 第一条），无剩余 → null */
     suspend fun deleteTarget(id: Long)

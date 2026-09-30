@@ -78,7 +78,9 @@ object KnowledgeChunker {
 
         for (chunk in (byHit + rest)) {
             if (used >= maxChars) break
-            val size = chunk.heading.length + chunk.body.length + 2
+            // F97 修复：每块真实渲染开销含 "## "(3) + '\n'(1) 共 4 字符，块间分隔 "\n\n" 另加 2——
+            // 原按 +2 记账漏算渲染头，多块拼接时实际输出最多超预算 4n-2 字符
+            val size = chunk.heading.length + chunk.body.length + 4 + (if (selected.isEmpty()) 0 else 2)
             if (used + size > maxChars) {
                 if (selected.isEmpty()) {
                     // M4: 首个块就超预算时也截断到预算 + 省略标记（防单份文档 token 预算失效）

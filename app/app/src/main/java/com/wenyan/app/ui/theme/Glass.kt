@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
  * v1.7.0 液态玻璃·衍生视觉常量（唯一来源 outputs/liquid-glass-prototype.html）。
  *
  * GtjPalette 中的 glass 系 / glow 系 / dot 系 token 为单色值；本文件存放**多停渐变/双色组合**类参数
- * （用户气泡 tint、军师建议内卡），它们跨主题固定两套，由 remember 辅助函数按当前主题取用。
+ * （用户气泡 tint、发送键渐变），它们跨主题固定两套，由 remember 辅助函数按当前主题取用。
  * 色值仍以 docs/design-tokens.json 为唯一来源（实施时同步）。
  */
 
@@ -28,16 +28,6 @@ val DarkUserBubbleTint: List<Pair<Float, Color>> = listOf(
     1.0f to Color(0x6BCE8A56), // 0.42 × 255 ≈ 107 = 0x6B
 )
 val DarkUserBubbleBorder: Color = Color(0x80CE8A56)
-
-// ── 军师建议内卡（原型 --l2 / --l2b）──
-
-/** 浅色：暖米半透明 rgba(247,234,220,.72) + 淡棕描边 rgba(164,85,28,.22) */
-val LightCoachInnerFill: Color = Color(0xB8F7EADC) // 0.72 × 255 ≈ 184 = 0xB8
-val LightCoachInnerBorder: Color = Color(0x38A4551C) // 0.22 × 255 ≈ 56 = 0x38
-
-/** 深色：白 10% + 杏棕描边 rgba(206,138,86,.2) */
-val DarkCoachInnerFill: Color = Color(0x1AFFFFFF) // 0.10 × 255 ≈ 26 = 0x1A
-val DarkCoachInnerBorder: Color = Color(0x33CE8A56) // 0.20 × 255 = 51 = 0x33
 
 // ── 发送键渐变（原型 .inbar --send1/--send2/--sendic，150°）──
 
@@ -73,14 +63,13 @@ fun rememberSendHighlight(): Color = SendHighlight
 fun rememberSendShadow(): Color = SendShadow
 
 /**
- * 当前主题是否为深色（按背景色与 LightPalette 比对，跨组件零额外状态）。
- * 供 Glass 组件在选择浅/深两套衍生参数时使用。
+ * 当前主题是否为深色。
+ * F55 精简：直接返回 Theme 提供的显式深色标记 [LocalGtjIsDark]（v1.8.1 B5 起即有该唯一判定源），
+ * 不再用「bg != LightPalette.bg」色值比对重新推导同一事实——两套判定今天恒等价，
+ * 但未来若给 LocalGtjColors 提供自定义/动态 palette（如动态取色）就会与显式标记分歧。
  */
 @Composable
-fun isDarkGtjTheme(): Boolean {
-    val p = LocalGtjColors.current
-    return p.bg != LightPalette.bg
-}
+fun isDarkGtjTheme(): Boolean = LocalGtjIsDark.current
 
 /** 当前主题的用户气泡 tint 渐变（150°，3 停靠点）。 */
 @Composable
@@ -91,12 +80,6 @@ fun rememberUserBubbleTint(): List<Pair<Float, Color>> =
 @Composable
 fun rememberUserBubbleBorder(): Color =
     if (isDarkGtjTheme()) DarkUserBubbleBorder else LightUserBubbleBorder
-
-/** 当前主题的军师建议内卡（fill, border）。 */
-@Composable
-fun rememberCoachInnerCard(): Pair<Color, Color> =
-    if (isDarkGtjTheme()) DarkCoachInnerFill to DarkCoachInnerBorder
-    else LightCoachInnerFill to LightCoachInnerBorder
 
 /** 当前主题的发送键渐变（150° 两停靠点）。 */
 @Composable

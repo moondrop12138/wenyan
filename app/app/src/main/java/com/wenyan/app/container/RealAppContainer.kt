@@ -64,32 +64,23 @@ class RealAppContainer(
         }
     }
 
+    /** F11：进程内共享 OkHttpClient——LlmClient 各构造点与 UpdateChecker 复用同一连接池/
+     *  Dispatcher（原 LlmClient 默认参数每次 build 新实例，跨请求重新 TCP+TLS 握手 + 线程池 churn） */
+    private val sharedOkHttpClient = OkHttpClient()
+
     /** v1.7.3 T4 更新检查（GitHub Releases 直连 + OkHttp 下载）；v1.7.3-fix：只传 versionName，不传本地刻度 versionCode */
     private val updateChecker = UpdateChecker(
-        client = UpdateClient(OkHttpClient()),
+        client = UpdateClient(sharedOkHttpClient),
         currentVersionName = BuildConfig.VERSION_NAME,
-        okHttp = OkHttpClient(),
+        okHttp = sharedOkHttpClient,
     )
 
-    override val settingsRepository: com.wenyan.app.ui.contract.SettingsRepository =
-        RealSettingsRepository(
-            context = appContext,
-            dataStore = dataStore,
-            providerRepository = providerRepository,
-            profileRepository = profileRepository,
-            conversationRepository = conversationRepository,
-            backupRepository = backupRepository,
-            crashLogStore = crashLogStore,
-            updateChecker = updateChecker,
-        )
-
-    override val onboardingRepository: com.wenyan.app.ui.contract.OnboardingRepository =
-        RealOnboardingRepository(dataStore, profileRepository)
-
-    override val chatRepository: com.wenyan.app.ui.contract.ChatRepository =
+    // F10 修复：chat repo 先于 settings repo 构建，清库/备份恢复经回调联动复位其内存会话态
+    private val realChatRepository: RealChatRepository =
         RealChatRepository(
             context = appContext,
             dataStore = dataStore,
+            httpClient = sharedOkHttpClient,
             conversationRepository = conversationRepository,
             profileRepository = profileRepository,
             providerRepository = providerRepository,
@@ -97,4 +88,23 @@ class RealAppContainer(
             promptBuilder = PromptBuilder(),
             imageCompressor = ImageCompressor(),
         )
+
+    override val settingsRepository: com.wenyan.app.ui.contract.SettingsRepository =
+        RealSettingsRepository(
+            context = appContext,
+            dataStore = dataStore,
+            httpClient = sharedOkHttpClient,
+            providerRepository = providerRepository,
+            profileRepository = profileRepository,
+            conversationRepository = conversationRepository,
+            backupRepository = backupRepository,
+            crashLogStore = crashLogStore,
+            updateChecker = updateChecker,
+            onChatSessionInvalidated = { realChatRepository.invalidateSessionState() },
+        )
+
+    override val onboardingRepository: com.wenyan.app.ui.contract.OnboardingRepository =
+        RealOnboardingRepository(dataStore, profileRepository)
+
+    override val chatRepository: com.wenyan.app.ui.contract.ChatRepository = realChatRepository
 }

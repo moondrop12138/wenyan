@@ -9,7 +9,7 @@ import java.io.File
 /**
  * 知识库打包完整性测试（AC-17）
  * 直接从文件系统读取 assets 目录（JVM 单测可访问工程文件），
- * 校验 41 份文档齐全 + routes.json 覆盖 SKILL.md 全部主题（v1.9.0 practical 21 份含伦理转译）。
+ * 校验 41 份文档齐全 + routes-v2.json 覆盖 SKILL.md 全部主题（v1.9.0 practical 21 份含伦理转译）。
  */
 class KnowledgeBundleTest {
 

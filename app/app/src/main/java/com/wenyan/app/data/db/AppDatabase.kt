@@ -134,9 +134,9 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(
-                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
-                    )
+                    // F16：与上方 MIGRATIONS 数组共用同一份迁移列表（desktop DesktopAppDatabase 同款写法），
+                    // 删除需手工同步的重复列表
+                    .addMigrations(*MIGRATIONS)
                     .build()
                     .also { instance = it }
             }

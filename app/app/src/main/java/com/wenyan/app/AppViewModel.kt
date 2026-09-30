@@ -63,9 +63,4 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
     }
-
-    /** v1.9.4 流光背景开关（照 setThemeMode 模式：只写 DataStore，StateFlow 由 init collect 回推） */
-    fun setFluidBackground(enabled: Boolean) {
-        viewModelScope.launch { container.settingsRepository.setFluidBackgroundEnabled(enabled) }
-    }
 }

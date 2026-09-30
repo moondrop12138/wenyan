@@ -10,7 +10,8 @@ import java.util.Locale
  * 崩溃日志本地兜底（v1.7.3 T3）：
  * - 环形内存缓冲：最近 100 条 AppLogger 事件（synchronized；事件格式含隐私红线，无用户内容）；
  * - 崩溃回调：写 filesDir/crash/last_crash.txt（时间戳 + 线程 + 堆栈 + 缓冲全文）；
- * - clear()：删 crash 目录 + cacheDir/downloads（wipeAll 隐私联动）。
+ * - clear()：删 crash 目录 + filesDir/downloads（wipeAll 隐私联动；顺带清旧版本的
+ *   cacheDir/downloads 兼容目录）。
  * 线程安全：崩溃线程与 AppLogger 调用线程并发，全部 synchronized。
  */
 class CrashLogStore(private val context: Context) {
@@ -58,10 +59,14 @@ class CrashLogStore(private val context: Context) {
         return if (f.exists()) f else null
     }
 
-    /** 清除崩溃日志目录 + 下载缓存（wipeAll 隐私联动） */
+    /** 清除崩溃日志目录 + 下载缓存（wipeAll 隐私联动）。
+     *  F29 修复：下载的 APK 实际写在 filesDir/downloads（UpdateChecker.download 由调用方传入
+     *  context.filesDir），原先只删 cacheDir/downloads 旧目录导致擦除后 APK 残留——
+     *  现两处都删（filesDir 为现行目录，cacheDir 为历史迁移遗留目录） */
     fun clear() {
         synchronized(lock) { buffer.clear() }
         runCatching { File(context.filesDir, CRASH_DIR).deleteRecursively() }
+        runCatching { File(context.filesDir, "downloads").deleteRecursively() }
         runCatching { File(context.cacheDir, "downloads").deleteRecursively() }
     }
 }

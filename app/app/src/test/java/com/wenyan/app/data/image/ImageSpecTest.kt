@@ -37,11 +37,21 @@ class ImageSpecTest {
     }
 
     @Test
-    fun `inSampleSize never exceeds power of two`() {
+    fun `inSampleSize picks exact power of two for large image`() {
+        // F56 修复：原断言「∈ {1,2,4,8,16}」由实现的 sample*=2 构造方式保证恒真——
+        // 连降采样被整体关掉（恒返回 1、防 OOM 失效）都测不出来。改为精确断言 + target 尺寸：
+        // 10000 → /2=5000≥1568、/4=2500≥1568、/8=1250<1568 → sample=4，target 双边 1568
         val plan = ImageSpec.planResize(10000, 10000)
-        assertTrue(plan.inSampleSize == 1 || plan.inSampleSize == 2 ||
-            plan.inSampleSize == 4 || plan.inSampleSize == 8 ||
-            plan.inSampleSize == 16)
+        assertEquals(4, plan.inSampleSize)
+        assertEquals(1568, plan.targetWidth)
+        assertEquals(1568, plan.targetHeight)
+    }
+
+    @Test
+    fun `inSampleSize can exceed 16 for huge edge`() {
+        // 实现契约是「2 的幂」而非「≤16」：最长边 100000 → /32=3125≥1568、/64=1562<1568 → 32
+        val plan = ImageSpec.planResize(100000, 100000)
+        assertEquals(32, plan.inSampleSize)
     }
 
     @Test

@@ -31,7 +31,11 @@ data class UpdateInfo(
     val digest: String? = null,
 )
 
-/** 更新检查结果（错误码约定：UPDATE_NETWORK / UPDATE_PARSE / UPDATE_NO_ASSET / UPDATE_DOWNLOAD / UPDATE_INSTALL） */
+/** 更新检查结果。
+ *  F26 修正死约定注释：原先声称的五错误码（UPDATE_PARSE/NO_ASSET/DOWNLOAD/INSTALL）从未产生——
+ *  网络/解析失败在 fetchLatest 内统一收敛为 null、归一为 UPDATE_NETWORK；消费方只展示通用
+ *  失败文案、不读 code/message。保留 Failed 现有形状（避免连带改 UI/测试），落地细分错误码留作后续建议。
+ */
 sealed interface UpdateCheckResult {
     data class NewVersion(val info: UpdateInfo) : UpdateCheckResult
     data object UpToDate : UpdateCheckResult

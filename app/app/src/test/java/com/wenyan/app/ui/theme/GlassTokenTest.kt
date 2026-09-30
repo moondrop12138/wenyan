@@ -95,10 +95,4 @@ class GlassTokenTest {
         val solid = GtjContrast.composite(Color.Red, Color.Blue)
         assertTrue("完全不透明 over = 自身", solid == Color.Red)
     }
-
-    @Test
-    fun coachInnerCard_tokensExist() {
-        assertTrue("军师内卡 fill alpha ∈(0,1)", alpha(LightCoachInnerFill) in 0.001f..0.999f)
-        assertTrue("深色内卡 fill alpha ∈(0,1)", alpha(DarkCoachInnerFill) in 0.001f..0.999f)
-    }
 }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +42,7 @@ import com.wenyan.app.ui.components.glass.glassBackdropContent
 import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.navigation.rememberViewModel
+import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
 import com.wenyan.app.ui.theme.rememberReducedMotion
 
@@ -146,12 +148,19 @@ fun OnboardingScreen(
             }
             // 底部按钮
             Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                PrimaryButton(
-                    text = if (vm.currentStep == vm.totalSteps - 1) "完成" else "下一步",
-                    onClick = vm::next,
-                    loading = vm.submitting,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Column {
+                    // F48 修复：提交/跳过失败的用户可见反馈（原先存储层异常直接崩溃进程）
+                    vm.actionError?.let {
+                        Text(it, style = GtjType.BodySm, color = p.danger)
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    PrimaryButton(
+                        text = if (vm.currentStep == vm.totalSteps - 1) "完成" else "下一步",
+                        onClick = vm::next,
+                        loading = vm.submitting,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }

@@ -93,7 +93,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.glass.GlassBackdropLayer
 import com.wenyan.app.ui.components.glass.GlassFill
-import com.wenyan.app.ui.components.glass.glassBackdropLayer
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -255,8 +254,10 @@ fun ChatInputBar(
                 )
             }
             // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜（光斑透出）
-            // v1.9.4：glassBackdropLayer（Mica 磨砂）垫在 liquidGlass 之前（靠前的 drawBehind 先画）；
-            // backdrop=false：本面已显式全量磨砂（背景+消息穿透），卡片级磨砂不叠加（v1.9.4 配套）；
+            // v1.9.4 + F41 修复：全量磨砂（背景+消息穿透）改由 liquidGlass 经 backdropLayer
+            // 参数在内部消费——投影之后、填充之前绘制。原先经独立的 glassBackdropLayer modifier
+            // 垫在链最底层，不透明磨砂被其上的 α.40 栏级投影整体压暗（与卡片路径层级矛盾）；
+            // backdrop=false：本面已显式全量磨砂，卡片级磨砂不叠加（v1.9.4 配套）；
             // v1.9.4：fill = Card——输入栏属 web --wy-card-* 渐变组（styles.css:538，与顶栏共用，
             // 亮 .150/.105、暗 .150/.150），不走 Frost 默认组
             Box(
@@ -289,7 +290,6 @@ fun ChatInputBar(
                             }
                         }
                     }
-                    .glassBackdropLayer(backdropLayer, GtjShape.inputBar)
                     // v1.7.1 二改：clip 在 liquidGlass 之后，软投影不被裁（此前投影丢失→纯色平台感）
                     // v1.9.4 Mica：栏阴影对齐 web（亮 0 8px 32px rgba(110,70,30,.12) /
                     // 暗 0 8px 32px rgba(0,0,0,.4)，styles.css:539/559）；CSS blur 半径 ≈ 2σ → 羽化 16dp。
@@ -300,6 +300,7 @@ fun ChatInputBar(
                         fill = GlassFill.Card,
                         enablePressAnimation = true,
                         backdrop = false,
+                        backdropLayer = backdropLayer,
                         shadowColor = p.glassShadowInputBar,
                         shadowFeather = 16.dp,
                         shadowLift = 8.dp,

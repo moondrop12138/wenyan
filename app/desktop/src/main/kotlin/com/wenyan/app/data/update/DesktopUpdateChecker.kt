@@ -14,8 +14,10 @@ import java.net.URI
  *  2. 防御解析：任何字段缺失/非法 → null/Failed，绝不抛异常；
  *  3. 只读版本元数据，不采集用户信息，10s 超时。
  *
- * 桌面版没有 APK 资产语义：assets 取第一个 browser_download_url（exe/zip 均可），
- * 无资产时仍返回版本信息（downloadUrl 为空串，前端只展示"去 Release 页"）。
+ * 桌面版资产语义：assets 按 .exe → .zip 后缀择优选直链（对齐手机版按 .apk 过滤的"同语义"；
+ * F107 修复：原先取第一个非空 browser_download_url，下载指向取决于资产上传顺序——
+ * zip/校验文件先传用户就会点错文件）；都没有时 downloadUrl 落该版本 Release 页
+ * （前端展示"去 Release 页"）。
  *
  * tag 前缀隔离：桌面版 Release 使用 desktop-vX.Y.Z（与手机版 vX.Y.Z 隔离），
  * 遍历 releases 列表取第一个 desktop- 前缀的 Release——两端共用 releases/latest
@@ -40,7 +42,7 @@ object DesktopUpdateChecker {
         val tag = json.optString("tag_name", "").trim()
         if (tag.isEmpty()) return@withContext Result("failed", currentVersion, error = "Release 解析失败")
         val latest = tag.removePrefix("desktop-").removePrefix("v").removePrefix("V")
-        // 优先直链该版本 exe 资产；无资产时跳 Release 页
+        // 优先直链该版本 exe 资产（其次 zip）；无可用安装资产时跳 Release 页
         val url = firstAssetUrl(json)
             ?: "https://github.com/$REPO/releases/tag/$tag"
         val notes = json.optString("body", "").trim()
@@ -75,15 +77,19 @@ object DesktopUpdateChecker {
         }
     }.getOrNull()
 
-    /** assets 中第一个非空 browser_download_url（桌面版 exe） */
+    /** assets 中按后缀择优：.exe 优先、其次 .zip（F107：不再取第一个非空 URL，防上传顺序决定下载指向） */
     private fun firstAssetUrl(json: JSONObject): String? {
         val assets = json.optJSONArray("assets") ?: return null
+        var zipUrl: String? = null
         for (i in 0 until assets.length()) {
             val obj = assets.optJSONObject(i) ?: continue
             val url = obj.optString("browser_download_url", "").trim()
-            if (url.isNotEmpty()) return url
+            if (url.isEmpty()) continue
+            val lower = url.lowercase()
+            if (lower.endsWith(".exe")) return url
+            if (zipUrl == null && lower.endsWith(".zip")) zipUrl = url
         }
-        return null
+        return zipUrl
     }
 
     /** "1.7.3" vs "1.7.2" → 1；"v" 前缀等价；非法段按 0（与手机版 UpdateChecker 逐字一致） */

@@ -1,43 +1,23 @@
 package com.wenyan.app.knowledge
 
-import org.json.JSONArray
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 import java.util.Random
 
 /**
  * O7 新方案：文档画像精排器的权重训练与评测。
- * 使用 618 条真实素材评测集，70/30 划分；坐标搜索最大化 F1@3。
+ * 使用真实素材评测集（route_eval_queries.json），70/30 划分；坐标搜索最大化 F1@3。
+ * F64/F68 修复：脚手架改用共享 [KnowledgeEvalCorpus]（原先与 Hybrid/Harness/QueryVariant
+ * 四处逐字复制，注释里的评测集条数也已漂移）。
  */
 class RouteRerankerTrainTest {
 
-    private val userDir = System.getProperty("user.dir") ?: "."
-    private val roots = listOf(File(userDir), File(userDir, "app"))
-
     @Test
     fun `train reranker and compare with contains and bm25`() {
-        val routesFile = roots.map { File(it, "src/main/assets/knowledge/routes-v2.json") }.firstOrNull { it.exists() }
-            ?: error("routes.json not found from $userDir")
-        val queriesFile = roots.map { File(it, "src/test/resources/route_eval_queries.json") }.firstOrNull { it.exists() }
-            ?: error("route_eval_queries.json not found from $userDir")
-
-        val index = KnowledgeIndex(routesFile.readText(Charsets.UTF_8))
-        val docTexts = mutableMapOf<String, String>()
-        for (doc in index.allDocs()) {
-            val f = File(routesFile.parentFile, doc)
-            if (f.exists()) docTexts[doc] = f.readText(Charsets.UTF_8)
-        }
+        val index = KnowledgeEvalCorpus.loadIndex()
+        val docTexts = KnowledgeEvalCorpus.loadDocTexts(index)
         val profiles = DocProfile.build(index, docTexts)
-
-        val root = JSONArray(queriesFile.readText(Charsets.UTF_8))
-        val queries = (0 until root.length()).map { i ->
-            val obj = root.getJSONObject(i)
-            val expected = (0 until obj.optJSONArray("expectedDocs").length()).map { j ->
-                obj.optJSONArray("expectedDocs").getString(j)
-            }
-            RouteEvaluator.EvalQuery(obj.getString("query"), expected)
-        }
+        val queries = KnowledgeEvalCorpus.loadQueries()
 
         // 预计算所有 query 的文档特征向量（不依赖权重）
         val reranker = RouteReranker(index, docTexts, profiles)
@@ -86,27 +66,22 @@ class RouteRerankerTrainTest {
         println("queries=${queries.size} train=${train.size} test=${test.size}")
         println("bestWeights=${bestWeights.joinToString()} (trainF1=$bestF1)")
         println("ALL:")
-        println("  contains: P=${containsRes.precisionAtK} R=${containsRes.recallAtK} F1=${f1Of(containsRes)}")
-        println("  bm25    : P=${bm25Res.precisionAtK} R=${bm25Res.recallAtK} F1=${f1Of(bm25Res)}")
-        println("  reranker: P=${rerankerRes.precisionAtK} R=${rerankerRes.recallAtK} F1=${f1Of(rerankerRes)}")
+        println("  contains: P=${containsRes.precisionAtK} R=${containsRes.recallAtK} F1=${KnowledgeEvalCorpus.f1(containsRes)}")
+        println("  bm25    : P=${bm25Res.precisionAtK} R=${bm25Res.recallAtK} F1=${KnowledgeEvalCorpus.f1(bm25Res)}")
+        println("  reranker: P=${rerankerRes.precisionAtK} R=${rerankerRes.recallAtK} F1=${KnowledgeEvalCorpus.f1(rerankerRes)}")
         println("TEST ONLY:")
-        println("  contains: P=${containsTest.precisionAtK} R=${containsTest.recallAtK} F1=${f1Of(containsTest)}")
-        println("  bm25    : P=${bm25Test.precisionAtK} R=${bm25Test.recallAtK} F1=${f1Of(bm25Test)}")
-        println("  reranker: P=${rerankerTest.precisionAtK} R=${rerankerTest.recallAtK} F1=${f1Of(rerankerTest)}")
+        println("  contains: P=${containsTest.precisionAtK} R=${containsTest.recallAtK} F1=${KnowledgeEvalCorpus.f1(containsTest)}")
+        println("  bm25    : P=${bm25Test.precisionAtK} R=${bm25Test.recallAtK} F1=${KnowledgeEvalCorpus.f1(bm25Test)}")
+        println("  reranker: P=${rerankerTest.precisionAtK} R=${rerankerTest.recallAtK} F1=${KnowledgeEvalCorpus.f1(rerankerTest)}")
 
         // 决策门记录：F1 提升需 ≥0.05 才切换生产。当前测试集提升不足且 precision 略降，
         // 因此保持 contains 基线；本测试仅保证新方案不劣于两个基线。
-        val improvement = f1Of(rerankerTest) - f1Of(containsTest)
+        val improvement = KnowledgeEvalCorpus.f1(rerankerTest) - KnowledgeEvalCorpus.f1(containsTest)
         println("test F1 improvement = $improvement")
         println("decision gate (>=0.05): ${improvement >= 0.05}")
-        assertTrue("reranker should not be worse than bm25 on test F1", f1Of(rerankerTest) >= f1Of(bm25Test))
+        assertTrue("reranker should not be worse than bm25 on test F1", KnowledgeEvalCorpus.f1(rerankerTest) >= KnowledgeEvalCorpus.f1(bm25Test))
         // 关键词反哺后 contains 已是最强，精排器不作为生产切换对象
-        println("contains remains best on test F1 = ${f1Of(containsTest) >= f1Of(rerankerTest)}")
-    }
-
-    private fun f1Of(r: RouteEvaluator.EvalResult): Double {
-        val sum = r.precisionAtK + r.recallAtK
-        return if (sum <= 0.0) 0.0 else 2.0 * r.precisionAtK * r.recallAtK / sum
+        println("contains remains best on test F1 = ${KnowledgeEvalCorpus.f1(containsTest) >= KnowledgeEvalCorpus.f1(rerankerTest)}")
     }
 
     private fun f1(

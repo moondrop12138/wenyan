@@ -21,14 +21,8 @@ interface JsonObject {
     fun optBoolean(key: String, fallback: Boolean = false): Boolean
     fun optJSONObject(key: String): JsonObject?
     fun optJSONArray(key: String): JsonArray?
-    fun getJSONObject(key: String): JsonObject
     fun has(key: String): Boolean
-
-    /** M9/L9: 取任意标量（字符串/数字/布尔）的字符串形式；缺失或显式 null → null */
-    fun optScalarString(key: String): String?
-
     fun isNull(key: String): Boolean
-    fun getString(key: String): String
     fun keys(): List<String>
     override fun toString(): String
 }
@@ -36,7 +30,6 @@ interface JsonObject {
 interface JsonArray {
     fun length(): Int
     fun optJSONObject(index: Int): JsonObject?
-    fun getJSONObject(index: Int): JsonObject
     fun opt(index: Int): Any?
     fun optString(index: Int, fallback: String = ""): String
     fun getString(index: Int): String

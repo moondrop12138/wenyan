@@ -22,13 +22,8 @@ private class JvmJsonObject(internal val delegate: org.json.JSONObject) : JsonOb
     override fun optBoolean(key: String, fallback: Boolean): Boolean = delegate.optBoolean(key, fallback)
     override fun optJSONObject(key: String): JsonObject? = delegate.optJSONObject(key)?.let { JvmJsonObject(it) }
     override fun optJSONArray(key: String): JsonArray? = delegate.optJSONArray(key)?.let { JvmJsonArray(it) }
-    override fun getJSONObject(key: String): JsonObject = JvmJsonObject(delegate.getJSONObject(key))
     override fun has(key: String): Boolean = delegate.has(key)
-    override fun optScalarString(key: String): String? =
-        if (delegate.isNull(key)) null else delegate.opt(key)?.toString()
-
     override fun isNull(key: String): Boolean = delegate.isNull(key)
-    override fun getString(key: String): String = delegate.getString(key)
     override fun keys(): List<String> = delegate.keys().asSequence().toList()
     override fun toString(): String = delegate.toString()
 }
@@ -36,8 +31,10 @@ private class JvmJsonObject(internal val delegate: org.json.JSONObject) : JsonOb
 private class JvmJsonArray(internal val delegate: org.json.JSONArray) : JsonArray {
     override fun length(): Int = delegate.length()
     override fun optJSONObject(index: Int): JsonObject? = delegate.optJSONObject(index)?.let { JvmJsonObject(it) }
-    override fun getJSONObject(index: Int): JsonObject = JvmJsonObject(delegate.getJSONObject(index))
     override fun opt(index: Int): Any? = wrap(delegate.opt(index))
+
+    // 桌面端 org.json 对数组中显式 null 元素：optString 返回 fallback、getString 抛异常（与 Android
+    // 端返回 "null" 字面量的分歧由 Android 侧 isNull 预检抹平），本实现保持平台原生语义。
     override fun optString(index: Int, fallback: String): String = delegate.optString(index, fallback)
     override fun getString(index: Int): String = delegate.getString(index)
     override fun put(value: Any?): JsonArray {

@@ -1,5 +1,6 @@
 package com.wenyan.app.data.db
 
+import androidx.room.useWriterConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -90,32 +91,43 @@ object PresetSeed {
     )
 
     /**
-     * 幂等注入：已存在同名提供商则跳过
+     * 幂等注入。
+     * L23 修复（对齐安卓 PresetSeed，双端同修）：原判据是「存在任意 provider」整体跳过
+     * （首次启动写一半被杀 → 下次整体跳过 → 预设永久缺失），且插入循环无事务。
+     * 现改为：逐预设按名称判重（缺哪个补哪个）+ useWriterConnection 事务原子化
+     * （JVM 侧 Room KMP 无 room-ktx 的 withTransaction，写法同 WenyanService.importAllJson），
+     * 写一半被杀后下次启动自动补齐剩余预设。
      */
     suspend fun seedIfEmpty(db: AppDatabase) = withContext(Dispatchers.IO) {
-        val providerDao = db.providerDao()
-        val modelDao = db.modelDao()
-        if (providerDao.listAll().isNotEmpty()) return@withContext
-
-        presets.forEachIndexed { order, preset ->
-            val providerId = providerDao.insert(
-                ProviderEntity(
-                    name = preset.name,
-                    baseUrl = preset.baseUrl,
-                    isPreset = true,
-                    sortOrder = order,
-                )
-            )
-            preset.models.forEachIndexed { mOrder, model ->
-                modelDao.insert(
-                    ModelEntity(
-                        providerId = providerId,
-                        name = model.name,
-                        supportsVision = model.supportsVision,
-                        isDefault = model.isDefault,
-                        sortOrder = mOrder,
+        db.useWriterConnection { transactor ->
+            transactor.withTransaction(androidx.room.Transactor.SQLiteTransactionType.DEFERRED) {
+                val providerDao = db.providerDao()
+                val modelDao = db.modelDao()
+                presets.forEachIndexed { order, preset ->
+                    // L23: 已存在同名提供商（含用户自建同名）→ 视为已注入，仅跳过该预设
+                    //（注意：此处必须 return@forEachIndexed——return@withTransaction 会中断
+                    // 整个事务块，导致后续未注入的预设被一并跳过）
+                    if (providerDao.getByName(preset.name) != null) return@forEachIndexed
+                    val providerId = providerDao.insert(
+                        ProviderEntity(
+                            name = preset.name,
+                            baseUrl = preset.baseUrl,
+                            isPreset = true,
+                            sortOrder = order,
+                        )
                     )
-                )
+                    preset.models.forEachIndexed { mOrder, model ->
+                        modelDao.insert(
+                            ModelEntity(
+                                providerId = providerId,
+                                name = model.name,
+                                supportsVision = model.supportsVision,
+                                isDefault = model.isDefault,
+                                sortOrder = mOrder,
+                            )
+                        )
+                    }
+                }
             }
         }
     }

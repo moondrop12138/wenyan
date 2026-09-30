@@ -106,7 +106,22 @@ class MemoryEditViewModel(
         mbti = t.mbti
         score = t.score ?: 0
         relationStatus = t.relationStatus
-        timeline = parseTimeline(t.timeline).sortedBy { it.time.ifBlank { "9999" } }
+        // F91 修复：数值序排序（与 shared TimelineParser.sortKey 同语义）——原 sortedBy 字典序
+        // 使「2026-10」排在「2026-7」之后（'1'<'7'）：L4 修复当时落在了全仓库无生产调用的
+        // TimelineParser.sorted() 上，真实渲染链路（本 VM → MemoryEditScreen）仍是字典序。
+        // 不直接复用 TimelineParser.parse：其对空 time/event 条目整行过滤，与本 VM 保留空行
+        // 供用户编辑的语义不同；非法串/空串排最后（sortedBy 稳定，保持原相对顺序）
+        timeline = parseTimeline(t.timeline).sortedBy { timelineSortKey(it.time) }
+    }
+
+    /** 时间段排序键：提取数字段合成 年*10000+月*100+日，无数字/含非法段返回 Long.MAX_VALUE 排尾 */
+    private fun timelineSortKey(time: String): Long {
+        val nums = Regex("\\d+").findAll(time).map { it.value.toLongOrNull() ?: Long.MAX_VALUE }.toList()
+        if (nums.isEmpty() || nums.any { it == Long.MAX_VALUE }) return Long.MAX_VALUE
+        val year = nums.getOrElse(0) { 0L }
+        val month = nums.getOrElse(1) { 1L }
+        val day = nums.getOrElse(2) { 1L }
+        return year * 10000 + month * 100 + day
     }
 
     /** O2: 两两启发式矛盾判定（同档案内），标红冲突对供用户裁决 */

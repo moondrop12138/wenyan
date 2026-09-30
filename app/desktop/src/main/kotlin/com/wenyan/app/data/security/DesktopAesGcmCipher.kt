@@ -44,7 +44,7 @@ class KeystoreAesGcmCipher : AesGcmCipher(MachineFingerprintKeyProvider()) {
          * 读 Windows MachineGuid。
          * L17 修复：Windows 上 reg 失败/超时改为显式抛错——原静默回退 COMPUTERNAME 派生
          * 导致密钥漂移，已存 Key 密文「时好时坏」且难排查；同时 waitFor 无超时，
-         * reg 挂起会永久阻塞并卡死外层 synchronized。非 Windows 平台维持主机名回退。
+         * reg 挂起会永久阻塞并卡死外层 synchronized。非 Windows 平台走主机名回退。
          */
         private fun machineGuid(): String {
             val isWindows = System.getProperty("os.name")?.lowercase()?.contains("windows") == true
@@ -68,8 +68,22 @@ class KeystoreAesGcmCipher : AesGcmCipher(MachineFingerprintKeyProvider()) {
                 ?: throw IllegalStateException("MachineGuid 解析失败")
         }
 
-        private fun fallback(): String =
-            (System.getenv("COMPUTERNAME") ?: "unknown-host")
+        /**
+         * 主机名回退（Windows 注册表 MachineGuid 读取失败的次选；非 Windows 平台的主路径）。
+         * F106 修复：原实现只读 Windows 专有的 COMPUTERNAME，非 Windows 平台恒得常量
+         * "unknown-host"，机器绑定退化为「常量|用户名」，换同用户名机器即可解密。
+         * 现依次取 COMPUTERNAME（Windows 次选，语义不变）→ HOSTNAME（POSIX 惯例）→
+         * InetAddress 本机主机名，全部失败显式抛错，绝不静默退化为源码可推算的常量。
+         */
+        private fun fallback(): String {
+            System.getenv("COMPUTERNAME")?.takeIf { it.isNotBlank() }?.let { return it }
+            System.getenv("HOSTNAME")?.takeIf { it.isNotBlank() }?.let { return it }
+            runCatching { java.net.InetAddress.getLocalHost().hostName }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() && !it.equals("localhost", ignoreCase = true) }
+                ?.let { return it }
+            throw IllegalStateException("无法获取主机名作为密钥绑定材料（请检查环境变量 HOSTNAME 或本机主机名解析）")
+        }
 
         private companion object {
             /** L17: reg 查询超时秒数 */

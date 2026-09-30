@@ -8,17 +8,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -45,10 +43,10 @@ import androidx.compose.ui.unit.roundToIntSize
  * - 内容层（[GlassBackdrop.contentLayer]）：ChatScreen 内容区经 [glassBackdropContent]
  *   `record` 进层后正常画出。内容自身失效（滚动/新消息）→ record 更新——这就是图层
  *   失效机制本身，不手动 invalidate；
- * - 模糊层（[GlassBackdropLayer.blurLayer]，每玻璃面一个）：玻璃面经 [glassBackdropLayer]
- *   在 drawBehind 中把内容层按"栏相对内容区的位置"translate 后画进自己（只在玻璃节点
- *   重绘时 record），renderEffect = BlurEffect、colorFilter = 饱和度/亮度 ColorMatrix
- *   （对应桌面 saturate(170%)），再 clip 进玻璃圆角路径、垫在玻璃填充之下。
+ * - 模糊层（[GlassBackdropLayer.blurLayer]，每玻璃面一个）：玻璃面（liquidGlass）在
+ *   onDrawBehind 中把内容层按"栏相对内容区的位置"translate 后画进自己（只在玻璃节点
+ *   重绘时 record，见 [drawBackdropBlur]），renderEffect = BlurEffect、colorFilter = 饱和度/
+ *   亮度 ColorMatrix（对应桌面 saturate(170%)），再 clip 进玻璃圆角路径、垫在玻璃填充之下。
  *
  * 性能（v1.8.1 B4 教训）：
  * - 不每帧手动 invalidate/重录：滚动帧只有内容层 record（内容自身重绘）；模糊层的
@@ -216,7 +214,7 @@ class GlassBackdropLayer internal constructor(
 
         // 采样余量外扩：blurLayer 尺寸 = 玻璃尺寸 + 2×pad，(pad,pad) 对应玻璃左上角
         val padPx = with(density) { padDp.toPx() }
-        // 缓存给绘制侧（glassBackdropLayer/liquidGlass）translate(-pad) 反向对齐用
+        // 缓存给绘制侧（liquidGlass 的 drawBackdropBlur）translate(-pad) 反向对齐用
         recordedPadPx = padPx
         val padded = Size(
             (barSize.width + padPx * 2).coerceAtLeast(1f),
@@ -246,7 +244,7 @@ fun rememberGlassBackdrop(): GlassBackdrop? {
 /**
  * 创建单个玻璃面的模糊层（顶栏/输入栏/卡片各自 remember 一个，几何独立）。
  * v1.9.4：[backgroundOnly]=true 供卡片级磨砂（liquidGlass 内部自动消费，取样纯背景层），
- * 默认 false 供悬浮栏全量磨砂（glassBackdropLayer 显式接入，取样背景+内容）。
+ * 默认 false 供悬浮栏全量磨砂（经 [liquidGlass] 的 backdropLayer 参数显式接入，取样背景+内容）。
  */
 @Composable
 fun rememberGlassBackdropLayer(
@@ -299,39 +297,29 @@ fun Modifier.glassBackdropContent(backdrop: GlassBackdrop?): Modifier {
 }
 
 /**
- * 玻璃面侧：把模糊后的内容层 clip 进 [shape] 圆角路径，垫在玻璃填充之下绘制。
- * 必须放在 `.liquidGlass(...)` **之前**（Compose 绘制顺序：链上靠前的 drawBehind 先画）
- * ——投影（liquidGlass ①）之后、玻璃填充之前，层级与桌面 Mica 一致。
+ * F43 去重：把「recordBlur + clipPath + translate(-recordedPadPx) 反向对齐 + drawLayer」的
+ * 磨砂影像绘制收敛为单一实现——[liquidGlass] 的悬浮栏全量磨砂与卡片透光磨砂两个调用点
+ * 共用（原先两处逐行复制、连「磨砂影像偏移」修复注释都成对复制，参数/坐标系协议一改就漂移）。
+ * 须在玻璃自身的 onDrawBehind 内、投影之后 / 玻璃填充之前调用（层级语义见 [liquidGlass]）。
  */
-fun Modifier.glassBackdropLayer(
-    layer: GlassBackdropLayer?,
-    shape: Shape,
-): Modifier {
-    if (layer == null) return this
-    return onGloballyPositioned { layer.barPositionInRoot = it.positionInRoot() }
-        .drawWithCache {
-            val glassPath: Path = when (val outline = shape.createOutline(size, layoutDirection, this)) {
-                is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
-                is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
-                is Outline.Generic -> outline.path
-            }
-            onDrawBehind {
-                layer.recordBlur(
-                    density = this,
-                    layoutDirection = layoutDirection,
-                    barSize = size,
-                    barPositionInRoot = layer.barPositionInRoot,
-                )
-                // v1.9.4 评审修复（磨砂影像偏移）：record 时玻璃左上角的内容在层内 (pad,pad)，
-                // drawLayer 会把层的 (0,0) 画在玻璃 (0,0)——不反向平移则磨砂影像整体向右下
-                // 偏移一个 samplePadding（v1.9.4 起悬浮栏/卡片统一 8dp，偏移量小但语义不变）。
-                // translate(-pad) 后层内 (pad,pad) 落回玻璃 (0,0)，与 CSS backdrop-filter 对齐。
-                // pad 由 [GlassBackdropLayer.recordedPadPx] 缓存（上方 recordBlur 刚写入本帧值）。
-                clipPath(glassPath) {
-                    translate(-layer.recordedPadPx, -layer.recordedPadPx) {
-                        drawLayer(layer.blurLayer)
-                    }
-                }
-            }
+internal fun DrawScope.drawBackdropBlur(
+    layer: GlassBackdropLayer,
+    clip: Path,
+) {
+    layer.recordBlur(
+        density = this,
+        layoutDirection = layoutDirection,
+        barSize = size,
+        barPositionInRoot = layer.barPositionInRoot,
+    )
+    // v1.9.4 评审修复（磨砂影像偏移）：record 时玻璃左上角的内容在层内 (pad,pad)，
+    // drawLayer 会把层的 (0,0) 画在玻璃 (0,0)——不反向平移则磨砂影像整体向右下
+    // 偏移一个 samplePadding（v1.9.4 起悬浮栏/卡片统一 8dp，偏移量小但语义不变）。
+    // translate(-pad) 后层内 (pad,pad) 落回玻璃 (0,0)，与 CSS backdrop-filter 对齐。
+    // pad 由 [GlassBackdropLayer.recordedPadPx] 缓存（上方 recordBlur 刚写入本帧值）。
+    clipPath(clip) {
+        translate(-layer.recordedPadPx, -layer.recordedPadPx) {
+            drawLayer(layer.blurLayer)
         }
+    }
 }

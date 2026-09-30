@@ -138,7 +138,8 @@ class PromptBuilder {
    向 AI 倾诉/要安慰、追问判断/原因解释、对方已拒绝或该放下、被伤害或被操控、用户想操纵欺骗、
    没有可发送对象、uncertain/greeting/明确不要话术/话术已给过/安全危机 时一律留空数组（reply 同时留空）；tag/reasons 可空。
 4. facts/actions：可空数组；reply_timing：一句话发送时机或注意（reply 为空或 uncertain 时留空字符串）。
-5. citations 留空数组。safety_override=false。
+5. safety_override 仅在命中安全危机（家暴、跟踪、胁迫、人身威胁、自伤伤人、立即危险等）时为 true 并在 safety_message 给出安全建议，否则为 false；
+   若参考了【system-知识】中的知识文档，citations 列出实际使用的文件名，否则留空数组。
         """.trimIndent(),
         )
     }

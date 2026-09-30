@@ -2,6 +2,7 @@ package com.wenyan.app.ui.components
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -85,9 +86,16 @@ private fun BreatheDot(color: Color, phaseMs: Int, reducedMotion: Boolean) {
         transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
+            // F40 修复：错峰必须用一次性起始偏移（initialStartOffset），不能把 delayMillis
+            // 写进 infiniteRepeatable 的子 tween——delay 会被计入每一次迭代周期，三点的周期
+            // 变成 1200/1400/1600ms（频率互异、相位随时间漂移，且每周期开头停在初始暗态）。
+            // StartOffset(phaseMs)：正偏移按默认 StartOffsetType.Delay 语义推迟首播——
+            // 偏移期间进度钳制在初始值 0（初始暗态），且只生效一次；与桌面 CSS
+            // animation-delay 等价，三点同频 1200ms、按 1→2→3 依次错峰。
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, delayMillis = phaseMs, easing = LinearEasing),
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
+                initialStartOffset = StartOffset(phaseMs),
             ),
             label = "progress",
         ).value

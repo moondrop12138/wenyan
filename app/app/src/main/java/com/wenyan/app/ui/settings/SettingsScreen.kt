@@ -131,7 +131,6 @@ fun SettingsScreen(
     val bgBrightness by vm.bgBrightness.collectAsState()
     val toastMessage by vm.toastMessage.collectAsState()
     val showNameDialog by vm.showNameDialog.collectAsState()
-    val editTarget by vm.editTarget.collectAsState()
     val deleteTarget by vm.deleteTarget.collectAsState()
     val p = LocalGtjColors.current
     val context = LocalContext.current

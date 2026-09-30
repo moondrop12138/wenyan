@@ -117,8 +117,20 @@ class PromptBuilderTest {
 
     @Test
     fun `core prompt forbids emoji`() {
-        // P0 规则：prompt 中无 emoji 字符
-        val hasEmoji = CorePrompt.text.codePoints().anyMatch { it in 0x1F300..0x1FAFF }
+        // P0 规则：prompt 中无 emoji 字符。
+        // F74 修复：原检查只覆盖 U+1F300..U+1FAFF——☀(U+2600)/❤(U+2764)/⭐(U+2B50)/
+        // 国旗区域指示符(U+1F1E6-1F1FF) 等常见 emoji 全在区间外，含这些字符的 prompt 会通过
+        // 门禁。扩为完整集合（杂项符号/丁字/箭头 supplement、mahjong 块、补充符号、变体选择符），
+        // 与「禁 emoji」的无限定声明一致
+        val text = CorePrompt.text
+        val hasEmoji = text.codePoints().anyMatch { cp ->
+            cp in 0x1F000..0x1FAFF ||   // emoji 主块 + 补充符号（含 1F300-1FAFF 原区间）
+                cp in 0x2600..0x27BF ||   // 杂项符号 + 丁字
+                cp in 0x2B00..0x2BFF ||   // 杂项符号与箭头 supplement（⭐ 等）
+                cp in 0x2190..0x21FF ||   // 箭头（↔️ 类 emoji 序列基字符）
+                cp == 0xFE0F ||           // 变体选择符-16（emoji 表现形式）
+                cp in 0x1F1E6..0x1F1FF    // 国旗区域指示符
+        }
         assertTrue("core prompt contains emoji", !hasEmoji)
     }
 

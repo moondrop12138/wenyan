@@ -17,10 +17,8 @@ object AppLogger {
     fun w(event: String, vararg kv: Pair<String, Any?>) = log("WARN", event, kv)
     fun e(event: String, vararg kv: Pair<String, Any?>) = log("ERROR", event, kv)
 
-    fun e(event: String, t: Throwable, vararg kv: Pair<String, Any?>) {
-        val line = format(event, kv) + " | " + t.javaClass.simpleName + ": " + (t.message ?: "")
-        sink?.invoke("ERROR", line)
-    }
+    fun e(event: String, t: Throwable, vararg kv: Pair<String, Any?>) =
+        log("ERROR", format(event, kv) + " | " + t.javaClass.simpleName + ": " + (t.message ?: ""), emptyArray())
 
     private fun log(level: String, event: String, kv: Array<out Pair<String, Any?>>) {
         sink?.invoke(level, format(event, kv))

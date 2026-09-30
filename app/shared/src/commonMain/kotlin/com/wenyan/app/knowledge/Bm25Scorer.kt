@@ -3,6 +3,12 @@ package com.wenyan.app.knowledge
 import kotlin.math.ln
 
 /**
+ * F95: 知识包统一的标点/空白清洗正则——文档与 query 同一口径（含弯单引号 ‘’），
+ * 消除 4 处复制字面量的漂移；预编译常量，去掉生产热路径上逐调用重复 Pattern.compile。
+ */
+internal val PUNCT_CLEAN_REGEX = Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'‘’“”]")
+
+/**
  * O7: BM25 打分器（零依赖、纯 JVM 可测）。
  * 词项用字符 bigram（文档与 query 统一口径）；k1/b 参数化；内置高频 2 字停用表。
  * 用于知识路由粗召回（top-8）与分块命中打分，替代纯 contains 计数。
@@ -18,7 +24,7 @@ class Bm25Scorer(
         // L8 修复：单字查询与 bigram 索引口径不对称——清洗后剩 1 字的查询
         // 对任何 bigram 分词的文档恒得 0 分。降级：单字查询改用「包含该字的
         // bigram 命中数」计分（命中一个含该字的 bigram 即有分）。
-        val cleaned = query.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'‘’“”]"), "")
+        val cleaned = query.replace(PUNCT_CLEAN_REGEX, "")
         if (cleaned.length == 1) {
             val c = cleaned[0]
             val docTerms = docs.map { tokenize(it) }
@@ -59,7 +65,7 @@ class Bm25Scorer(
 
     /** 字符 bigram 分词：去标点/空白后按相邻 2 字切分，过滤停用词；单字直接返回 */
     fun tokenize(text: String): List<String> {
-        val cleaned = text.replace(Regex("[\\s，。！？、,.!?；;：:（）()《》「」\"'“”]"), "")
+        val cleaned = text.replace(PUNCT_CLEAN_REGEX, "")
         if (cleaned.isEmpty()) return emptyList()
         if (cleaned.length == 1) return listOf(cleaned)
         return buildList {

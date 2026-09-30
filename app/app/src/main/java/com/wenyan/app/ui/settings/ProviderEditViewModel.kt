@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wenyan.app.data.repository.ProviderUrlNormalizer
+import com.wenyan.app.data.security.AesGcmCipher
 import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.ModelInfo
@@ -19,6 +20,9 @@ data class TestResult(
     val warn: Boolean,
     val message: String,
 )
+
+/** F21：Keystore 不可用兜底文案（KeyUnavailableException.message 缺失时的兜底） */
+private const val KEY_UNAVAILABLE_HINT = "密钥不可用，请重新输入 API Key"
 
 /**
  * 提供商编辑状态（AC-09/11）：名称/Host/Key（密文显隐）+ 模型管理 + 测试连接。
@@ -94,7 +98,23 @@ class ProviderEditViewModel(
                 }
             }
         }
+        // F51 修复：模型列表收集对新建路径同样生效——原先收集器整体在 if (!isNew) 内，
+        // 新建页 vm.models 永远为空：doAddModel 经 ensurePersisted 已把模型写进库，
+        // 但「模型管理」列表不显示（观感如同添加失败）。过滤键用当前生效 provider id：
+        // 新建落库前 persistedId 尚空 → 过滤为空列表；首存后 ensurePersisted 记下 id，
+        // 下一次 repo.models 发射（含 addModel 触发的）即自动显示该提供商的模型
+        if (isNew) {
+            viewModelScope.launch {
+                repo.models.collect { list ->
+                    models = list.filter { it.providerId == currentEffectiveProviderId() }
+                }
+            }
+        }
     }
+
+    /** 当前生效的 provider id：新建 = 首存后记忆的 persistedId（未落库时 -1 过滤为空）；编辑 = providerId */
+    private fun currentEffectiveProviderId(): Long =
+        if (isNew) persistedId ?: -1L else providerId
 
     /** v1.7.5 保存用 key：未修改（== 原解密值）→ null 不重加密；清空 → null 不覆盖；新值 → 传明文 */
     private fun apiKeyToPersist(): String? =
@@ -142,18 +162,25 @@ class ProviderEditViewModel(
         testing = true
         testResult = null
         viewModelScope.launch {
-            // H2 修复：新建走 ensurePersisted（首存后记住 id，后续 update）；已有直接 update 后测
-            val id = if (isNew) {
-                ensurePersisted()
-            } else {
-                repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
-                providerId
+            try {
+                // H2 修复：新建走 ensurePersisted（首存后记住 id，后续 update）；已有直接 update 后测
+                val id = if (isNew) {
+                    ensurePersisted()
+                } else {
+                    repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
+                    providerId
+                }
+                testResult = when (val err = repo.testConnection(id)) {
+                    null -> TestResult(ok = true, warn = false, message = "连接正常，模型可用")
+                    else -> errorToResult(err)
+                }
+            } catch (e: AesGcmCipher.KeyUnavailableException) {
+                // F21 修复：Keystore 不可用 → 提示到达 UI（原先异常击穿 launch 直接崩溃进程，
+                // KeyUnavailableException 里的用户话术全仓库无任何展示点）
+                testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
+            } finally {
+                testing = false
             }
-            testResult = when (val err = repo.testConnection(id)) {
-                null -> TestResult(ok = true, warn = false, message = "连接正常，模型可用")
-                else -> errorToResult(err)
-            }
-            testing = false
         }
     }
 
@@ -180,7 +207,8 @@ class ProviderEditViewModel(
     }
 
     /**
-     * Base URL 预检（v1.7.x）：规范化并回写输入框；含非法字符（逗号/空格等）→ 显示错误并阻止继续。
+     * Base URL 预检（v1.7.x）：规范化并回写输入框；空串 / 含非法字符（逗号/空格）或 query·fragment
+     * （F22：`?`/`#` 会让硬拼端点恒 404）→ 显示错误并阻止继续。
      * @return true 表示可继续
      */
     private fun normalizeOrReject(): Boolean {
@@ -189,7 +217,10 @@ class ProviderEditViewModel(
             testResult = TestResult(
                 ok = false,
                 warn = true,
-                message = "Base URL 包含非法字符（如逗号、空格），请全选删除后重新输入",
+                message = when {
+                    baseUrl.isBlank() -> "Base URL 不能为空，请填写服务地址"
+                    else -> "Base URL 包含非法字符（如逗号、空格、?、#），请全选删除后重新输入"
+                },
             )
             return false
         }
@@ -228,9 +259,14 @@ class ProviderEditViewModel(
     /** v1.6.3 新增模型默认非视觉（supportsVision=false），需要时在模型行第二行再开"视觉"开关 */
     private fun doAddModel(nameTrim: String) {
         viewModelScope.launch {
-            val id = if (isNew) ensurePersisted() else providerId   // H2 修复
-            repo.addModel(id, nameTrim, supportsVision = false)
-            newModelName = ""
+            try {
+                val id = if (isNew) ensurePersisted() else providerId   // H2 修复
+                repo.addModel(id, nameTrim, supportsVision = false)
+                newModelName = ""
+            } catch (e: AesGcmCipher.KeyUnavailableException) {
+                // F21 修复：加密失败提示到达 UI（ensurePersisted 落库时加密）
+                testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
+            }
         }
     }
 
@@ -239,10 +275,15 @@ class ProviderEditViewModel(
         if (saving) return
         saving = true
         viewModelScope.launch {
-            val id = if (isNew) ensurePersisted() else providerId   // H2 修复
-            repo.addModel(id, modelName, supportsVision = false)
-            newModelName = ""
-            saving = false
+            try {
+                val id = if (isNew) ensurePersisted() else providerId   // H2 修复
+                repo.addModel(id, modelName, supportsVision = false)
+                newModelName = ""
+            } catch (e: AesGcmCipher.KeyUnavailableException) {
+                testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
+            } finally {
+                saving = false
+            }
         }
     }
 
@@ -284,26 +325,35 @@ class ProviderEditViewModel(
         if (saving) return
         saving = true
         viewModelScope.launch {
-            val id = if (isNew) {
-                repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
-            } else {
-                repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
-                providerId
+            try {
+                val id = if (isNew) {
+                    // F50 修复：与 doTestConnection/doAddModel/doSaveAndAddModel 统一走 H2 入口
+                    // ensurePersisted——原先「测试连接/添加模型」已落库后再点「保存」仍直接
+                    // saveProvider 再插一条重复提供商行（无模型 → 必然红灯写在新行上）
+                    ensurePersisted()
+                } else {
+                    repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
+                    providerId
+                }
+                // L30 修复：编辑页清空 Key = 真删除已存密文——原 apiKeyToPersist 的 null 语义是
+                // 「不覆盖」，清空输入框保存后旧 Key 仍在，测试连接继续用旧 Key 绿灯误导用户。
+                if (!isNew && originalApiKey != null && apiKey.isBlank()) {
+                    repo.deleteProviderApiKey(id)
+                }
+                // v1.6.3 保存后立即测试连接并写入红绿灯状态：成功绿灯，失败/未填 Key 红灯
+                if (apiKey.isBlank()) {
+                    repo.markConnectionStatus(id, ok = false)
+                } else {
+                    val err = repo.testConnection(id)
+                    repo.markConnectionStatus(id, ok = err == null)
+                }
+                onDone()
+            } catch (e: AesGcmCipher.KeyUnavailableException) {
+                // F21 修复：加密失败停在当前页并提示，不导航回列表（保存未完成）
+                testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
+            } finally {
+                saving = false
             }
-            // L30 修复：编辑页清空 Key = 真删除已存密文——原 apiKeyToPersist 的 null 语义是
-            // 「不覆盖」，清空输入框保存后旧 Key 仍在，测试连接继续用旧 Key 绿灯误导用户。
-            if (!isNew && originalApiKey != null && apiKey.isBlank()) {
-                repo.deleteProviderApiKey(id)
-            }
-            // v1.6.3 保存后立即测试连接并写入红绿灯状态：成功绿灯，失败/未填 Key 红灯
-            if (apiKey.isBlank()) {
-                repo.markConnectionStatus(id, ok = false)
-            } else {
-                val err = repo.testConnection(id)
-                repo.markConnectionStatus(id, ok = err == null)
-            }
-            saving = false
-            onDone()
         }
     }
 

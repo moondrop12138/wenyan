@@ -48,8 +48,14 @@ class WenyanApp : Application() {
         }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            AppLogger.e("app_crash", throwable, "thread" to thread.name, "class" to throwable.javaClass.simpleName)
-            crashLogStore.writeCrash(thread, throwable)
+            // F09 修复：兜底链内的日志格式化/落盘自身再抛（典型：崩溃本身是 OOM，
+            // 字符串格式化再次分配失败；sink 的 Log.println/append 也在链路上）不能击穿
+            // 兜底——previous?.uncaughtException（系统默认崩溃处理：AMS 上报/对话框/杀进程）
+            // 必须无条件执行，否则连 OOM 现场都丢失
+            runCatching {
+                AppLogger.e("app_crash", throwable, "thread" to thread.name, "class" to throwable.javaClass.simpleName)
+                crashLogStore.writeCrash(thread, throwable)
+            }
             previous?.uncaughtException(thread, throwable)
         }
     }

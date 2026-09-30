@@ -65,7 +65,7 @@ import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ModelInfo
-import com.wenyan.app.ui.navigation.rememberViewModel
+import com.wenyan.app.ui.navigation.rememberEphemeralViewModel
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -80,7 +80,10 @@ fun ProviderEditScreen(
     providerId: Long,
     onBack: () -> Unit,
 ) {
-    val vm: ProviderEditViewModel = rememberViewModel("ProviderEdit_$providerId") {
+    // F46/F07 修复：改用页面级 VM（每次 push 全新创建、离开页面即弃）——原先固定 key 存进
+    // Activity store 永不驱逐，二次进入「新建提供商」会复用上一轮 VM（旧草稿含 API Key 明文
+    // 原样预填，遗留 persistedId 还会静默改写上一轮落库的行），且旧 VM 的常驻收集永不停止
+    val vm: ProviderEditViewModel = rememberEphemeralViewModel("ProviderEdit_$providerId") {
         ProviderEditViewModel(container.settingsRepository, providerId)
     }
     val p = LocalGtjColors.current
@@ -305,13 +308,8 @@ private fun EditField(
         visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = { trailing?.invoke() },
         shape = GtjShape.md,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = p.accent,
-            unfocusedBorderColor = p.border,
-            focusedContainerColor = p.surface,
-            unfocusedContainerColor = p.surface,
-            cursorColor = p.accent,
-        ),
+        // F53 精简：改用包内共享 editFieldColors()（原内联配方与 MemoryDialogs/MemoryEditScreen 三份逐字相同）
+        colors = editFieldColors(),
     )
 }
 
