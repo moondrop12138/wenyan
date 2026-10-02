@@ -6,6 +6,19 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
+ * knowledgeRouting 设置项取值（双端唯一来源，安卓 DataStore / 桌面 Properties 槽位共用）：
+ * - [LLM]（默认）：LLM 优先路由（分类器可用时优先，失败/未配置/未设置主模型自动落离线兜底）
+ * - [OFFLINE]：用户显式关闭，纯离线路由，完全不发起路由请求
+ */
+object KnowledgeRouting {
+    const val LLM = "llm"
+    const val OFFLINE = "offline"
+
+    /** 读取归一：只有显式 "offline" 才关；null/空/非法值（含未设置 = 默认）一律 [LLM]（默认开） */
+    fun normalize(raw: String?): String = if (raw == OFFLINE) OFFLINE else LLM
+}
+
+/**
  * 知识文档读取抽象（Android assets 实现由生产代码提供，测试注入内存实现）
  */
 interface KnowledgeAssetReader {
@@ -17,18 +30,23 @@ interface KnowledgeAssetReader {
 
     /** 读取 assets/knowledge/route_query_variants.json；未提供时返回 null（生产使用混合路由补漏） */
     fun readQueryVariantsJson(): String? = null
+
+    /** 读取 assets/knowledge/routing-catalog.json（LLM 路由目录）；未提供时返回 null（LLM 路由不可用） */
+    fun readRoutingCatalogJson(): String? = null
 }
 
 /**
  * 知识引擎（AC-06 知识路由 + 注入）
  *
- * 流程：输入 → 路由命中 1-3 份文档 → 每份分块截断（≤4K token）→ 输出注入文本。
+ * 流程：输入 → 路由命中 1-5 份文档 → 每份分块截断（≤4K token）→ 输出注入文本。
+ * 路由降级链：LLM 分类器（平台每次调用经 [buildInjection] 注入，可用时优先，空集 = 不注入）→
+ * 失败/未注入 → 现有 HybridVariantRouter（无变体库时退回 KnowledgeIndex contains）。
  * 依赖 AssetReader 抽象，JVM 单测可注入内存实现。
  */
 class KnowledgeEngine(
     private val reader: KnowledgeAssetReader,
     private val index: KnowledgeIndex? = null,
-    private val maxDocs: Int = 3,
+    private val maxDocs: Int = 5,
 ) {
 
     private val lazyIndex: KnowledgeIndex by lazy {
@@ -58,12 +76,18 @@ class KnowledgeEngine(
 
     /**
      * 路由 + 注入：返回按 prompt-architecture §2.3 格式拼装的 system-知识文本
+     * @param llmClassifier 平台侧每次调用注入的 LLM 路由分类器（[currentRouteClassifier] 装配；
+     *   null = knowledgeRouting=offline 或平台未接入，本次纯离线路由，零路由请求）
      * @return Pair(注入文本, 引用的文件名列表)
      */
-    suspend fun buildInjection(userInput: String): Pair<String, List<String>> {
-        val docPaths = route(userInput).take(maxDocs)
+    suspend fun buildInjection(
+        userInput: String,
+        llmClassifier: LlmRouteClassifier? = null,
+    ): Pair<String, List<String>> {
+        val (routed, routeSource) = route(userInput, llmClassifier)
+        val docPaths = routed.take(maxDocs)
         if (docPaths.isEmpty()) {
-            AppLogger.d("knowledge_route_empty")
+            AppLogger.d("knowledge_route_empty", "route_source" to routeSource)
             return "" to emptyList()
         }
 
@@ -87,12 +111,34 @@ class KnowledgeEngine(
                 refs.add(fileName)
             }
         }
-        // 只记录命中文档名（元数据），不记录用户输入原文
-        AppLogger.i("knowledge_route_hit", "docs" to refs.joinToString(","))
+        // 只记录命中文档名（元数据），不记录用户输入原文；route_source 标记本次路由来源
+        AppLogger.i(
+            "knowledge_route_hit",
+            "docs" to refs.joinToString(","),
+            "route_source" to routeSource,
+        )
         return injected.joinToString("\n\n") to refs
     }
 
-    private fun route(input: String): List<String> = lazyHybrid?.route(input) ?: lazyIndex.route(input)
+    /**
+     * 路由降级链：LLM 分类器成功 → 用其结果（空集 = 合法弃权，source=llm）；
+     * 失败（null）→ 现有 HybridVariantRouter（source=fallback）；未注入分类器 → 同左（source=offline）
+     * @return Pair(文档路径列表, route_source 埋点取值)
+     */
+    private suspend fun route(
+        input: String,
+        llmClassifier: LlmRouteClassifier?,
+    ): Pair<List<String>, String> {
+        if (llmClassifier != null) {
+            llmClassifier.route(input)?.let { return it to ROUTE_SOURCE_LLM }
+            return offlineRoute(input) to ROUTE_SOURCE_FALLBACK
+        }
+        return offlineRoute(input) to ROUTE_SOURCE_OFFLINE
+    }
+
+    /** 离线路由：现有 HybridVariantRouter，无变体库时退回 KnowledgeIndex contains */
+    private suspend fun offlineRoute(input: String): List<String> =
+        lazyHybrid?.route(input) ?: lazyIndex.route(input)
 
     private fun parseQueryVariants(rawJson: String?): Map<String, List<String>> {
         if (rawJson.isNullOrBlank()) return emptyMap()
@@ -143,5 +189,14 @@ class KnowledgeEngine(
 
         /** M12: 关键词上限（与原 take(12) 一致） */
         const val KEYWORD_LIMIT = 12
+
+        /** route_source 埋点取值（双端日志字段一致）：llm=分类器成功（含空集弃权） */
+        const val ROUTE_SOURCE_LLM = "llm"
+
+        /** route_source：分类器不可用/失败，回退现有离线路由 */
+        const val ROUTE_SOURCE_FALLBACK = "fallback"
+
+        /** route_source：knowledgeRouting=offline / 平台未注入分类器，纯离线路由 */
+        const val ROUTE_SOURCE_OFFLINE = "offline"
     }
 }

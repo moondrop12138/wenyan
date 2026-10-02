@@ -4,6 +4,8 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
  * 唯一色值来源：docs/design-tokens.json（SPEC v1.0 §8 锁定）。
@@ -246,6 +248,47 @@ val LocalFluidHue = staticCompositionLocalOf { FLUID_HUE_DEFAULT }
  * 默认 50 = 不叠加，观感与不可调版本完全一致。
  */
 val LocalBgBrightness = staticCompositionLocalOf { BG_BRIGHTNESS_DEFAULT }
+
+// ── v1.9.4 玻璃外观（模糊度锁死 + 磨砂度可调；唯一来源 docs/design-tokens.json component.glassAppearance）──
+
+/**
+ * 玻璃模糊度（dp）。v1.9.4 收尾（用户指定）：滑条移除、**锁死 100dp**——全部 backdrop 模糊
+ * （悬浮栏/玻璃卡片/弹层窗口）与雾化曲线统一取此值；[GLASS_BLUR_MAX] 保留为雾化 √ 曲线的
+ * 满档归一（glassFogAlpha(100, 500) 钉值 0.4114 不漂移）。量程远超平台 RenderEffect 单次
+ * 模糊视觉上限（~52px，见 GlassBackdropParams.MAX_BLUR_PX），超限段由悬浮栏降采样放大
+ * （blurRecordScale）保证渲染。web 对照：滑条 0-60px（app.js:1069）、运行时默认 4px（app.js:73），
+ * 仅注释。
+ */
+const val GLASS_BLUR_MAX = 500
+const val GLASS_BLUR_DEFAULT = 100
+
+/** 磨砂度范围（%）。对齐 web 磨砂度滑条 0-100%（app.js:1070）；默认 60 = 磨砂档（web 基础默认 30%，app.js:74，仅对照）。 */
+const val GLASS_FROST_MIN = 0
+const val GLASS_FROST_MAX = 100
+const val GLASS_FROST_DEFAULT = 60
+
+/**
+ * v1.9.4 磨砂度滑条：按 web 公式运行时派生玻璃填充 alpha（frost 语义 = web `--wy-glass-frost`，
+ * app.js:139 写入 (S.glassFrost/100)；styles.css:483-488 / 526-531 消费）——只改四项玻璃填充的
+ * alpha、RGB 一律不变（静态基值 token 见 LightPalette/DarkPalette，frost 基准 0.300）：
+ * - glassFill.alpha = frost；
+ * - glassFillStrong.alpha = frost + (基值 strong − 基值 fill) 截到 1（= web 亮 `calc(frost+0.17)` /
+ *   暗 `calc(frost+0.29)`，styles.css:484/488——增量从基值推导，不硬编码）；
+ * - glassCardFillTop/Bottom.alpha = frost × (基值 alpha / 基值 fill.alpha)（= web 亮
+ *   `calc(frost×0.50)`/`calc(frost×0.35)`、暗双停 `calc(frost×0.50)`，styles.css:526-531——
+ *   比例从基值推导；基 frost=0.30，故除数非零）。
+ */
+fun GtjPalette.withGlassFrost(frost: Float): GtjPalette {
+    val base = glassFill.alpha
+    if (base <= 0f) return this // 防御：基值 fill alpha 不可能为 0，真为 0 时比例无定义，原样返回
+    val f = frost.coerceIn(0f, 1f)
+    return copy(
+        glassFill = glassFill.copy(alpha = f),
+        glassFillStrong = glassFillStrong.copy(alpha = (f + (glassFillStrong.alpha - base)).coerceAtMost(1f)),
+        glassCardFillTop = glassCardFillTop.copy(alpha = f * (glassCardFillTop.alpha / base)),
+        glassCardFillBottom = glassCardFillBottom.copy(alpha = f * (glassCardFillBottom.alpha / base)),
+    )
+}
 
 /** M3 ColorScheme 映射（浅色）。映射关系固定：accent→primary 等，勿随意改。 */
 fun lightColorScheme(p: GtjPalette = LightPalette): ColorScheme = ColorScheme(

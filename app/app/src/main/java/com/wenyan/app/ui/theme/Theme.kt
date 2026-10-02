@@ -27,10 +27,16 @@ enum class ThemeMode(val key: String) {
     }
 }
 
-/** 全局主题装配：三态主题（浅色/深色/跟随系统），全部页面同体验（AC-16）。 */
+/**
+ * 全局主题装配：三态主题（浅色/深色/跟随系统），全部页面同体验（AC-16）。
+ * v1.9.4 玻璃可调：[glassFrost]（0-1）按 web 公式运行时派生四项玻璃填充 alpha
+ * （[withGlassFrost]），RGB 与静态基值 token 不变；默认 0.30 = 静态基值 frost 基准
+ * （唯一调用点 MainActivity 传设置页磨砂度滑条值 / 100f）。
+ */
 @Composable
 fun GtjTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
+    glassFrost: Float = 0.30f,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -38,7 +44,7 @@ fun GtjTheme(
         ThemeMode.DARK -> true
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-    val palette = if (dark) DarkPalette else LightPalette
+    val palette = (if (dark) DarkPalette else LightPalette).withGlassFrost(glassFrost)
     val colorScheme = if (dark) darkColorScheme(palette) else lightColorScheme(palette)
     // v1.6.3 沉浸式手势小白条：系统栏外观跟随 App 主题（三态 DataStore 驱动）。
     // enableEdgeToEdge 是 Activity 一次性设置且只随系统深浅，这里用 SideEffect 按解析后的

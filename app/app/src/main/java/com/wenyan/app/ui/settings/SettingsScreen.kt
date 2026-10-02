@@ -3,6 +3,7 @@ package com.wenyan.app.ui.settings
 import com.wenyan.app.BuildConfig
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -64,6 +65,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wenyan.app.data.update.UpdateInfo
+import com.wenyan.app.knowledge.KnowledgeRouting
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.ModelSheet
 import com.wenyan.app.ui.components.SliderField
@@ -71,11 +73,15 @@ import com.wenyan.app.ui.components.Tag
 import com.wenyan.app.ui.components.TagKind
 import com.wenyan.app.ui.components.ThickDivider
 import com.wenyan.app.ui.components.glass.FluidBackground
+import com.wenyan.app.ui.components.glass.GlassBlurCapabilityProbe
 import com.wenyan.app.ui.components.glass.GlassFill
+import com.wenyan.app.ui.components.glass.GlassRenderMode
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
 import com.wenyan.app.ui.components.glass.glassBackdropContent
+import com.wenyan.app.ui.components.glass.glassProbeStatusText
+import com.wenyan.app.ui.components.glass.glassRenderMode
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.contract.AppContainer
@@ -86,6 +92,8 @@ import com.wenyan.app.ui.theme.BG_BRIGHTNESS_MAX
 import com.wenyan.app.ui.theme.BG_BRIGHTNESS_MIN
 import com.wenyan.app.ui.theme.FLUID_HUE_MAX
 import com.wenyan.app.ui.theme.FLUID_HUE_MIN
+import com.wenyan.app.ui.theme.GLASS_FROST_MAX
+import com.wenyan.app.ui.theme.GLASS_FROST_MIN
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -95,6 +103,9 @@ private const val FLUID_HUE_STEP = 5
 
 /** v1.9.4 三改 亮度滑条步进（1% = 101 个落点，veil alpha 随之为 0.02 级，肉眼平滑） */
 private const val BG_BRIGHTNESS_STEP = 1
+
+/** v1.9.4 玻璃可调 磨砂度滑条步进（1% = 101 个落点，与 web 滑条 step 1 一致，app.js:1070） */
+private const val GLASS_FROST_STEP = 1
 
 private enum class PickerTarget { MAIN, VISION }
 
@@ -124,11 +135,15 @@ fun SettingsScreen(
     val usage by vm.usage.collectAsState()
     val targets by vm.targets.collectAsState()
     val memoryAutoEnabled by vm.memoryAutoEnabled.collectAsState()
+    // 知识路由模式（"llm" 默认 | "offline" 显式关闭；开关行 checked = mode == llm）
+    val knowledgeRouting by vm.knowledgeRouting.collectAsState()
     // v1.9.4 流光背景开关状态
     val fluidBackground by vm.fluidBackgroundEnabled.collectAsState()
     // v1.9.4 三改 流光可调：色相 / 背景亮度（滑条当前值 = 落盘值的实时回流）
     val fluidHue by vm.fluidHue.collectAsState()
     val bgBrightness by vm.bgBrightness.collectAsState()
+    // v1.9.4 玻璃可调：磨砂度（%）（滑条当前值 = 落盘值的实时回流）；模糊半径已锁死 100dp
+    val glassFrost by vm.glassFrost.collectAsState()
     val toastMessage by vm.toastMessage.collectAsState()
     val showNameDialog by vm.showNameDialog.collectAsState()
     val deleteTarget by vm.deleteTarget.collectAsState()
@@ -327,6 +342,40 @@ fun SettingsScreen(
                 }
             }
             item {
+                // 知识路由开关行（照「自动记忆」行模板：玻璃行 + Switch，默认开 = llm；
+                // 关闭（offline）后聊天链路完全不发起 LLM 路由请求，仅本地关键词路由）
+                GlassSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("智能知识路由", style = GtjType.Body, color = p.fg)
+                            Text("开启后由对话模型挑选知识文档；关闭仅本地关键词路由", style = GtjType.Caption, color = p.muted)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = knowledgeRouting == KnowledgeRouting.LLM,
+                            onCheckedChange = { checked ->
+                                vm.setKnowledgeRouting(if (checked) KnowledgeRouting.LLM else KnowledgeRouting.OFFLINE)
+                            },
+                            // 无障碍：Switch 显式关联 label
+                            modifier = Modifier.semantics { contentDescription = "智能知识路由" },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = p.accentOn,
+                                checkedTrackColor = p.accent,
+                                uncheckedTrackColor = p.borderSoft,
+                            ),
+                        )
+                    }
+                }
+            }
+            item {
                 // v1.9.0 撤销最近一次自动记忆（写日志在提炼链路内自动记录，仅删除对应事实）
                 GlassSurface(
                     modifier = Modifier
@@ -425,6 +474,48 @@ fun SettingsScreen(
                             label = "背景亮度（%）",
                             onValueChange = vm::setBgBrightness,
                             step = BG_BRIGHTNESS_STEP,
+                        )
+                    }
+                }
+            }
+            item {
+                // v1.9.4 收尾：玻璃卡只剩磨砂度滑条（0-100 按 web 公式运行时派生玻璃填充 alpha，
+                // = web --wy-glass-frost，app.js:1070）；模糊半径锁死 GLASS_BLUR_DEFAULT 100dp
+                //（设置页滑条已移除，= web --wy-glass-blur 的安卓对应值）。范围/默认值唯一
+                // 来源 design-tokens.json component.glassAppearance（Compose 侧常量在
+                // ui/theme/Color.kt；磨砂默认 60 = 磨砂档）。拖拽中滑条本地零延迟，
+                // 落盘按 SettingsViewModel 的 60ms 合并写，玻璃随回流实时变化
+                GlassSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("玻璃", style = GtjType.Body, color = p.fg)
+                        // v1.9.4 探测降级为观测：状态行由 SDK 版本 + GlassBlurCapabilityProbe.state/failure
+                        // 驱动——31+ 恒「真实高斯模糊：已启用」（探测只观测、不改行为，结论翻转经
+                        // 快照态自动重组刷新文案）；<31 雾化兜底
+                        if (glassRenderMode(Build.VERSION.SDK_INT) == GlassRenderMode.REAL_BLUR) {
+                            Text(
+                                "真实高斯模糊：已启用 · 探测" +
+                                    glassProbeStatusText(GlassBlurCapabilityProbe.state, GlassBlurCapabilityProbe.failure),
+                                style = GtjType.Caption,
+                                color = p.muted,
+                            )
+                        } else {
+                            Text(
+                                "雾化兜底（系统低于 Android 12）",
+                                style = GtjType.Caption,
+                                color = p.muted,
+                            )
+                        }
+                        SliderField(
+                            value = glassFrost,
+                            range = GLASS_FROST_MIN..GLASS_FROST_MAX,
+                            label = "磨砂度（%）",
+                            onValueChange = vm::setGlassFrost,
+                            step = GLASS_FROST_STEP,
                         )
                     }
                 }

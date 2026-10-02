@@ -5,6 +5,7 @@ import androidx.compose.ui.unit.dp
 import com.wenyan.app.ui.theme.DarkPalette
 import com.wenyan.app.ui.theme.GtjContrast
 import com.wenyan.app.ui.theme.LightPalette
+import com.wenyan.app.ui.theme.withGlassFrost
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -284,11 +285,57 @@ class GlassTransparencyReadabilityTest {
 
     @Test
     fun backdrop_matchesMicaBlurAndTwoTimesPadding() {
-        // v1.9.4 Mica 收窄：悬浮栏与卡片统一 4dp（web 8 类玻璃元素共用生效默认 --wy-glass-blur=4px），
-        // 采样余量维持 2×blur 不变式
-        assertEquals(4.dp, GlassBackdropParams.blurRadius)
+        // v1.9.4 收尾：运行时半径锁死 GLASS_BLUR_DEFAULT（100dp，设置页滑条已移除），
+        // GlassBackdropParams 两个半径与运行时值一致，
+        // 采样余量维持 2×blur 不变式（recordBlur 运行时 samplePadding = 2×传入半径）
+        assertEquals(100.dp, GlassBackdropParams.blurRadius)
         assertEquals(GlassBackdropParams.blurRadius * 2, GlassBackdropParams.samplePadding)
-        assertEquals(4.dp, GlassBackdropParams.cardBlurRadius)
+        assertEquals(100.dp, GlassBackdropParams.cardBlurRadius)
         assertEquals(GlassBackdropParams.cardBlurRadius * 2, GlassBackdropParams.cardSamplePadding)
+    }
+
+    // ── 磨砂度滑条派生护栏（v1.9.4 玻璃可调）：withGlassFrost 只改 alpha、RGB 不变 ──
+
+    @Test
+    fun withGlassFrost_derivedAlphas_matchWebFormula() {
+        // 公式出处（ui/theme/Color.kt GtjPalette.withGlassFrost，对齐 web styles.css:483-488/526-531）：
+        // glassFill.alpha = frost；glassFillStrong.alpha = frost + (基值 strong − 基值 fill)（截到 1，
+        // = web calc(frost+0.17)/calc(frost+0.29)）；cardFillTop/Bottom.alpha = frost × (基值 alpha /
+        // 基值 fill.alpha)（= web calc(frost×0.50)/calc(frost×0.35) 与暗色 ×0.50；基 frost=0.30）。
+        // 默认磨砂档 frost=0.60（= 磨砂度滑条 60%）：
+        val light = LightPalette.withGlassFrost(0.60f)
+        assertEquals("亮 glassFill = frost", 0.60f, light.glassFill.alpha, 0.02f)
+        assertEquals("亮 cardFillTop = frost×0.50", 0.30f, light.glassCardFillTop.alpha, 0.02f)
+        assertEquals("亮 cardFillBottom = frost×0.35", 0.21f, light.glassCardFillBottom.alpha, 0.02f)
+        assertEquals("亮 glassFillStrong = frost+0.17", 0.77f, light.glassFillStrong.alpha, 0.02f)
+        val dark = DarkPalette.withGlassFrost(0.60f)
+        assertEquals("暗 glassFillStrong = frost+0.29", 0.89f, dark.glassFillStrong.alpha, 0.02f)
+        // RGB 不变（只改 alpha）：四派生字段两主题逐一核对
+        assertEquals("亮 glassFill RGB 不变", LightPalette.glassFill.copy(alpha = 1f), light.glassFill.copy(alpha = 1f))
+        assertEquals(
+            "亮 glassFillStrong RGB 不变",
+            LightPalette.glassFillStrong.copy(alpha = 1f),
+            light.glassFillStrong.copy(alpha = 1f),
+        )
+        assertEquals(
+            "亮 cardFillTop RGB 不变",
+            LightPalette.glassCardFillTop.copy(alpha = 1f),
+            light.glassCardFillTop.copy(alpha = 1f),
+        )
+        assertEquals(
+            "亮 cardFillBottom RGB 不变",
+            LightPalette.glassCardFillBottom.copy(alpha = 1f),
+            light.glassCardFillBottom.copy(alpha = 1f),
+        )
+        assertEquals("暗 glassFill RGB 不变", DarkPalette.glassFill.copy(alpha = 1f), dark.glassFill.copy(alpha = 1f))
+        // 截到 1 的护栏：frost=1.0 时暗色 strong 0.29 增量会越界，必须被截住
+        assertEquals("frost=1.0 时 strong 截到 1", 1f, DarkPalette.withGlassFrost(1f).glassFillStrong.alpha, 0.0001f)
+        // 基点回归：frost = 基值 fill alpha（0.30196…，0x4D/255）时四字段应回到基值（容差 0.001，
+        // 证明派生比例相对基值、非硬编码绝对值）；withGlassFrost 返回副本，静态基值 token 不会被改写
+        val atBase = LightPalette.withGlassFrost(LightPalette.glassFill.alpha)
+        assertEquals("frost=基值时 glassFill 回到基值", LightPalette.glassFill.alpha, atBase.glassFill.alpha, 0.001f)
+        assertEquals("frost=基值时 cardFillTop 回到基值", LightPalette.glassCardFillTop.alpha, atBase.glassCardFillTop.alpha, 0.001f)
+        assertEquals("frost=基值时 cardFillBottom 回到基值", LightPalette.glassCardFillBottom.alpha, atBase.glassCardFillBottom.alpha, 0.001f)
+        assertEquals("frost=基值时 strong 回到基值", LightPalette.glassFillStrong.alpha, atBase.glassFillStrong.alpha, 0.001f)
     }
 }

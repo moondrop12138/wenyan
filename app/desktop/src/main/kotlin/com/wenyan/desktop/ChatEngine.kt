@@ -9,6 +9,10 @@ import com.wenyan.app.domain.HistoryCompactor
 import com.wenyan.app.domain.MemoryExtractor
 import com.wenyan.app.knowledge.DesktopKnowledgeAssetReader
 import com.wenyan.app.knowledge.KnowledgeEngine
+import com.wenyan.app.knowledge.KnowledgeRouting
+import com.wenyan.app.knowledge.LlmRouteClassifier
+import com.wenyan.app.knowledge.RoutingCatalog
+import com.wenyan.app.knowledge.currentRouteClassifier
 import com.wenyan.app.llm.AnalysisParser
 import com.wenyan.app.llm.ChatHistoryMessage
 import com.wenyan.app.llm.ChatRequest
@@ -44,6 +48,26 @@ class ChatEngine(
     private val stateTracker = ConversationStateTracker()
     private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val migrateMutex = Mutex()
+
+    /**
+     * LLM 知识路由目录（懒解析 classpath routing-catalog.json，首次发送才触达资源；
+     * null = 目录缺失/坏数据，分类器不可用，路由始终走离线兜底。对称安卓 RealChatRepository.routeCatalog）
+     */
+    private val routeCatalog: RoutingCatalog? by lazy {
+        RoutingCatalog.parse(DesktopKnowledgeAssetReader().readRoutingCatalogJson())
+    }
+
+    /**
+     * 平台侧 LLM 路由装配（对称安卓 RealChatRepository.routeClassifier）：
+     * knowledgeRouting=llm（默认）且请求模型三元组可得 → 分类器；offline（用户显式关闭）/ 未配置 → null（纯离线兜底）。
+     * offline 时 [currentRouteClassifier] 短路，不读模型配置（零解密、零路由请求）；
+     * 桌面主模型随聊天请求传入（前端逐请求带 modelId），与手机端 DataStore 槽位解析等价。
+     */
+    private suspend fun routeClassifier(modelId: Long): LlmRouteClassifier? = currentRouteClassifier(
+        catalog = routeCatalog,
+        isLlmRouting = { service.getKnowledgeRouting() == KnowledgeRouting.LLM },
+        resolveMainModelConfig = { service.resolveRouteLlmConfig(modelId) },
+    )
 
     // ===== 输入形态路由（移植 ChatViewModel.routeByInputShape，四分优先级不变） =====
 
@@ -125,7 +149,7 @@ class ChatEngine(
         val statePrefix = stateTracker.buildStatePrefix(state)
 
         // 知识路由 + 三层拼装
-        val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
+        val (knowledge, refDocs) = knowledgeEngine.buildInjection(text, routeClassifier(modelId))
         val profile = service.getLatestProfile()
         val target = resolveTargetWithMemory(session.targetId)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
@@ -264,7 +288,7 @@ class ChatEngine(
         }
         val statePrefix = stateTracker.buildStatePrefix(state)
 
-        val (knowledge, refDocs) = knowledgeEngine.buildInjection(transcription)
+        val (knowledge, refDocs) = knowledgeEngine.buildInjection(transcription, routeClassifier(modelId))
         val profile = service.getLatestProfile()
         val target = resolveTargetWithMemory(session.targetId)
         val system = promptBuilder.buildSystem(profile, target, knowledge)

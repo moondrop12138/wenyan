@@ -1,5 +1,6 @@
 package com.wenyan.app.ui.components.glass
 
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -35,7 +36,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import com.wenyan.app.ui.theme.rememberReducedMotion
+import com.wenyan.app.ui.theme.GLASS_BLUR_DEFAULT
+import com.wenyan.app.ui.theme.GLASS_BLUR_MAX
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.LocalGtjColors
 
@@ -104,14 +108,18 @@ enum class GlassFill {
  * @param shadowNearLift 近影垂直位移（web 2px → 2dp）
  * @param backdrop v1.9.4 卡片透光磨砂开关（默认 true）：页面 [LocalGlassBackdrop] 有层且
  *  API 31+ 时，在玻璃填充之下垫真实高斯模糊（取样页面 record 的流光背景层，防自反馈见
- *  BackdropGlass.kt）；null/低版本自动回退现状半透明，无设置开关。已显式接入全量磨砂的
- *  悬浮面（ChatScreen 顶栏/输入栏，经 [backdropLayer] 取样背景+内容）与本玻璃内部小件
- *  （顶栏模型 pill/状态点）传 false 防双重模糊/观感割裂
+ *  BackdropGlass.kt）；null/低版本时 API<31 改为垫 [glassFogAlpha] 雾化降级（模糊度滑条的
+ *  低版本近似响应），无设置开关。本玻璃内部小件（顶栏模型 pill/状态点）与弹层容器
+ *  （磨砂由窗口级 FLAG_BLUR_BEHIND 承担）传 false 防双重模糊/观感割裂——false 的面在
+ *  低版本同样不画雾。显式全量磨砂的悬浮面（ChatScreen 顶栏/输入栏，经 [backdropLayer]
+ *  取样背景+内容）传 true：31+ 上 [backdropLayer] 优先、两种磨砂结构性不叠加
  * @param backdropLayer F41 修复：悬浮栏显式传入的全量磨砂层（[rememberGlassBackdropLayer]
- *  创建，取样「背景+内容」层）。原实现经独立的 glassBackdropLayer modifier 垫在链最底层，
- *  磨砂画在本面栏级投影**之前**——不透明磨砂被 α.30/.40 投影整体压暗，与卡片路径
- *  （投影之后、填充之前）层级矛盾。现由本函数在 onDrawBehind 内紧随投影之后绘制磨砂，
- *  两条路径层级统一；null 时回退 [backdrop] 的卡片级磨砂逻辑
+ *  创建）。v1.9.4 修复（design J）：层经 [com.wenyan.app.ui.components.glass.GlassBackdrop.barLayers]
+ *  注册到内容层宿主，underlay 的 record+draw 在**内容层宿主**的 draw 分发内一体完成
+ *  （rememberGraphicsLayer 层在录制分发之外绘制会静默不出图——探针实证，见
+ *  BackdropGlass.kt recordBlurUnderlay 注释），垫画在玻璃填充之下、投影之后；
+ *  本节点对悬浮栏路径**零绘制**。null 时回退 [backdrop] 的卡片级磨砂逻辑
+ *  （卡片路径 record/draw 同分发，维持既有形态）
  *
  * v1.8.1 B4：移除 glowPositions/glowIntensities——dead path（接收后从未使用）且引发 60fps 重组。
  * v1.9.4 评审修复：移除 scrollVelocity 死参数（接收后从未消费）与死 API liquidGlassScrollAware
@@ -144,6 +152,24 @@ fun Modifier.liquidGlass(
     val cardBackdrop = if (backdrop) LocalGlassBackdrop.current else null
     val cardBackdropLayer = rememberGlassBackdropLayer(cardBackdrop, backgroundOnly = true)
 
+    // v1.9.4 收尾：模糊半径锁死 GLASS_BLUR_DEFAULT（100dp，设置页滑条已移除）——悬浮栏
+    // （backdropLayer）与卡片（cardBackdropLayer）取同一个常量。半径是编译期常量，
+    // drawBackdropBlur → recordBlur 的效果缓存按半径变化自愈的机制保留不依赖
+    val glassBlur = GLASS_BLUR_DEFAULT.dp
+
+    // 雾化兜底（v1.9.4 探测降级为观测后收窄为**仅 API<31**，判定唯一来源 glassRenderMode
+    // 纯函数）：三层皆无真实模糊且平台低于 RenderEffect 门槛时，在填充之下垫雾化
+    // （glassFogAlpha 随半径 √ 响应，半径即锁死的 GLASS_BLUR_DEFAULT）。API 31+ 恒真实
+    // 模糊分支接管（探测状态已移出全部行为条件——GlassBlurCapabilityProbe.state 只进
+    // logcat 与设置页状态行，不再否决任何玻璃行为；ROM 不渲染模糊构造的设备上模糊静默
+    // 失效为已接受取舍，不再有雾化兜底）。能力可用但页面未 provide backdrop 时不画雾
+    // （v1.9.4 既有语义：静态玻璃回退）。backdrop=false 的调用方（防双重模糊的
+    // 玻璃内部小件/弹层容器）任何情况都不画雾，尊重其意图
+    val fogFallback = backdrop &&
+        backdropLayer == null &&
+        cardBackdropLayer == null &&
+        glassRenderMode(Build.VERSION.SDK_INT) == GlassRenderMode.FOG
+
     // L33 修复：enablePressAnimation 此前是死参数——KDoc 宣称「果冻按压」但函数体从未实现，
     // 7 处调用点传 true 全部无效。现补真实实现：观察按下/抬起驱动 0.97 缩放。
     // v1.9.4 修复：旧实现用 detectTapGestures(onPress)，它会消费 DOWN/UP——GlassSurface 在
@@ -174,7 +200,9 @@ fun Modifier.liquidGlass(
             if (cardBackdropLayer != null || backdropLayer != null) {
                 Modifier.onGloballyPositioned {
                     backdropLayer?.barPositionInRoot = it.positionInRoot()
+                    backdropLayer?.barSize = it.size.toSize() // [design F] record 移至内容层宿主，栏尺寸须缓存
                     cardBackdropLayer?.barPositionInRoot = it.positionInRoot()
+                    cardBackdropLayer?.barSize = it.size.toSize()
                 }
             } else {
                 Modifier
@@ -205,6 +233,9 @@ fun Modifier.liquidGlass(
                 is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
                 is Outline.Generic -> outline.path
             }
+
+            // [design J] 悬浮栏 underlay 的圆角裁剪形状（栏本地坐标）交给内容层宿主使用
+            backdropLayer?.barShapePath = fillPath
 
             // ②' 用户 tint 渐变（150° 方向近似：右下斜向，尺寸相关 → 缓存块内构造）
             val tintBrush: Brush? = tint?.let { stops ->
@@ -260,6 +291,15 @@ fun Modifier.liquidGlass(
                 GlassFill.Card -> Brush.verticalGradient(listOf(p.glassCardFillTop, p.glassCardFillBottom))
             }
 
+            // 雾化兜底雾色（仅 API<31；31+ 探测降级为观测、不再落雾化）：RGB 取玻璃填充基色
+            // （frost 版 --glass），alpha 随模糊度滑条独立派生（glassFogAlpha，不乘磨砂度）——
+            // cache 块随滑条重组整块重建，与半径同源
+            val fogColor = if (fogFallback) {
+                p.glassFill.copy(alpha = glassFogAlpha(glassBlur, GLASS_BLUR_MAX.dp))
+            } else {
+                null
+            }
+
             // ③ 顶边内高光（内凹改版·只沿顶边一条渐变细线）= web .edge::before：
             // `top:0;left:10%;right:10%;height:1.5px;border-radius:99px;
             //  background:linear-gradient(90deg,transparent,var(--edge),transparent)`
@@ -313,9 +353,29 @@ fun Modifier.liquidGlass(
                 // recordBlur 读 barPositionInRoot/backdrop position state（draw 阶段观察）；
                 // 模糊层 display list 持久引用取样层 RenderNode——流光动画每帧更新取样层，
                 // 玻璃静止时无需重录即得最新模糊（除本 record 外零分配）。
-                val activeBackdropLayer = backdropLayer ?: cardBackdropLayer
-                if (activeBackdropLayer != null) {
-                    drawBackdropBlur(activeBackdropLayer, fillPath)
+                if (backdropLayer != null) {
+                    // [design J] v1.9.4 修复（栏模糊静默失效）：悬浮栏全量磨砂的 underlay 由内容层
+                    // 宿主节点（glassBackdropContent）在同一次 draw 分发内 record+draw——垫在本玻璃
+                    // 填充之下（内容节点先于 Scaffold 栏绘制）。本节点零绘制：rememberGraphicsLayer
+                    // 的层在「录制分发之外」drawLayer 会静默不出图（Compose ui 1.8.3 实测，探针
+                    // E4-E9；详见 BackdropGlass.kt recordBlurUnderlay 注释）。
+                } else if (cardBackdropLayer != null) {
+                    // 卡片透光磨砂：record 与 draw 同在本节点 draw 分发内（取样纯背景层防自反馈，
+                    // 见 recordBlur 注释），投影之后、填充之前垫磨砂影像
+                    cardBackdropLayer.recordBlur(
+                        density = this,
+                        layoutDirection = layoutDirection,
+                        barSize = size,
+                        barPositionInRoot = cardBackdropLayer.barPositionInRoot,
+                        blurRadius = glassBlur,
+                        samplePadding = glassBlur * 2,
+                    )
+                    drawBackdropBlur(cardBackdropLayer, fillPath)
+                } else if (fogColor != null) {
+                    // 雾化兜底（仅 API<31）：垫在原磨砂影像位置（投影之后、填充
+                    // 之前），语义对齐「模糊半径越大越不透底」；纯 drawPath 零效果对象，不触碰
+                    // 性能护栏
+                    drawPath(fillPath, fogColor)
                 }
 
                 // ② 玻璃填充（Mica 纵向渐变 → 底下光斑/背景透出；backdrop 模糊层由独立 modifier 垫在本层之下）

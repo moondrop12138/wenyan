@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
 import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
+import com.wenyan.app.ui.theme.GLASS_FROST_DEFAULT
 import com.wenyan.app.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _bgBrightness = MutableStateFlow(BG_BRIGHTNESS_DEFAULT)
     val bgBrightness: StateFlow<Int> = _bgBrightness.asStateFlow()
 
+    /** v1.9.4 玻璃可调 磨砂度（0-100，默认 60 = 磨砂档；经 GtjTheme 的 withGlassFrost 派生玻璃填充 alpha） */
+    private val _glassFrost = MutableStateFlow(GLASS_FROST_DEFAULT)
+    val glassFrost: StateFlow<Int> = _glassFrost.asStateFlow()
+
     private val _onboardingCompleted = MutableStateFlow(false)
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
 
@@ -55,6 +60,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         viewModelScope.launch {
             container.settingsRepository.bgBrightness.collect { value -> _bgBrightness.value = value }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.glassFrost.collect { value -> _glassFrost.value = value }
         }
         viewModelScope.launch {
             container.onboardingRepository.onboardingCompleted.collect { done ->

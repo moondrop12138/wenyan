@@ -431,10 +431,15 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
     get("/api/settings") {
         call.respondJson(JSONObject()
             .put("visionModelId", service.getVisionModelId()?.let { JSONObject.wrap(it) } ?: JSONObject.NULL)
-            .put("memoryAutoEnabled", service.isMemoryAutoEnabled()))
+            .put("memoryAutoEnabled", service.isMemoryAutoEnabled())
+            .put("knowledgeRouting", service.getKnowledgeRouting()))
     }
 
-    /** 部分更新设置；visionModelId 为 null 即清除槽位（对齐手机端 setVisionModelId 语义）；memoryAutoEnabled 布尔直接写 */
+    /**
+     * 部分更新设置；visionModelId 为 null 即清除槽位（对齐手机端 setVisionModelId 语义）；
+     * memoryAutoEnabled 布尔直接写；knowledgeRouting（"llm" 默认 | "offline"）写前归一，
+     * 只有显式 "offline" 才关（与手机端 DataStore 层同语义）
+     */
     put("/api/settings") {
         val body = JSONObject(call.receiveText())
         if (body.has("visionModelId")) {
@@ -444,6 +449,9 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
         }
         if (body.has("memoryAutoEnabled")) {
             service.setMemoryAutoEnabled(body.getBoolean("memoryAutoEnabled"))
+        }
+        if (body.has("knowledgeRouting")) {
+            service.setKnowledgeRouting(body.getString("knowledgeRouting"))
         }
         call.respondJson(JSONObject().put("ok", true))
     }

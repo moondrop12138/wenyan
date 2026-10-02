@@ -55,7 +55,11 @@ class MainActivity : ComponentActivity() {
             // 默认值（0/50）下输出与不可调版本逐位一致（见 FluidAppearance.kt）
             val fluidHue by appViewModel.fluidHue.collectAsState()
             val bgBrightness by appViewModel.bgBrightness.collectAsState()
-            GtjTheme(themeMode = themeMode) {
+            // v1.9.4 玻璃可调：磨砂度经 GtjTheme 的 withGlassFrost 派生玻璃填充 alpha（默认
+            // 60 = 磨砂档）；玻璃模糊半径已锁死 GLASS_BLUR_DEFAULT 100dp（v1.9.4 收尾移除滑条，
+            // LocalGlassBlur 一并移除），消费方直接读常量
+            val glassFrost by appViewModel.glassFrost.collectAsState()
+            GtjTheme(themeMode = themeMode, glassFrost = glassFrost / 100f) {
                 CompositionLocalProvider(
                     LocalFluidBackground provides fluidBackground,
                     LocalFluidHue provides fluidHue,

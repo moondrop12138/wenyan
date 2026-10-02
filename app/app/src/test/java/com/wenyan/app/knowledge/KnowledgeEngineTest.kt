@@ -106,4 +106,70 @@ class KnowledgeEngineTest {
         assertEquals(listOf("提高气场：从内到外的力量感塑造指南.md"), refs)
         assertTrue(injected.startsWith("【知识文档 #1】《提高气场：从内到外的力量感塑造指南.md》"))
     }
+
+    // ---- LLM 路由降级链（分类器每次调用注入，平台侧开关决定是否传 null） ----
+
+    private fun makeClassifier(
+        catalogDoc: String,
+        respond: suspend (RouteLlmConfig, String) -> String?,
+    ): LlmRouteClassifier = LlmRouteClassifier(
+        configProvider = { RouteLlmConfig("https://api.test.example/v1", "key", "route-model") },
+        catalog = RoutingCatalog.parse(
+            """{"entries":[{"file":"$catalogDoc","title":"目录文档","summary":"摘要"}]}"""
+        )!!,
+        transport = respond,
+    )
+
+    @Test
+    fun `llm classifier result takes priority over hybrid`() {
+        val reader = FakeReader()
+        val hybridPath = "practical/routed.md"
+        val llmPath = "knowledge/03-依恋理论与情绪调节.md"
+        reader.routesJson = buildRoutesJson(Pair(listOf("怎么回"), hybridPath))
+        reader.docs[hybridPath] = "# 路由内\n\n## 内容\n回复。"
+        reader.docs[llmPath] = "# 依恋\n\n## 类型\n焦虑型。"
+
+        val engine = KnowledgeEngine(reader)
+        // contains 明明命中 hybridPath，但 LLM 结果优先
+        val (_, refs) = runBlocking {
+            engine.buildInjection("这句怎么回", makeClassifier(llmPath) { _, _ -> "[\"$llmPath\"]" })
+        }
+        assertEquals(listOf("03-依恋理论与情绪调节.md"), refs)
+    }
+
+    @Test
+    fun `llm empty result abstains without falling back to hybrid`() {
+        val reader = FakeReader()
+        val hybridPath = "practical/routed.md"
+        reader.routesJson = buildRoutesJson(Pair(listOf("怎么回"), hybridPath))
+        reader.docs[hybridPath] = "# 路由内\n\n## 内容\n回复。"
+
+        val engine = KnowledgeEngine(reader)
+        // 空集 = 合法弃权：不回退到 hybrid，不注入任何文档
+        val (injected, refs) = runBlocking {
+            engine.buildInjection("这句怎么回", makeClassifier(hybridPath) { _, _ -> "[]" })
+        }
+        assertEquals("", injected)
+        assertTrue(refs.isEmpty())
+    }
+
+    @Test
+    fun `llm classifier failure falls back to hybrid`() {
+        val reader = FakeReader()
+        val routedPath = "practical/routed.md"
+        val variantOnlyPath = "practical/提高气场：从内到外的力量感塑造指南.md"
+        reader.routesJson = buildRoutesJson(Pair(listOf("怎么回"), routedPath))
+        reader.docs[routedPath] = "# 路由内\n\n## 内容\n回复。"
+        reader.docs[variantOnlyPath] = "# 提高气场\n\n## 方法\n稳住自己。"
+        reader.variantsJson = org.json.JSONObject()
+            .put(variantOnlyPath, org.json.JSONArray(listOf("怎么提升气场", "气场弱怎么办")))
+            .toString()
+
+        // 分类失败（transport 返回坏输出 → route 返回 null）→ 走现有 HybridVariantRouter
+        val engine = KnowledgeEngine(reader)
+        val (_, refs) = runBlocking {
+            engine.buildInjection("怎么提升气场", makeClassifier(variantOnlyPath) { _, _ -> "模型胡言乱语" })
+        }
+        assertEquals(listOf("提高气场：从内到外的力量感塑造指南.md"), refs)
+    }
 }

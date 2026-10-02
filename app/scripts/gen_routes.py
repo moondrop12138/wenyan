@@ -9,6 +9,8 @@
 3. 文档完整性校验：路由引用不存在的文档 → 非零退出（构建失败）；
    ROUTE_TABLE 之外的文档不经关键词路由暴露（补充阅读篇目，现状如此），
    如需「全部文档必被路由」的强约束应另立白名单门禁，勿依赖本脚本
+4. 校验 routing-catalog.json（LLM 路由目录）：41 条、file 与 routes-v2.json 的 files
+   键一致、summary ≤ 30 字符；违规非零退出（并入 knowledgeCheck 门禁）
 
 用法：
     python scripts/gen_routes.py   # 在仓库根的 app/ 目录下运行
@@ -27,6 +29,10 @@ OUT_ROUTES = os.path.join(ASSETS_KNOWLEDGE, "routes-v2.json")
 
 EXPECTED_COUNTS = {"knowledge": 20, "practical": 21}
 EXPECTED_TOTAL = 41
+
+# LLM 路由目录（shared/llm 参与路由的 system 提示词数据源）
+CATALOG_NAME = "routing-catalog.json"
+CATALOG_MAX_SUMMARY_CHARS = 30
 
 # 路由表（文档标题关键词 → 相对 assets/knowledge 的路径，顺序即优先级）
 # 主题对应原始开源项目 goutoujunshi（powerycy/goutoujunshi）的按需加载设计
@@ -147,11 +153,70 @@ def report_routes_summary(routes: dict) -> None:
           f"{len(route_docs)} 份文档被路由引用")
 
 
+def verify_routing_catalog(routes: dict) -> None:
+    """校验 routing-catalog.json（LLM 路由目录）：
+    1. entries 恰好 41 条且 file 不重复
+    2. file 与 routes-v2.json 的 files 键完全一致（双向：不多不少）
+    3. 每条 file/title/summary 齐备，summary ≤ 30 字符
+    违规即非零退出（构建失败）
+    """
+    path = os.path.join(ASSETS_KNOWLEDGE, CATALOG_NAME)
+    if not os.path.exists(path):
+        raise SystemExit(f"FATAL: 缺少 {CATALOG_NAME}（LLM 路由目录）")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            catalog = json.load(f)
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"FATAL: {CATALOG_NAME} 读取/解析失败: {e}")
+
+    entries = catalog.get("entries") if isinstance(catalog, dict) else None
+    if not isinstance(entries, list):
+        raise SystemExit(f"FATAL: {CATALOG_NAME} 结构非法：缺少 entries 数组")
+
+    errors = []
+    if len(entries) != EXPECTED_TOTAL:
+        errors.append(f"entries 期望 {EXPECTED_TOTAL} 条，实际 {len(entries)} 条")
+
+    seen = set()
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            errors.append(f"entries[{i}] 不是对象")
+            continue
+        rel = entry.get("file")
+        if not isinstance(rel, str) or not rel.strip():
+            errors.append(f"entries[{i}] file 缺失或为空")
+            continue
+        if rel in seen:
+            errors.append(f"file 重复: {rel}")
+        seen.add(rel)
+        if rel not in routes["files"]:
+            errors.append(f"file 不在 routes-v2.json 的 files 键中: {rel}")
+        if not isinstance(entry.get("title"), str) or not entry["title"].strip():
+            errors.append(f"{rel} title 缺失或为空")
+        summary = entry.get("summary")
+        if not isinstance(summary, str):
+            errors.append(f"{rel} summary 缺失或非字符串")
+        elif len(summary) > CATALOG_MAX_SUMMARY_CHARS:
+            errors.append(f"{rel} summary {len(summary)} 字符，超过上限 {CATALOG_MAX_SUMMARY_CHARS}")
+
+    missing = sorted(set(routes["files"].keys()) - seen)
+    if missing:
+        errors.append(f"{len(missing)} 份文档未进目录: " + "、".join(missing[:3]) +
+                      ("…" if len(missing) > 3 else ""))
+
+    if errors:
+        raise SystemExit(f"FATAL: {CATALOG_NAME} 校验失败\n  " + "\n  ".join(errors))
+    print(f"[gen_routes] {CATALOG_NAME} OK：{len(entries)} 条，file 与 routes-v2.json 一致，"
+          f"summary ≤ {CATALOG_MAX_SUMMARY_CHARS} 字符")
+
+
 def main() -> None:
     files = collect_md_files()
     verify_completeness(files)
     routes = build_routes(files)
     report_routes_summary(routes)
+    # 目录校验必须先于下方「已是最新，跳过写入」的早退，保证门禁每次构建都执行
+    verify_routing_catalog(routes)
 
     # F118：此处无需 makedirs——collect_md_files 已对 knowledge/practical 子目录 isdir 校验，
     # 能执行到这说明 ASSETS_KNOWLEDGE 必然已存在

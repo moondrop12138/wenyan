@@ -15,6 +15,8 @@ import com.wenyan.app.data.db.TargetDao
 import com.wenyan.app.data.db.TargetEntity
 import com.wenyan.app.data.security.KeystoreAesGcmCipher
 import com.wenyan.app.domain.MemoryExtractor
+import com.wenyan.app.knowledge.KnowledgeRouting
+import com.wenyan.app.knowledge.RouteLlmConfig
 import kotlinx.coroutines.flow.first
 
 /**
@@ -221,6 +223,27 @@ class WenyanService(
 
     fun setMemoryAutoEnabled(enabled: Boolean) =
         DesktopSettingsStore.put("memoryAutoEnabled", enabled.toString())
+
+    // ===== 知识路由模式（对齐手机端 DataStore knowledge_routing 槽位）=====
+
+    /** 知识路由模式（"llm" 默认 | "offline" 显式关闭）；读取经 KnowledgeRouting.normalize 归一，只有显式 "offline" 才关 */
+    fun getKnowledgeRouting(): String = KnowledgeRouting.normalize(DesktopSettingsStore.get("knowledgeRouting"))
+
+    /** 写入前归一（只有显式 "offline" 才关，与手机端 setKnowledgeRouting 语义一致） */
+    fun setKnowledgeRouting(mode: String) {
+        DesktopSettingsStore.put("knowledgeRouting", KnowledgeRouting.normalize(mode))
+    }
+
+    /**
+     * 主模型三元组（LLM 路由分类器配置；模型/提供商/Key 任一缺失 → null，分类器不可用）。
+     * 桌面主模型随聊天请求传入（前端逐请求带 modelId），与手机端 DataStore 槽位解析等价。
+     */
+    suspend fun resolveRouteLlmConfig(modelId: Long): RouteLlmConfig? {
+        val model = getModel(modelId) ?: return null
+        val provider = getProvider(model.providerId) ?: return null
+        val apiKey = decryptApiKey(provider.id) ?: return null
+        return RouteLlmConfig(provider.baseUrl, apiKey, model.name)
+    }
 
     /** 最近一次自动写入日志（无则 null） */
     fun lastMemoryWrite(): DesktopWriteLogEntry? = DesktopWriteLogCodec.decodeLast(DesktopSettingsStore.get("memoryWriteLog"))

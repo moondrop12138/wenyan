@@ -75,6 +75,9 @@ class RealSettingsRepository(
 
     override val bgBrightness: Flow<Int> = dataStore.bgBrightness
 
+    /** v1.9.4 玻璃可调 磨砂度（DataStore 直通，默认 60 兜底在 DataStore 层）；模糊度已锁死 100dp 不持久化 */
+    override val glassFrost: Flow<Int> = dataStore.glassFrost
+
     override val privacyAck: Flow<Boolean> = dataStore.privacyAck
 
     // ===== v1.7.2 记忆档案 =====
@@ -92,6 +95,9 @@ class RealSettingsRepository(
     override val activeTargetId: Flow<Long?> = dataStore.activeTargetId
 
     override val memoryAutoEnabled: Flow<Boolean> = dataStore.memoryAutoEnabled
+
+    /** 知识路由模式（"llm" 默认 | "offline" 显式关闭；llm 档每条消息向 Provider 发路由请求；DataStore 直通，归一与默认值兜底在 DataStore 层） */
+    override val knowledgeRouting: Flow<String> = dataStore.knowledgeRouting
 
     /** v1.7.2 创建档案；当前无激活档案 → 自动激活该档案（空白名称防御返回 -1） */
     override suspend fun createTarget(name: String): Long {
@@ -123,6 +129,9 @@ class RealSettingsRepository(
     override suspend fun setActiveTarget(id: Long) = dataStore.setActiveTargetId(id)
 
     override suspend fun setMemoryAutoEnabled(enabled: Boolean) = dataStore.setMemoryAutoEnabled(enabled)
+
+    /** 知识路由模式写入（非法值归一：只有显式 "offline" 才关，归一在 DataStore 层） */
+    override suspend fun setKnowledgeRouting(mode: String) = dataStore.setKnowledgeRouting(mode)
 
     // ===== v1.7.3 事实单条管理 + 档案详情编辑 =====
 
@@ -317,6 +326,9 @@ class RealSettingsRepository(
 
     /** v1.9.4 三改 背景亮度（0-100，50 = 中点；夹取在 DataStore 层） */
     override suspend fun setBgBrightness(value: Int) = dataStore.setBgBrightness(value)
+
+    /** v1.9.4 玻璃可调 磨砂度（0-100；夹取在 DataStore 层） */
+    override suspend fun setGlassFrost(value: Int) = dataStore.setGlassFrost(value)
 
     override suspend fun setPrivacyAck(ack: Boolean) {
         dataStore.setPrivacyAck(ack)

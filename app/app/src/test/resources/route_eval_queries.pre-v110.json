@@ -1,0 +1,6612 @@
+[
+  {
+    "query": "一吵架就冷战，怎么打破僵局",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "女友总吃醋，不让我和异性朋友往来",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆怀疑我和女闺蜜关系，怎么安抚",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "男朋友和女同事走太近，我很不安",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "伴侣沉默不说话，我心里很难受",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我害怕被抛弃，她一出门我就焦虑",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "男友不让我关注某些女孩，太控制",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "总忍不住发超长消息，怎么控制自己",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "她总翻旧账，我们没法好好沟通",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "父母总吵架，我该怎么劝",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "女朋友总嘲讽我，想让她停下来",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆对谁都多疑，影响我们的关系",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "异地恋吵架后女友不想沟通",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么告诉男友我介意他和女性朋友太近",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "前女友威胁要自杀，我该怎么办",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "感觉被伴侣情感操纵，怎么识别",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "前任在跟踪我，怎么保护自己",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "女友要我配合不喜欢的亲密行为",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝女友的身体要求又不伤感情",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "约会对象总越界动手动脚",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "伴侣不喜欢谈同意话题，我怎开口",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "前男友探视孩子时碰我，怎么拒绝",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "网友未见面就索要私密照片",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "该不该为了让他开心答应发生关系",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "总是我主动他从不回应，该降级吗",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "付出太多回报少，要不要退出",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "第一次见面怎么自然表达好感",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "约会冷场怎么自然推进关系",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "被问尴尬隐私，怎么自然地转移话题",
+    "expectedDocs": [
+      "practical/实战话术编排器：从一句回复到后续分支.md",
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "朋友说用套路追女生，能信吗",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md",
+      "knowledge/20-经典社交体系的机制、证据与风险边界.md"
+    ]
+  },
+  {
+    "query": "邻居总修剪我家院子草坪，怎么办",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么礼貌地让发传单的人走开",
+    "expectedDocs": []
+  },
+  {
+    "query": "同事开会总打断我，怎么提醒",
+    "expectedDocs": []
+  },
+  {
+    "query": "我们从不吵架，感情一直很平静",
+    "expectedDocs": []
+  },
+  {
+    "query": "我完全不介意他看别的女生",
+    "expectedDocs": []
+  },
+  {
+    "query": "男友从不越界，特别尊重我的底线",
+    "expectedDocs": []
+  },
+  {
+    "query": "我们冷战半天就和好，从不冷暴力",
+    "expectedDocs": []
+  },
+  {
+    "query": "我从不担心被抛弃，很有安全感",
+    "expectedDocs": []
+  },
+  {
+    "query": "分手后见面，怎么解释我现在才懂当初的问题",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前任还有未了的心结，我怎么在他面前自然相处",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "朋友不肯接受已经分手的事实，怎么帮他走出来",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么用最不伤人的方式跟女友提分手",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "想跟前任聊过去那次出轨的事，该怎么开口",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我没出轨但女友就是不信，怎么证明清白",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "前任说再也不联系却又总给我发消息，该怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "前任拿自杀威胁我，我该怎么办",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "被前任跟踪骚扰，怎么让她彻底停下来",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "我想走出被跟踪的阴影，又怕她再来缠我",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "老婆总是不信任我，她的猜疑正在伤害我们",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同居女友不信任我，怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我想继续跟那个朋友来往，但女友不信任我",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "那次关键时刻没支持到老婆，怎么重新赢回信任",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "一谈钱伴侣就回避，怎么把金钱话题聊下去",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么开口跟老婆说她的花钱习惯让我担心",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆不上班却想要自己可支配的钱，怎么谈",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "交往多年，怎么向男友坦白我欠了债",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "夫妻花钱理念完全不同，怎么适应这种差异",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "想让老婆多分担一些家庭责任，怎么开口",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "伴侣总是拖家务不干，怎么让她跟上节奏",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟男朋友谈家务怎么分",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "两个人工作时间不同，家务该怎么分才公平",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "岳父不打招呼就进我们家门，怎么让他改",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "公婆的言行让我配偶很压抑，怎么告诉他们",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "跟婆婆沟通老是出问题，怎么改善",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我家和我老婆家水火不容，有必要强行和好吗",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我妈和婆婆合不来，怎么让两个家庭和睦",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "小姑子总影响我老婆的决定，怎么处理",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么跟婆婆说清楚她身上有气味又不伤她",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我妈和女朋友互相讨厌，我夹在中间怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怀疑老婆跟别人有暧昧，怎么开口谈",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "发现朋友之间搞婚外情，我该不该管",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "我对别的女人动了心，怎么跟老婆说",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我不想结婚，怎么跟女友讲清楚理由",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "现在的婚姻状态很差，怎么能改善",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "分居的夫妻怎么协商给孩子伤害最小的方案",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "前妻总逼孩子在我和新伴侣之间选边站",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "婚后一点自己的时间都没有，怎么跟老公说",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "遇到问题女友就封闭自己不肯沟通，怎么打开局面",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "朋友只索取从不回报，我该怎么面对",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "怎么说出底线却不显得像在威胁对方",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "女友要我给太多关注，我感觉被掏空",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "她在网上威胁要自伤，我该怎么处理",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "伴侣重度抑郁，怎么帮他又不变成纵容",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么判断自己是不是处在虐待型关系里",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md",
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "伴侣控制我关注谁，连社交账号都要管",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "想对男友说清我的不舒服，又怕像在威胁他",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "恋爱里总是焦虑想控制对方，怎么办",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "我考试作弊被抓了，该怎么表达真心悔过",
+    "expectedDocs": []
+  },
+  {
+    "query": "朋友在一起打牌老作弊，我该怎么开口",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么在家庭聚会上自然地避开政治话题",
+    "expectedDocs": []
+  },
+  {
+    "query": "我们根本没分手，只是异地了怎么维持热度",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "我没出轨但朋友以为我劈腿，只是想聊聊关心我",
+    "expectedDocs": []
+  },
+  {
+    "query": "老婆不信任我但我真的没做任何越界的事，单纯想沟通",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "朋友问怎么离婚，我只是想安慰他并不是要劝分",
+    "expectedDocs": []
+  },
+  {
+    "query": "今天心情很差不是为感情，就是单纯想找人聊聊",
+    "expectedDocs": []
+  },
+  {
+    "query": "第一次约会怎么判断对方愿不愿意更进一步",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么让对方明白这是正式邀约而不是普通见面",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么委婉告诉对方我不想再约第二次",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "想拒绝二次约会又不想破坏关系怎么开口",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "常常见面的人怎么约出去才不尴尬",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么约认识很久的好友约会不尴尬",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "第一次约会后怎么温和地问对方感觉如何",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "第一次约会很愉快想约下次怕说错话",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "第一次约会谁买单比较合适",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "约会时对方突然情绪低落该怎么安慰",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "约会时怎么礼貌让对方少看手机",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么判断对方是不能赴约还是不想赴约",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "想约经常光顾的店员出去该怎么开口",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "约会软件上被已读不回还要继续发吗",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "网上聊得好几个对象怎么礼貌结束对话",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "交友网站个人简介怎么开场介绍自己",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "网聊时怎么显得不那么木讷不会说话",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "对方总是很久才回消息是没兴趣吗",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "对方不常用社交媒体该怎么多了解她",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "见面前怎么确认网上认识的人的真实意图",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么约网上认识的人见面又不显得着急",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "断联很久后重新联系该注意什么",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么自然夸女生妆容不显得油腻",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么夸女同事又不显得像在调情",
+    "expectedDocs": [
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "怎么判断对方是不是在对我调情",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "和喜欢的人聊天怎么自然转到新话题",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么提升聊天接话的反应能力",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "拒绝朋友的表白怎么把伤害降到最低",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么含蓄表达对对方没有恋爱好感",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "对方想恋爱但我不想怎么拒绝不伤人",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "不感兴趣的人一直发消息纠缠怎么办",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么避免在恋爱中被对方操控",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "有人用信任操控我发生关系该怎么脱身",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么和操控欲很强的人打交道",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "女友抗拒亲吻和身体接触该怎么反应",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "伴侣不喜欢聊性同意话题怎么沟通",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "约会对象太强势怎么表达我的不适",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么邀伴侣过夜又不显得急着发生关系",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么自然地搭讪陌生人而不显得奇怪",
+    "expectedDocs": [
+      "knowledge/20-经典社交体系的机制、证据与风险边界.md"
+    ]
+  },
+  {
+    "query": "对方忽冷忽热我还该继续投入吗",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "感觉被吊着但又不舍得退出怎么办",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "网上认识的人见面第一句说什么好",
+    "expectedDocs": [
+      "practical/实战话术编排器：从一句回复到后续分支.md"
+    ]
+  },
+  {
+    "query": "网上那些恋爱技巧到底靠不靠谱",
+    "expectedDocs": [
+      "knowledge/01-证据分级与内容边界.md"
+    ]
+  },
+  {
+    "query": "怎么让健身房教练不再总找我搭话",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么委婉让室友按时倒垃圾",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让父母尊重我的隐私",
+    "expectedDocs": []
+  },
+  {
+    "query": "对方已读不回我要不要也故意冷落他",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么欲擒故纵让她主动来追我",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "聊天时故意忽冷忽热能提升吸引力吗",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么假装高冷来测试对方是否真心",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "用冷暴力让女友主动求和可行吗",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "INFP和ESTJ性格差异太大适合在一起吗",
+    "expectedDocs": [
+      "knowledge/04-MBTI人格与匹配.md"
+    ]
+  },
+  {
+    "query": "怎么判断自己是什么依恋风格",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "回避型伴侣一吵架就消失怎么办",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么科学看待MBTI能不能预测感情",
+    "expectedDocs": [
+      "knowledge/04-MBTI人格与匹配.md",
+      "knowledge/01-证据分级与内容边界.md"
+    ]
+  },
+  {
+    "query": "谈恋爱的书单有没有靠谱推荐",
+    "expectedDocs": [
+      "knowledge/01-证据分级与内容边界.md"
+    ]
+  },
+  {
+    "query": "怎么安慰刚失去父亲的恋人",
+    "expectedDocs": [
+      "practical/公开表达案例的伦理转译.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "朋友难过却拒绝安慰怎么办",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "安慰人时怎么不总说我懂",
+    "expectedDocs": [
+      "practical/公开表达案例的伦理转译.md",
+      "practical/实战话术编排器：从一句回复到后续分支.md"
+    ]
+  },
+  {
+    "query": "怎么识别和应对煤气灯操控",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么向老板提不同意见又不让他觉得被冒犯",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么告诉同事想约会她又不毁工作关系",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "异地恋怎么维持热情",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "异地恋怎么安排视频通话时间",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和两个多元关系伴侣谈未来期待",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "多元关系里怎么介绍伴侣的伴侣不尴尬",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "开放式关系规则理解错了怎么跟新对象解释",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "伴侣想控制我关注谁怎么办",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "女朋友想同居但我们有矛盾",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "伴侣暂时搬进来怎么确保只是暂时的",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "夫妻消费观不同怎么磨合",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么向女友说明不想结婚的理由",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么坚定地告诉家人我不想结婚",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "怎么委婉地拒绝好朋友的求婚",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "怎么温柔地提分手",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么铺垫让女友接受分手",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "气头上说了伤人的话怎么修复关系",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "被拉黑了想和好怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "女友对别人有好感但没爱上怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和妻子谈忠诚保证",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么帮朋友判断是幸福还是在将就",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "约会软件被人忽略后怎么处理",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "约会网站上怎么开口自我介绍",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md",
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么和婆婆改善沟通",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么让女友打开心扉",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么向情感封闭的人表达支持",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么化解和好友之间暗藏的矛盾",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和价值观对立的妈妈怎么维持关系",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝朋友不合理的要求不伤感情",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md",
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么和同事保持距离",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "怎么在猜谜式社交文化里活得轻松",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么约要好的朋友出来不尴尬",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么让女生相信我不是玩玩而已",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "在餐馆怎么点一盘真正够辣的菜",
+    "expectedDocs": []
+  },
+  {
+    "query": "公交上座位被包占着怎么开口",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让邻居管管吵闹的孩子",
+    "expectedDocs": []
+  },
+  {
+    "query": "异地恋里说双方都有错又怕她再封闭自己",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "怎么夸伴侣好看又不冒犯她的身体焦虑",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "恋爱中该不该主动发私密照",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么答应好朋友的求婚",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "家人催婚该不该顺从",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "夫妻花钱观念不同怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆花钱大手大脚怎么提醒她",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆不工作但想要自己的零花钱",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "想和伴侣谈钱但他总回避怎么办",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "欠着债怎么跟男朋友坦白",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和老婆说她花钱太多",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆想要继承的遗产但我没有能给",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么让老婆多分担点家里的责任",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和男友谈家务分配",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "两人工作时长不同家务怎么分才公平",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "伴侣总拖延做家务怎么开口",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "老公做事总不彻底怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么给婆婆留下好印象",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "公公总是不打招呼就来我家怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "和婆婆沟通不好怎么改善",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "婆婆总用钱让我们内疚怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "婆婆让老公很抑郁怎么跟她说",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "小姑子总影响我老婆的决定",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "丈母娘总给我们买一堆东西怎么拒绝",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "婆婆不尊重我的育儿方式还要继续让她来吗",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么跟未婚夫说想和他姐划清界限",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "两边妈文化冲突怎么调和",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "公婆送的礼物不喜欢怎么拒绝不伤感情",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "家人总在我老公来时安排活动怎么拒绝",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "夫妻对要不要孩子有分歧怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "该什么时候跟对象说我不想再要孩子",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "老婆说不想要孩子了但我怕她是因为抑郁",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "怎么让双方父母接受我们不要孩子",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么开口让父母偶尔帮我们带下孩子",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "公婆想亲自抚养儿子但我想要回来",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么管教配偶带来的孩子",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "夫妻对要不要二胎想法不一致",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "我在考虑离婚但不确定该不该",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "离婚后房子怎么处理",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "快离婚了怎么跟前妻相处得好一点",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "前妻总干涉孩子和新伴侣的关系",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前夫在孩子面前说我坏话怎么应对",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "共同抚养孩子多久交接一次比较合理",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "离婚后对方总说我不愿付钱怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "老婆离家出走了怎么安抚孩子",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "逃离家暴老公后孩子不愿认我怎么办",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "要不要取消孩子的抚养费",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "什么时候告诉女儿她不是亲生的",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前夫恨我父母怎么处理",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前妻新男友可能虐待我孩子怎么办",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么帮孩子度过父母离婚的时期",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "离婚后该让孩子自己选跟谁吗",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "离婚后轮流住谁家对孩子更好",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么减少前夫对孩子的不良影响",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "女友想搬来同居但我们有矛盾",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "伴侣暂住我家怎么确保只是暂时的",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么开口跟同居伴侣说想分开住",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "女友搬进来后怎么跟她谈房租分担",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "现在婚姻状况不好想改善怎么入手",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么让家人和老婆恢复和睦",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "夫妻互不相让怎么解决冲突",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么跟老婆谈忠诚问题又不想伤害她",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "发现老婆爱耍小心思怎么谈",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆总发脾气怎么跟她沟通",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么跟老公说我需要自己的时间",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆的多疑伤害了我们怎么告诉她",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "夫妻政治观点不同怎么相处",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "老婆总变卦不按计划走怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怀疑老婆有精神出轨怎么谈",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟女友聊敏感话题",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "好朋友向我求婚怎么婉拒",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "怎么跟女友解释我不想结婚的理由",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "婚礼地点选哪里和未婚妻谈不拢",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "爸非要我婚礼请奶奶但我不同意",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "邻居家的孩子老来我家玩怎么办",
+    "expectedDocs": []
+  },
+  {
+    "query": "办公室微波炉被同事霸占了怎么说",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让物业修好楼道的灯",
+    "expectedDocs": []
+  },
+  {
+    "query": "同事总是借我的笔不还怎么办",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么礼貌地让理发师别聊那么多天",
+    "expectedDocs": []
+  },
+  {
+    "query": "健身房办卡太贵怎么砍价",
+    "expectedDocs": []
+  },
+  {
+    "query": "婚前保持处男被嘲笑很正常吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "该不该劝朋友听妈妈的话接受包办婚姻",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么告诉异教朋友婚姻走不到一起",
+    "expectedDocs": []
+  },
+  {
+    "query": "要不要反对好朋友结婚",
+    "expectedDocs": []
+  },
+  {
+    "query": "孩子考了好成绩该给钱奖励吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "伴侣总因为焦虑控制我，怎么相处",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "女友焦虑影响到我和朋友的关系怎么办",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "喜欢有焦虑和强迫症的女孩，怎么追不刺激她",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "妈妈有严重焦虑，我该怎么帮她走出来",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "怎么和女友聊她的嫉妒心问题",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "怎么让女友相信我没出轨",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "遇到别的女生时女友变得攻击性强",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "怎么让男友安心踏实",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "伴侣过去感情创伤重，怎么安抚",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "女友总和她前任聊天，我该介意吗",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "恋爱初期对方抑郁很深，怎么不变成纵容者",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "怎么识别并反击煤气灯操控",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "女友被操控型父母控制，怎么帮她",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "长辈用操控和情感勒索我，怎么应对",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么和爱操控的人打交道",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么避免在别人问我偏好时被带节奏",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么让朋友意识到自己很toxic需要改变",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "我妈说话总是让我愧疚，怎么打破",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么委婉拒绝被操控的性要求",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么和伴侣说我们需要边界",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "成年人大发脾气该怎么化解",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "家人冷战互相不理，怎么打破",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和男友谈他身边的女性好友",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和女友谈敏感话题而不让她抗拒",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "女友一天发生什么总说得很含糊，心里不舒服",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "和朋友的伴侣吃饭怎么不让朋友觉得被背叛",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "女友发现我第二个住处，怎么解释",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "前女友误会很深还在生气，怎么澄清",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "两人吵架时观点完全不合，怎么收场",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "伴侣的朋友总在聊天时碰我，怎么阻止",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么告诉伴侣我受不了突然的肢体触碰又不伤感情",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么跟不喜欢聊的伴侣谈性同意",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "做爱时对方不喜欢直接问，怎么确认意愿",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "同事圣诞派对摸我臀部，怎么告诉他这不行",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让朋友删掉有我的自拍",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让新朋友给我留点个人空间",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "有人总入侵我的个人空间，怎么提醒",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么跟黏人的小女友设边界又不伤她",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝哥哥又让他觉得我还挺他",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么劝爸妈尊重我的隐私",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "邻居侵犯基本隐私，怎么划清界限",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "和情绪虐待我的共同育儿者设边界，怎么做对孩子好",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "有人偷偷拍我照片，怎么处理",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "伴侣总看我手机消息，怎么谈",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么提醒别人别在公共场合看我手机",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "房东在门口装了摄像头，怎么办",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "丈夫在婴儿面前发怒，我该多担心",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "离婚后孩子轮流住还是房子轮流住",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么跟孩子讲爸妈离婚但一方还爱着另一方",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "单亲父母再约会，什么时候介绍孩子",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么退出toxic关系又不伤害朋友",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟toxic的原生家庭'分手'",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "想和toxic家人拉开距离但总被拉回去",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "该不该告诉别人他的伴侣在出轨",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "朋友被绿了，出轨的是我好友，怎么告诉他",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么问前任她是不是对我有依赖",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前任用自杀威胁我，怎么应对",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么帮网上声称要自残的朋友",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "朋友知道我自残过，怎么面对",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么帮陌生被家暴的女性",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么保护孩子不受虐待型妈妈伤害",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "我爸总打我，怎么让他停手",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么劝我爸别再打我妈",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "6岁孩子说恨自己想自杀，怎么办",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "11岁孩子说想死，怎么帮他",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么告诉好友他在精神虐待自己的孩子",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "被家暴逃出来后孩子不愿跟我，怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "老婆总用威胁来管4岁孩子，怎么办",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "邻居虐待孩子，报警前该做什么",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "我逃出情绪虐待的丈夫又回来了，孩子不认我",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "怎么教小孩不虐待动物",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让孩子保留泰迪熊到永远",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让别人正确写下我的邮箱又不显得居高临下",
+    "expectedDocs": []
+  },
+  {
+    "query": "宝宝洗澡几岁可以离开他",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么跟不讲理的网友辩论",
+    "expectedDocs": []
+  },
+  {
+    "query": "3岁孩子打8个月大的弟弟，怎么让他停手",
+    "expectedDocs": []
+  },
+  {
+    "query": "家长要求小孩给拥抱算虐待吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "什么时候可以偷看teenager的短信",
+    "expectedDocs": []
+  },
+  {
+    "query": "老大对老二表现出嫉妒，正常吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让5岁儿子学会尊重同学",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么判断第一次约会对方愿不愿意邀请我去她家",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "为什么第一次约会总是男方付钱",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "第一次约会后想委婉问对方感受",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么明确表达这是在约对方出去",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "约会软件上没感觉想退回做朋友",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "约会到底应该谁付钱",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "拒绝第二次约会还不能破坏未来可能",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "怎么约经常见面的人而不尴尬",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "约会对象屡次放我鸽子怎么处理",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "和网上认识的网友见面之前怎么确认意图",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "对同事有好感怎么请吃饭不显得有目的",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "约会软件到底该怎么正确使用",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "约会软件上被忽略怎么办",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么让约会对象少发消息",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "想追的人觉得我发消息不体贴",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么问社交软件上主动联系我的女生想干什么",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "消息已读不回应该怎么处理",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "对方回消息特别慢是不是没兴趣",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么判断对方是不是故意不回消息",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "怎么让对方知道我不喜欢被消息已读不回",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么问朋友为什么突然不理我",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "网上认识的人想约见面但不想显得太急",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "很久没联系后重新开始网聊要注意什么",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "对方已读不回怎么催回复",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么夸女生的妆容不奇怪",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么得体接受别人的含蓄夸奖",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么夸别人变瘦了",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么夸女同事而不显得是在调情",
+    "expectedDocs": [
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "别人夸我但我觉得不配怎么回应",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么让对方知道我没有在调情",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "为什么善意的举动会被当成冒犯性的调情",
+    "expectedDocs": [
+      "practical/公开表达案例的伦理转译.md"
+    ]
+  },
+  {
+    "query": "聚会上有人调戏我伴侣怎么处理",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么让对方停止跟我调情",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么委婉确认对方是不是在调情",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么判断老朋友是否对我有意思",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么让伴侣相信我没有在跟别人调情",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么表达只想做朋友不想发展关系",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "实习快结束了想约实习生出来",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么约收银员出去",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么委婉地约好朋友出去",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "网上群里怎么约人出来",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "对方给暧昧信号但又不明确怎么约",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "不想直接问怎么知道她对我是否有好感",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "拿到了女同学号码怎么联系她不奇怪",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么向认识很久的朋友表白",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么礼貌地拒绝别人的追求",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让女生更直接地拒绝我",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "约会对象太强势怎么委婉表达不满",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么暗示对方自己现在不想谈恋爱",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "被拒绝后还要一起工作怎么相处",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝告白不伤害对方",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么告诉追求者我们不可能",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "暗恋对象对我没意思怎么相处",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "伴侣很讨厌谈同意和边界怎么办",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "伴侣不喜欢直接问但在性爱中需要沟通",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "伴侣的朋友摸我怎么处理",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么跟配偶说我不喜欢突然的肢体接触",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么阻止对方以性操控我",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "怎么处理关系中的焦虑和控制问题",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "前女友威胁要自杀怎么处理",
+    "expectedDocs": [
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "和前任有巨大误会她很生气怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么问前任她是否对我有依赖",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么让别人不要期待我回短信",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让女生更愿意直接拒绝我",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么跟人说清楚我没有在调情",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么说服大家我真的不想参加活动",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "怎么礼貌地拒绝搭讪的人",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让对方不再拼命对我好",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让同事吃饭声音小一点",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么礼貌地让别人放下手机",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么说服室友从有线改WiFi",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让同事关掉广播",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么问老板要不要参加公司团建",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让邻居晚上不要太吵",
+    "expectedDocs": []
+  },
+  {
+    "query": "分手后想跟对方复合但怕伤害她",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "分手后怎么和前任重新联系",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "我跟女友想分手但不知道怎么开口最委婉",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "朋友分手了走不出来我该怎么帮他",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "分手后前任还联系我但我叫他别再说话了",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "如何跟前任谈分手后再做朋友",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟前任说我想复合又不想伤害她的感情",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "跟女友正式提分手前想先铺垫一下",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "分手了但还喜欢她怎么放下",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "分手后生活圈子重合太多怎么处理",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "分手后共同朋友生日派对该不该邀请前任",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前任说永远不再联系我但还在发消息",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "前任老拿分手的事来怼我怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "想跟前任解释我明白我们之间的问题了",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "追一个刚分手的女生合适吗",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "男朋友还挂着前任的照片在家里",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "女朋友还留着前男友的东西",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "女友总跟前任保持联系我该介意吗",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "我的好朋友跟我前女友在一起了怎么相处",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "发现朋友被劈腿了该不该告诉她",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "我该不该告诉朋友她的伴侣出轨了",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟伴侣谈我之前的出轨经历",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "伴侣背叛了我的信任怎么修复",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "被伴侣骗了之后还能重新信任吗",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "女友跟别人暧昧我该不该继续",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么重建女友对我的信任",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "我撒谎后怎么让伴侣重新信任我",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "跟异性的友谊让女友不信任怎么办",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "老婆总是怀疑我出轨但我是清白的",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么告诉伴侣我不是在骗她",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "家人逼我原谅伤害我的人",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "男朋友出轨了我不知道该不该原谅他",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "被劈腿后怎么走出心理阴影",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "前任伤害我很深我还在恨他",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "跟伴侣谈重要问题她总是回避",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "我总忍不住给前任发很长消息",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "和女朋友吵架后她不愿沟通怎么办",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "每次和伴侣吵架都翻旧账怎么解决",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么让女朋友愿意敞开心扉说话",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "伴侣以前被伤害过怎么安抚她的不安",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "我总担心伴侣会离开我不安怎么办",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "伴侣过度焦虑影响我的人际关系",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "前段感情留下创伤怎么面对新关系",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "女朋友不把我加进朋友圈什么情况",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "伴侣不让我看她手机信息",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "删除聊天记录会不会让女友失去信任",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "前妻总干涉我和新伴侣的关系",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "老公前任还来家里谈财务问题",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "父母总想让我跟分手的人复合",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "离婚了什么时候该告诉新认识的人",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么让前任删除我们的私密照片",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么告诉前任不要有性方面的期待",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么分辨伴侣是在控制我还是关心我",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "伴侣控制我关注谁感觉很不舒服",
+    "expectedDocs": [
+      "knowledge/05-PUA操控与伦理替代.md"
+    ]
+  },
+  {
+    "query": "和伴侣投入不对等感觉不平衡",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "女友对我过度依赖我想抽身",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+    ]
+  },
+  {
+    "query": "和新认识的人聊到前任话题怎么自然回应",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么自然地告诉对方我不想谈前任的事",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "如何在妻子有困难时没帮上忙后重建信任",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "她老是说我背叛了我们的信任",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "分手后还要同居怎么相处",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "怎么让朋友别再逼我原谅分手的人",
+    "expectedDocs": []
+  },
+  {
+    "query": "前任的事过去三年了家人还老提",
+    "expectedDocs": []
+  },
+  {
+    "query": "用手机聊天时怎样有礼貌地结束对话",
+    "expectedDocs": []
+  },
+  {
+    "query": "分手后怎么把狗从对方家里要回来",
+    "expectedDocs": []
+  },
+  {
+    "query": "室友老是作弊打游戏怎么办",
+    "expectedDocs": []
+  },
+  {
+    "query": "邻居总跟我说他前任的故事",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么礼貌拒绝邻居借东西",
+    "expectedDocs": []
+  },
+  {
+    "query": "和前女友绝交后怎么在工作场合保持专业",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么让老朋友别再说我前任的坏话",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "分手了房子怎么分才公平",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "前任和我是同事怎么避讳过去",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "伴侣说前任坏话让我很烦",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "前任还用小号偷看我的社交动态怎么办",
+    "expectedDocs": [
+      "knowledge/09-在线约会与数字关系.md"
+    ]
+  },
+  {
+    "query": "前任突然找我借钱不知道怎么拒绝",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同事老在会议上打断我说话怎么提醒他",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么让老板听我把话说完再打断",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同事因一次分歧不理我了怎么缓解",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么委婉告诉同事他们越过了工作边界",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "老板对我发火时怎么保持冷静讲理",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么表达对上司决策的不同意见又不被穿小鞋",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同事只给模糊的批评性反馈怎么回应",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么接受同事带有伤害性的反馈",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "和同事谈话怎么避免冲突升级打起来",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么礼貌地告诉同事别在我专心工作时打断我",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "开电话会怎么礼貌地插话说出自己的意见",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "上司不接受任何异议我该怎么和他沟通",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同事总在我忙的时候追着问问题该怎么拒绝",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "同事想让我教她技能但我不想搭进私人时间",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么设定工作时间的边界不让同事占用",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "同事总直接闯进办公室问问题怎么设边界",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么和同事重新建立专业边界不再公私不分",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "经理不尊重我的私人时间总在下班后找我",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "办公室恋情结束后怎么跟前同事正常相处",
+    "expectedDocs": [
+      "knowledge/15-分手背叛与关系修复.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么告诉老板我和同事在谈恋爱",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "升职后喜欢的同事进了我的团队怎么处理",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "拒绝了好感过我的高级别同事之后怎么自保",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "被同事追求已拒绝但对方还缠着我该不该上报",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "和同事约会但对方跟我的下属有关联怎么办",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么跟同事说我不想和他发展亲密关系",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么向经理要真实坦诚的绩效反馈",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么给老板的老板提建设性的意见",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么正确看待有道理的批评不被击垮",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "代码评审时同事给的批评毫无建设性怎么应对",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么给那些把意见当人身攻击的人提建议",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "遇到特别争强好胜的同事怎么相处",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "升职后原来平级的同事总跟我起冲突",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同事总批评我的个人习惯和性格怎么应对",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "跟刚变成自己上司的同事关系紧张怎么改善",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么在工作中表现得坚定自信又不显得冒犯",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "遇到过于强势的平级同事怎么维护自己",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让同事说话直击重点别再绕弯子",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么和既是同事又是朋友的人保持适当距离",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么委婉告诉经理他做的某件事让我不开心了",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么告诉经理我手头缺活干又不显得抹黑同事",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "同事总是大声说话打扰到我怎么礼貌制止",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么应对同事不停问我私人问题",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "午休时间被同事拉去谈工作该怎么拒绝",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "面对总否定我的经理怎么调整心态继续工作",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md"
+    ]
+  },
+  {
+    "query": "同事总是抢走我的功劳我该怎么争取",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟同事说不要总在我面前炫耀",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝同事让我帮做的额外工作",
+    "expectedDocs": [
+      "practical/关系投入失衡：互惠判断、降级投入与退出决策.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "同事总带孩子来上班我该怎么应对",
+    "expectedDocs": []
+  },
+  {
+    "query": "能不能给同事钱让他帮我做不想做的事",
+    "expectedDocs": []
+  },
+  {
+    "query": "面试时花一整天帮潜在雇主干活合适吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "同事带小孩来办公室玩可以吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让同事在我面前说真话别客气",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让经理别再对我太客气",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让同事对我的工作提更多反馈",
+    "expectedDocs": []
+  },
+  {
+    "query": "同事约我吃饭想婉转表示可以一起",
+    "expectedDocs": [
+      "practical/主动表达、第一次见面与自然接触.md"
+    ]
+  },
+  {
+    "query": "怎么鼓励同事多跟我交流",
+    "expectedDocs": [
+      "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+    ]
+  },
+  {
+    "query": "再婚后孩子不接受我的伴侣怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "继子亲妈总买一堆东西宠坏他怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "继父面对叛逆期青少年怎么保持冷静",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "丈夫作为继父觉得和继女关系越来越远怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "5岁继子好像不喜欢我怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "16岁继女有精神问题还攻击我该参与多少",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "8岁继子不听话怎么改善我们关系",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么调解配偶和继子女之间的冲突",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "继父面对情绪不稳定的5岁孩子该扮演什么角色",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "想成为更好的继父应该怎么做",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "只是娶了妈妈的人怎么当好继父",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "再婚后我总站在孩子这边让伴侣伤心怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "单亲家长频繁换伴侣对孩子伤害大吗",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么帮孩子接受父母的新恋情",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "什么时候该向孩子介绍同母异父的弟弟妹妹",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "单亲家长怎么确定带孩子见新对象的时机",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么和孩子谈我要重新开始约会",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "再婚后怎么让成年继子学会表达情绪而不是憋着",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "再婚家庭里继女离家出走怎么支持她",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/17-中国法律安全与危机转介.md"
+    ]
+  },
+  {
+    "query": "共同抚养时孩子在两家长间轮换频率怎么定",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "前夫在孩子面前说我坏话怎么处理",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "孩子被前妻离间不愿意理我怎么办",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "离异后是孩子搬家还是大人轮流换房比较好",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "前夫总来额外探视却不帮忙分担怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "和非抚养权方在育儿决定上意见不合怎么沟通",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么减少前夫不良育儿方式对孩子的影响",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "女儿亲爸不愿尽责任却总给她希望怎么办",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "儿子和妈妈吵架后总要给我打电话我该怎么做",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "三个月50/50共同抚养带孩子出国可行吗",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "抚养权在下怎么管教孩子才不和对方冲突",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "前妻总想插手我和新伴侣的关系怎么办",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "怎么跟父母划定聊天话题的边界",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "父母控制欲太强我该怎么设立边界",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么和总是消极抱怨的父母划清界限",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么教5岁儿子理解边界",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "7个月大的婴儿需要设定什么边界",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "成年子女应该在经济上帮父母多少",
+    "expectedDocs": [
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "17岁怎么应对控制欲强喜怒无常的妈妈",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么让妈妈意识到她对我弟弟的伤害行为",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝父母总想不请自来的探望",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么制止兄弟姐妹对我的边界侵犯",
+    "expectedDocs": [
+      "knowledge/08-同意边界性与亲密.md"
+    ]
+  },
+  {
+    "query": "怎么和23岁女儿就家庭问题做成人式沟通",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "怎么跟13岁儿子聊他不恰当的言论",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md"
+    ]
+  },
+  {
+    "query": "发现儿子抽烟喝酒要怎么摊牌",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "离婚后5岁儿子对爸爸说不爱他怎么办",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "离婚后女儿和我越来越疏远是不是弄丢了",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "9岁女儿情绪性暴食怎么帮忙",
+    "expectedDocs": [
+      "knowledge/03-依恋理论与情绪调节.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "孩子亲爸讨厌我的父母怎么处理",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md",
+      "knowledge/15-分手背叛与关系修复.md"
+    ]
+  },
+  {
+    "query": "成年儿子总是不停批评我怎么办",
+    "expectedDocs": [
+      "knowledge/07-沟通冲突与修复.md",
+      "knowledge/11-婚姻家庭与生命周期.md"
+    ]
+  },
+  {
+    "query": "一岁多的宝宝到底该多严格管教",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么才能拿到儿童虐待数据统计资料",
+    "expectedDocs": []
+  },
+  {
+    "query": "正面教育里情绪认可之后该接什么话",
+    "expectedDocs": []
+  },
+  {
+    "query": "妈妈当自己孩子的幼儿园老师合适吗",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么戒掉家长和孩子同睡的习惯",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么阻止父母离婚",
+    "expectedDocs": []
+  },
+  {
+    "query": "怎么让前妻和新伴侣彻底断绝来往",
+    "expectedDocs": []
+  },
+  {
+    "query": "如何逼孩子快点接受新伴侣",
+    "expectedDocs": []
+  },
+  {
+    "query": "恋爱关系一般有哪些心理学理论",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "想系统了解亲密关系的心理学框架",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "怎么判断一段关系健不健康",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "关系里的回应性是什么意思",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "伴侣之间的正向互动怎么做",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "亲密关系里的权力怎么影响感情",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "压力大会不会影响恋爱关系",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "怎么从心理学角度复盘一段感情",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "亲密关系有哪些核心要素",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "关系质量可以从哪些维度看",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "想找亲密关系心理学的总论资料",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "恋爱中交换和承诺是什么",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "怎么理解伴侣回应性",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "心理学怎么解释喜欢和爱",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "关系里公平感重要吗",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "想读亲密关系心理学的入门框架",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "如何判断关系是滋养还是消耗",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "关系动态系统是什么意思",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "感情里比较水平是什么",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "想要一份亲密关系心理学的知识地图",
+    "expectedDocs": [
+      "knowledge/02-亲密关系心理学总论.md"
+    ]
+  },
+  {
+    "query": "怎么自然地开始约会",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "第一次见面怎么表达好感",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "吸引一个人靠什么",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "约会初期怎么推进关系",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "如何判断对方对我有没有兴趣",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "关系启动阶段要注意什么",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "被拒绝后怎么调整心态",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "怎么增加约会中的吸引力",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "认识之后多久可以约",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "怎么避免把约会搞成查户口",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "追求阶段怎么保持自然",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "怎么看出互惠的趋势",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "喜欢一个人要不要主动",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "刚开始约会怎么定节奏",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "吸引力的常见误区有哪些",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "怎么承受不确定和被拒绝",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "怎么从朋友升级到恋人",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "速度约会研究说明了什么",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "怎么让关系自然启动",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "求约会和关系启动的心理学建议",
+    "expectedDocs": [
+      "knowledge/06-吸引约会与关系启动.md"
+    ]
+  },
+  {
+    "query": "什么是真正的爱",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱一个人和爱他带来的体验有什么区别",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱情哲学有哪些经典问题",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱是发现价值还是创造价值",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "亲密关系里如何保持自我",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱与自由能共存吗",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "中国哲学里怎么理解爱",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "儒家怎么看待爱情",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "道家对亲密关系有什么启发",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "墨家兼爱和恋爱有什么关系",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "恋爱里的“我们”会不会吞没“我”",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "怎么面对伴侣不是我想象中的人",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱情的本质是什么",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "想从哲学角度理解恋爱",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱需要理由吗",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "为什么说爱不是一个概念",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "恋爱中的他者性是什么意思",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "爱的种类有哪些",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "如何用哲学思考亲密关系",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "关于爱的哲学书单有推荐吗",
+    "expectedDocs": [
+      "knowledge/10-恋爱哲学.md"
+    ]
+  },
+  {
+    "query": "情侣之间钱怎么管",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "结婚后财务怎么分配",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "家务总是我一个人做怎么办",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "夫妻因为钱吵架怎么办",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "育儿责任怎么分担",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "双方父母介入太多怎么处理",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "家庭开支 AA 还是上交工资",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "怎么和伴侣谈钱不伤感情",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "婚后财务透明的标准是什么",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "家务分工怎么才算公平",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "有了孩子后夫妻怎么协作",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "婆媳/丈母娘边界怎么定",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "家庭财务预算会议怎么开",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "怎么判断财务安排是否公平",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "一方不工作家庭经济怎么安排",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "育儿不是妈妈的义务怎么沟通",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "伴侣总是不做家务怎么谈",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "双方家庭借钱怎么拒绝",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "怎么建立共同财务目标",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "金钱和家务矛盾怎么解决",
+    "expectedDocs": [
+      "knowledge/12-金钱家务育儿与双方家庭.md"
+    ]
+  },
+  {
+    "query": "现代婚姻是怎么演变的",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "古代婚姻和现代婚姻有什么不同",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "婚姻制度为什么变化",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "为什么现在人越来越晚婚",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "中国婚姻法历史沿革",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "包办婚姻什么时候变成自由恋爱的",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "婚姻从角色分工到平等协商怎么来的",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "现代婚姻为什么要求这么高",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "婚姻是不是人类社会的常态",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "一夫一妻制是一直都有吗",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "1950年婚姻法有什么意义",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "婚姻变迁对今天择偶的影响",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "为什么现在离婚率变高",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "传统婚姻和伴侣式婚姻的区别",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "想了解婚姻制度的历史",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "婚姻的浪漫爱情理想是何时出现的",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "中国近代婚姻制度怎么变化的",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "不婚和晚婚是历史趋势吗",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "婚姻变迁史有什么资料",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "怎么用历史眼光看待婚姻",
+    "expectedDocs": [
+      "knowledge/13-现代婚姻变迁史.md"
+    ]
+  },
+  {
+    "query": "为什么现在年轻人不结婚",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "中国家庭规模为什么变小",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "晚婚不婚少育的社会原因",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "城市化对家庭有什么影响",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "女性就业对婚姻有什么影响",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "低生育率和家庭变化有什么关系",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "中国人口老龄化对家庭影响",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "为什么离婚率上升",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "住房压力怎么影响结婚",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "教育年限拉长和晚婚的关系",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "家庭变迁的社会机制有哪些",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "现在的人为什么越来越独居",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "婚姻登记数据说明了什么",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "怎么理解中国家庭规模变化",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "社会压力对婚育选择的影响",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "中国家庭变迁的最新数据",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "流动人口对家庭结构的影响",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "为什么生孩子的越来越少",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "家庭变化是社会结构还是观念问题",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "想了解中国家庭变迁的背景",
+    "expectedDocs": [
+      "knowledge/14-社会发展与家庭变迁.md"
+    ]
+  },
+  {
+    "query": "同性伴侣的关系要注意什么",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "多元关系是不是更容易不稳定",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "双方同意的开放关系怎么经营",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "非单偶关系有哪些风险",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "跨性别伴侣怎么沟通",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "残障人士的亲密关系怎么支持",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "再婚家庭的孩子怎么处理",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "单亲妈妈/爸爸如何平衡关系",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "不同文化背景的情侣怎么相处",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "年龄差很大的恋爱靠谱吗",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "怎么避免对多元关系贴标签",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "性少数伴侣如何面对出柜压力",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "继亲家庭怎么建立信任",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "多元关系里的公平怎么做",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "慢性病患者的恋爱怎么经营",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "怎么尊重不同阶层背景的伴侣",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "多元关系有哪些共同机制",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "非传统关系需要特别注意什么",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "想了解多元关系与反刻板印象",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "特殊群体在关系里的支持资源",
+    "expectedDocs": [
+      "knowledge/16-多元关系与反刻板印象.md"
+    ]
+  },
+  {
+    "query": "有没有关系沟通的练习",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "情侣可以一起做的反思练习",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "怎么开每周关系会议",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "吵架暂停协议怎么写",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "修复关系清单有什么",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "约会后怎么复盘",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "婚前必问的十个问题",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "怎么给关系做健康体检",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "倾听轮换练习怎么做",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "分手后怎么清理数字痕迹",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "关系价值排序练习怎么做",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "红绿灯边界练习是什么",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "怎么用练习改善沟通",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "想找一些恋爱教学用的对话卡",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "事实解释感受行动怎么练",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "冲突暂停怎么约定",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "关系月检要检查哪些项目",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "有哪些可以自己做的亲密关系练习",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "求关系修复的实用模板",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "想找情侣沟通的练习手册",
+    "expectedDocs": [
+      "knowledge/18-实用练习与对话卡.md"
+    ]
+  },
+  {
+    "query": "有哪些亲密关系经典书",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "求推荐恋爱心理学书单",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "想找依恋理论的原始论文",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "沟通治疗类书籍有什么推荐",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "中国婚姻家庭研究有什么书",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "在线约会和PUA有哪些研究",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "性与同意有什么权威书籍",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "扩展阅读怎么检索",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "想读米勒的亲密关系",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "婚姻哲学有什么书",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "家庭社会学经典著作",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "人格测量类书籍推荐",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "数字安全与约会有什么资料",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "多元关系研究有哪些书",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "核心书单和论文索引在哪",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "求权威的恋爱心理学术资源",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "想找伴侣沟通治疗的书",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "中国婚姻法相关书籍",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "有没有系统的亲密关系书单",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "想查具体主题的论文怎么找",
+    "expectedDocs": [
+      "knowledge/19-核心书单与论文索引.md"
+    ]
+  },
+  {
+    "query": "吵架时怎么保持冷静",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "每次吵架都翻旧账怎么办",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么吵架不伤感情",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "和对象吵架怎么收场",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "对方说话难听怎么回应",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "吵架时总想赢怎么办",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免把矛盾越吵越大",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "吵架后怎么和好",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "情侣吵架的理性处理技巧",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么接住对方的情绪不激化",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "一吵架就放狠话怎么改",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么在吵架中表达自己",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "吵架时对方不沟通怎么办",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "有没有万能吵架话术",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么做到对事不对人",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "亲密关系里吵架怎么解决",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "家人吵架怎么劝",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免情绪上头",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "吵架冷战时怎么办",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "求理性冲突处理指南",
+    "expectedDocs": [
+      "practical/万能吵架技巧：理性冲突处理指南.md"
+    ]
+  },
+  {
+    "query": "怎么夸人显得真诚",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "夸同事/领导/下属怎么夸",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "夸对象有哪些技巧",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免夸人像拍马屁",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "赞美别人的细节怎么找",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "夸人夸不到点子上怎么办",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么夸朋友不尴尬",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "有没有万能夸人话术",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么夸人才让人觉得被看见",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "间接夸人怎么夸",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么夸别人努力又夸结果",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "给女生/男生发消息怎么夸",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "高情商夸人的底层逻辑",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么夸孩子/长辈",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场夸人有哪些雷区",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让夸奖不刻意",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "万能夸人的实用指南",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么夸人才能建立好感",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "夸人会不会显得虚伪",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "求真诚夸奖的模板",
+    "expectedDocs": [
+      "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么给别人提供情绪价值",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "朋友难过时怎么安慰",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "伴侣抱怨工作怎么回应",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么接住对方的负面情绪",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "情绪价值到底是什么",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么安慰人才不显得敷衍",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "对方焦虑时怎么疏导",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么让喜欢的人觉得你懂他",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "提供情绪价值有哪些技巧",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么回应伴侣分享的成就",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "情绪价值是不是讨好",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免把安慰变成讲道理",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "对方受挫时说什么好",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么在聊天中提供情绪价值",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "情绪价值高的人怎么做",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "细节关怀怎么做",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么帮对方缓解压力",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "亲密关系里如何共情",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "求温暖有效的回应话术",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "怎么成为会提供情绪价值的人",
+    "expectedDocs": [
+      "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+    ]
+  },
+  {
+    "query": "说错话尴尬怎么救场",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天冷场了怎么办",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "对方说错话怎么化解",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "自己出丑怎么自嘲",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "聚会冷场怎么带动气氛",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么把尴尬话题自然转走",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "空气突然安静怎么接",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "被当众揭短怎么应对",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "不小心忘事尴尬怎么办",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么化解社交尴尬",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "救场有哪些实用技巧",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么用幽默化解尴尬",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "对方尴尬时怎么给台阶",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "饭局上冷场怎么办",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "说错名字/记错人怎么圆",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免越解释越尴尬",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "尴尬时刻怎么放松自己",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "求轻松救场的实用指南",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么在尴尬中保持体面",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "高情商救场话术",
+    "expectedDocs": [
+      "practical/化解尴尬：轻松救场的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么接话才不会冷场",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天总是把天聊死怎么办",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么接住对方的话继续聊",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "接话技巧有哪些",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "对方吐槽时怎么接",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么把话题自然延伸",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天时怎么抓关键词",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "接话卡壳了怎么救",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "日常闲聊怎么接话",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么回应对方才显高情商",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天中怎么避免只回嗯哦",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么把普通对话聊出深度",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "接话时先回应情绪还是内容",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "对方说模糊的话怎么补细节",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么在群里接话不尴尬",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "和喜欢的人聊天怎么接",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "求巧妙接话技巧",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让对话更流畅",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "冷场时怎么补位",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "高情商接话实战指南",
+    "expectedDocs": [
+      "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+    ]
+  },
+  {
+    "query": "不想回答的问题怎么用废话带过",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么用废话文学应付尴尬问题",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "无聊的问题怎么回",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "不想透露隐私时怎么回复",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "求万能的废话回复模板",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么把敷衍说得不伤人",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "敏感追问怎么避开",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "不熟的人问工资怎么回",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么用废话文学活跃气氛",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "废话文学会不会得罪人",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "对方问不好回答的问题怎么接",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "求几个百搭的废话句式",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么判断什么时候该用废话回复",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "寒暄时怎么回不尴尬",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "被追问感情状况怎么答",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么用废话文学化解压力",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "高情商地转移话题",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "废话回复的避坑技巧",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "求轻松应对各类场景的废话指南",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么让回答听起来有内容又没泄露信息",
+    "expectedDocs": [
+      "practical/废话文学回复指南：轻松应对各类场景.md"
+    ]
+  },
+  {
+    "query": "怎么开口求人帮忙不尴尬",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "请人办事怎么说话",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么让朋友愿意帮你",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "托关系办事有什么话术",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "求人帮忙被拒绝了怎么回应",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么表达需求让对方容易答应",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "请领导帮忙怎么说",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么降低求人办事的压迫感",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "找熟人帮忙怎么开场",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么回应对方的顾虑",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "托人办事要不要送礼",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么提出请求不显得功利",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "求高效托人办事的话术",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么把忙说清楚又不给对方压力",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "对方犹豫时怎么化解",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "求人办事后怎么感谢",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "职场求人帮忙的技巧",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免求人时低声下气",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "高情商求人办事指南",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "怎么让人心甘情愿帮你",
+    "expectedDocs": [
+      "practical/托人办事的高效话术指南.md"
+    ]
+  },
+  {
+    "query": "说话没逻辑怎么办",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么表达才能让领导听明白",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "汇报工作怎么讲才有条理",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天时说话颠三倒四怎么改",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么把观点说清楚",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "表达逻辑性怎么提升",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免说话啰嗦没重点",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "结构化表达有哪些框架",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么用衔接词让表达流畅",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "汇报时被问住怎么应对",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么预判对方疑问",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么提炼信息重点",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "说话总是想到哪说到哪怎么办",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "如何做到逻辑清晰",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "表达时怎么减少信息过载",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场汇报的逻辑模板",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让沟通更高效",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "逻辑表达有哪些常见误区",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "求提升表达逻辑性的方法",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么讲事情让别人一听就懂",
+    "expectedDocs": [
+      "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么提升自己的气场",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "开会发言怎么不怯场",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么让人觉得自己不好惹",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "气场是装出来的吗",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么在社交中显得自信",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "被甩锅时怎么应对",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝别人还不损气场",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "气场强的人有什么特点",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么从内到外建立气场",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "遇到突发情况怎么稳住",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免气场弱被欺负",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "说话声音小气场弱怎么改",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么在职场建立影响力",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "气场和强势有什么区别",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么保持内心稳定",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "被道德绑架怎么应对",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "陌生人社交怎么显气场",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "求提高气场的实用方法",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么让自己看起来有力量感",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "气场修炼的底层逻辑",
+    "expectedDocs": [
+      "practical/提高气场：从内到外的力量感塑造指南.md"
+    ]
+  },
+  {
+    "query": "怎么拓展有效人脉",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "参加活动怎么认识有用的人",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "加了微信怎么不变成僵尸好友",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么维护长期人脉",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "很久没联系的人怎么开口",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "人脉是不是越多越好",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让贵人愿意帮你",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "破冰聊天怎么自然",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么给人留下好印象",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "人脉维护有哪些技巧",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么输出价值让人记住你",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "社恐怎么拓展人脉",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "找大佬聊天怎么开场",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免社交功利感",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么把点头之交变成朋友",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "求助很久没联系的人怎么开场",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场人脉怎么建立",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "人脉的本质是什么",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "求有效拓展人脉指南",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么维护弱关系",
+    "expectedDocs": [
+      "practical/有效拓展人脉：从建立到维护的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天总是被动怎么改",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么主动开启话题",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "对方问一句我答一句怎么办",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让聊天不冷场",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "没话题时怎么主动找话题",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么从对方话里延伸话题",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "开放式提问怎么问",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "和喜欢的人聊天怎么主动",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免查户口式聊天",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天中怎么分享自己不尴尬",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么把普通聊天聊得有趣",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "冷场时怎么主动救场",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么引导对方多说话",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "聊天化被动为主动的技巧",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "刚认识怎么聊天不尬",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么主动推进对话",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "对方总是回嗯怎么继续",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "求聊天主动引导指南",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么在聊天中掌握节奏",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "如何让互动持续下去",
+    "expectedDocs": [
+      "practical/聊天化被动为主动：引导互动的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么自然地聊天不刻意",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么把搭讪变得自然",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "自然流是什么",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "聊天时怎么找到话题",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么做到边观察边表达",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "不用套路怎么和喜欢的人聊",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "冷读和开放假设有什么区别",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么诚实表达好感",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "聊天中怎么双向自我披露",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么选择聊天话题线",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "自然流和结构化怎么结合",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "追人是不是一定要用套路",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么在聊天中保持真实",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "求自然流的实操方法",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么从一句问候自然推进",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "内在状态不好怎么聊天",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "轻结构互动是什么意思",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么避免把互动变成升级漏斗",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "求伦理能力转译的聊天方法",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么真诚又有吸引力地交流",
+    "expectedDocs": [
+      "practical/自然流、内在状态与结构化互动：伦理能力转译.md"
+    ]
+  },
+  {
+    "query": "怎么让领导欣赏我",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么获得领导信任",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "领导喜欢的下属什么样",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "接任务时怎么表现专业",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么向领导汇报才有用",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么主动创造价值",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让领导觉得你靠谱",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "被领导甩锅怎么应对",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么和领导有效沟通",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场怎么不做无用功",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么理解领导需求",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么在领导面前加分",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "求获得领导青睐的方法",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么避免讨好领导",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "领导给额外任务怎么接",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么成为领导离不开的人",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场向上管理的技巧",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么让领导轻松获取信息",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "和领导沟通有哪些雷区",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "求职场价值匹配指南",
+    "expectedDocs": [
+      "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md"
+    ]
+  },
+  {
+    "query": "被同事孤立怎么办",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "新环境没人理我怎么破",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被小圈子排挤怎么应对",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被孤立是不是我的问题",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么融入新集体",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被故意冷落怎么不卑不亢",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "转学/新入职怎么交朋友",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被排挤时怎么调整心态",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么打破零社交状态",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么诊断自己被孤立的原因",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被孤立后要不要讨好别人",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么和孤立自己的人相处",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "求被孤立破局指南",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "新环境怎么建立连接",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被圈子排斥怎么办",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么创造共同场景融入",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被孤立时怎么保持自信",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场被边缘化怎么办",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "如何从自我调适到建立连接",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "被孤立后如何重建关系",
+    "expectedDocs": [
+      "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝别人不伤感情",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "不想帮忙怎么委婉拒绝",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝领导加任务",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "被借钱不想借怎么回",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝同事甩活",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "高情商拒绝的技巧有哪些",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么说不才不愧疚",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "拒绝后又想帮对方怎么办",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么用替代方案拒绝",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "被道德绑架怎么拒绝",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝朋友不尴尬",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "边界式拒绝怎么表达",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "突然的请求怎么延迟答应",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝亲戚的无理要求",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "拒绝时怎么保持友好",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "职场怎么拒绝额外任务",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么设定个人边界",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "求体面拒绝的话术",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "高情商拒绝的底层逻辑",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  },
+  {
+    "query": "怎么拒绝别人还维护关系",
+    "expectedDocs": [
+      "practical/高情商拒绝他人：体面护边界的实用指南.md"
+    ]
+  }
+]

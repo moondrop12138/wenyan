@@ -17,8 +17,14 @@ import com.wenyan.app.domain.ConversationStateTracker
 import com.wenyan.app.domain.HistoryCompactor
 import com.wenyan.app.domain.MemoryConflictDetector
 import com.wenyan.app.domain.MemoryExtractor
+import com.wenyan.app.knowledge.AndroidKnowledgeAssetReader
 import com.wenyan.app.knowledge.CrisisDetector
 import com.wenyan.app.knowledge.KnowledgeEngine
+import com.wenyan.app.knowledge.KnowledgeRouting
+import com.wenyan.app.knowledge.LlmRouteClassifier
+import com.wenyan.app.knowledge.RouteLlmConfig
+import com.wenyan.app.knowledge.RoutingCatalog
+import com.wenyan.app.knowledge.currentRouteClassifier
 import com.wenyan.app.llm.AnalysisParser
 import com.wenyan.app.llm.ChatHistoryMessage
 import com.wenyan.app.llm.ChatRequest
@@ -145,6 +151,34 @@ class RealChatRepository(
 
     private val currentModelId = dataStore.currentModelId
     private val visionModelId = dataStore.visionModelId
+
+    /**
+     * LLM 知识路由目录（懒解析 assets/knowledge/routing-catalog.json，首次发送才触达 assets；
+     * null = 目录缺失/坏数据，分类器不可用，路由始终走离线兜底）
+     */
+    private val routeCatalog: RoutingCatalog? by lazy {
+        RoutingCatalog.parse(AndroidKnowledgeAssetReader(context).readRoutingCatalogJson())
+    }
+
+    /**
+     * 平台侧 LLM 路由装配（对称桌面 ChatEngine.routeClassifier）：
+     * knowledgeRouting=llm（默认）且主模型三元组可得 → 分类器；offline（用户显式关闭）/ 未配置 → null（纯离线兜底）。
+     * offline 时 [currentRouteClassifier] 短路，不读模型配置（零解密、零路由请求）；
+     * 三元组解析与 resolveClient 同源（DataStore current_model_id → Room → Keystore 解密）。
+     */
+    private suspend fun routeClassifier(): LlmRouteClassifier? = currentRouteClassifier(
+        catalog = routeCatalog,
+        isLlmRouting = { dataStore.knowledgeRouting.first() == KnowledgeRouting.LLM },
+        resolveMainModelConfig = {
+            val model = currentModelId.first()?.let { providerRepository.getModel(it) }
+                ?: return@currentRouteClassifier null
+            val provider = providerRepository.getProvider(model.providerId)
+                ?: return@currentRouteClassifier null
+            val apiKey = providerRepository.decryptApiKey(provider.id)
+                ?: return@currentRouteClassifier null
+            RouteLlmConfig(provider.baseUrl, apiKey, model.name)
+        },
+    )
 
     init {
         // v1.9.4 隔夜冷启动恢复：进程被杀（澎湃OS 夜间清理等）后 sessionId 归零，
@@ -276,7 +310,7 @@ class RealChatRepository(
         }
         val statePrefix = stateTracker.buildStatePrefix(state)
 
-        val (knowledge, refDocs) = knowledgeEngine.buildInjection(text)
+        val (knowledge, refDocs) = knowledgeEngine.buildInjection(text, routeClassifier())
         val profile = profileRepository.getProfile()
         // v1.7.2 会话归属档案优先（老会话 targetId=null → 空档案 = 现状行为）
         // v1.7.3 注入链路改读事实表：resolveTargetWithMemory 内部惰性搬移 note→facts 后
@@ -496,7 +530,7 @@ class RealChatRepository(
         owner?.retag(sid)   // H5/M18
         conversationRepository.addMessage(sid, "USER", "transcription", transcription)
 
-        val (knowledge, _) = knowledgeEngine.buildInjection(transcription)
+        val (knowledge, _) = knowledgeEngine.buildInjection(transcription, routeClassifier())
         val profile = profileRepository.getProfile()
         // v1.7.2 会话归属档案优先；v1.7.3 注入改读事实表
         val target = resolveTargetWithMemory(sid)

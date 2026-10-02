@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.wenyan.app.knowledge.KnowledgeRouting
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -18,6 +19,9 @@ import kotlinx.coroutines.flow.map
  * v1.9.0 新增：memory_write_log（最近自动写入日志，供撤销最近一次；JSON 数组，最多 5 条）
  * v1.9.4 新增：current_session_id（冷启动恢复）/ fluid_background_enabled（流光背景开关）
  * v1.9.4 三改新增：fluid_hue（流光色相 0-360，默认 0）/ bg_brightness（背景亮度 0-100，默认 50）
+ * v1.9.4 玻璃可调新增：glass_frost（磨砂度 0-100，默认 60）；glass_blur（模糊度）v1.9.4 收尾移除——
+ *   模糊半径锁死 100dp（ui/theme/Color.kt GLASS_BLUR_DEFAULT），历史存量 key 不再读取（留库无害）
+ * 知识路由新增：knowledge_routing（"llm" 默认 | "offline" 显式关闭，取值归一见 shared KnowledgeRouting）
  * clearAll() 一键清全部 key（含新 key），隐私清除自动覆盖
  */
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
@@ -44,6 +48,10 @@ class SettingsRepository(private val context: Context) {
         val FLUID_HUE = intPreferencesKey("fluid_hue")
         /** v1.9.4 三改 背景亮度（0-100，默认 50 = 不叠 veil，观感与不可调版本完全一致） */
         val BG_BRIGHTNESS = intPreferencesKey("bg_brightness")
+        /** v1.9.4 玻璃可调 磨砂度（0-100，默认 60 = 磨砂档；运行时派生玻璃填充 alpha，对齐 web --wy-glass-frost 滑条 app.js:1070） */
+        val GLASS_FROST = intPreferencesKey("glass_frost")
+        /** 知识路由模式（"llm" 默认 | "offline" 显式关闭；取值常量与归一见 shared KnowledgeRouting） */
+        val KNOWLEDGE_ROUTING = stringPreferencesKey("knowledge_routing")
     }
 
     val currentModelId: Flow<Long?> =
@@ -83,6 +91,14 @@ class SettingsRepository(private val context: Context) {
     /** v1.9.4 三改 背景亮度（0-100，默认 50 = 中点 = 不叠 veil；同样双向夹取） */
     val bgBrightness: Flow<Int> =
         context.settingsDataStore.data.map { (it[Keys.BG_BRIGHTNESS] ?: 50).coerceIn(0, 100) }
+
+    /** v1.9.4 玻璃可调 磨砂度（0-100，默认 60 = 磨砂档；同样双向夹取） */
+    val glassFrost: Flow<Int> =
+        context.settingsDataStore.data.map { (it[Keys.GLASS_FROST] ?: 60).coerceIn(0, 100) }
+
+    /** 知识路由模式（默认 "llm"；读取经 KnowledgeRouting.normalize 归一，只有显式 "offline" 才关） */
+    val knowledgeRouting: Flow<String> =
+        context.settingsDataStore.data.map { KnowledgeRouting.normalize(it[Keys.KNOWLEDGE_ROUTING]) }
 
     suspend fun setCurrentModelId(id: Long?) {
         context.settingsDataStore.edit { prefs ->
@@ -133,6 +149,16 @@ class SettingsRepository(private val context: Context) {
     /** v1.9.4 三改 背景亮度（0-100，50 = 中点）：写前夹取 */
     suspend fun setBgBrightness(value: Int) {
         context.settingsDataStore.edit { it[Keys.BG_BRIGHTNESS] = value.coerceIn(0, 100) }
+    }
+
+    /** v1.9.4 玻璃可调 磨砂度（0-100）：写前夹取 */
+    suspend fun setGlassFrost(value: Int) {
+        context.settingsDataStore.edit { it[Keys.GLASS_FROST] = value.coerceIn(0, 100) }
+    }
+
+    /** 知识路由模式：写前归一（只有显式 "offline" 才关） */
+    suspend fun setKnowledgeRouting(value: String) {
+        context.settingsDataStore.edit { it[Keys.KNOWLEDGE_ROUTING] = KnowledgeRouting.normalize(value) }
     }
 
     // ===== v1.9.4 当前会话 id 持久化（隔夜冷启动恢复上次对话） =====

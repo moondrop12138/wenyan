@@ -85,6 +85,7 @@ const S = {
   sessionTargetId: undefined,   // 当前会话已绑定的档案（undefined=尚未加载）
   visionModelId: null,          // 视觉模型槽位（后端 Properties 持久化；主模型不支持视觉时走通道 B 转述）
   memoryAutoEnabled: true,      // v1.9.0 自动记忆开关（默认开；/api/settings 加载后覆盖）
+  knowledgeRouting: 'llm',     // 知识路由模式（"llm" 默认 | "offline" 显式关闭；/api/settings 加载后覆盖）
 };
 
 // v1.9.4: 当前会话冷启动恢复 —— 写穿见 persistSessionId，启动校验见 restoreSession
@@ -209,6 +210,7 @@ async function refreshSettings(){
   const s = await api.get('/api/settings');
   S.visionModelId = s.visionModelId || null;
   S.memoryAutoEnabled = s.memoryAutoEnabled !== false;   // v1.9.0 自动记忆开关（默认开）
+  S.knowledgeRouting = s.knowledgeRouting === 'offline' ? 'offline' : 'llm';  // 只有显式 offline 才关（与双端 normalize 同语义）
 }
 async function refreshTargets(){ S.targets = await api.get('/api/targets'); }
 async function refreshSessions(){ S.sessions = await api.get('/api/sessions'); }
@@ -1166,6 +1168,24 @@ async function renderSettings(col){
   };
   autoRow.onclick = () => { asw.onclick({ stopPropagation(){}, }); };
   g3.appendChild(autoRow);
+  // 知识路由开关行（照「自动记忆」行模板，默认开 = llm；关闭（offline）后端聊天链路
+  // 完全不发起 LLM 路由请求，仅本地关键词路由；行文案与手机端设置页一致）
+  const routeRow = el('div','setrow glass edge');
+  routeRow.appendChild(el('span','ic','◈'));
+  const routeTx = el('span','tx');
+  routeTx.appendChild(el('span','t','智能知识路由'));
+  routeTx.appendChild(el('span','d', S.knowledgeRouting === 'offline' ? '已关闭 · 仅本地关键词路由' : '对话模型优先挑选知识文档'));
+  routeRow.appendChild(routeTx);
+  const rsw = el('span','sw' + (S.knowledgeRouting !== 'offline' ? ' on' : ''));
+  rsw.onclick = async e => {
+    e.stopPropagation();
+    S.knowledgeRouting = S.knowledgeRouting === 'offline' ? 'llm' : 'offline';
+    try { await api.put('/api/settings', { knowledgeRouting: S.knowledgeRouting }); }
+    catch(err){ toast('保存失败：' + (err.message||err)); }
+    renderSettings(col);
+  };
+  routeRow.onclick = () => { rsw.onclick({ stopPropagation(){}, }); };
+  g3.appendChild(routeRow);
   // v1.9.0 撤销最近一次自动记忆
   const undoRow = el('div','setrow glass edge');
   undoRow.appendChild(el('span','ic','↩'));

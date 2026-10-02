@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
@@ -58,18 +59,19 @@ import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
+import com.wenyan.app.ui.theme.GLASS_BLUR_DEFAULT
 import com.wenyan.app.ui.theme.LocalFluidHue
 import com.wenyan.app.ui.theme.LocalGtjColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * 弹层背后的窗口级模糊半径（dp）：= web 弹层 `backdrop-filter: blur(var(--wy-glass-blur))`
- * 的生效默认 4px（styles.css:515-518；--wy-glass-blur 默认 4，app.js:66/130）。
- * 与页内玻璃面同一换算：backdrop 引擎把同一个 web 值取作 4dp（GlassBackdropParams.blurRadius），
- * 窗口级这里也取 4dp，两端强度观感一致。
+ * 弹层背后的窗口级模糊半径（dp）：锁死 GLASS_BLUR_DEFAULT（100dp；v1.9.4 收尾移除设置页
+ * 「玻璃模糊度」滑条）——= web 弹层 `backdrop-filter: blur(var(--wy-glass-blur))` 的同一
+ * --wy-glass-blur 单值语义（styles.css:515-518），与页内玻璃 backdrop 引擎同一个半径，
+ * 两端强度观感一致。web 滑条 0-60px/运行时默认 4px 仅注释对照（app.js:1069/73/130）。
  */
-private val SHEET_BLUR_RADIUS = 4.dp
+private val SHEET_BLUR_RADIUS: Dp = GLASS_BLUR_DEFAULT.dp
 
 /**
  * 找到本视图所在的对话框窗口（沿 parent 链上溯 [DialogWindowProvider]）。
@@ -116,9 +118,13 @@ private fun enableBlurBehind(window: Window, radiusPx: Int): () -> Unit {
  * `ModalBottomSheetDialogLayout`（见 ModelSheet 调用点注释）。
  *
  * 降级路径：① API < 31（无该 API 与常量，S 才引入）→ 不设任何 flag；② 拿不到窗口引用
- * （弹层实现变化/非对话框宿主）→ 同样不设；两种降级都维持现状：弹层自带 scrim 压暗
- * （compose 内绘的半透明 scrim，压暗足够承担可读性）。系统「关闭模糊」（开发者选项/无障碍）
- * 或低端机型忽略 blur behind 时也落在同一条 scrim 路径上，无功能影响。
+ * （弹层实现变化/非对话框宿主）→ 同样不设；③ v1.9.4 修复：`WindowManager.isCrossWindowBlurEnabled`
+ * = false（系统「关闭模糊」——开发者选项/无障碍「移除动画」可关）→ 显式跳过，不设 flag，
+ * 直接落 scrim 降级（原实现会设 flag 后被系统静默忽略，行为等同但语义含混）。三种降级都
+ * 维持现状：弹层自带 scrim 压暗（compose 内绘的半透明 scrim，压暗足够承担可读性），无功能影响。
+ *
+ * v1.9.4 收尾：半径来自 [SHEET_BLUR_RADIUS]（锁死 GLASS_BLUR_DEFAULT = 100dp），DisposableEffect
+ * 以换算后的半径 px 为 key——半径恒定，效果只在首次进组合时设置一次。
  */
 @Composable
 private fun SheetWindowBlurBehind() {
@@ -129,8 +135,13 @@ private fun SheetWindowBlurBehind() {
         if (window == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             onDispose { }
         } else {
-            val restore = enableBlurBehind(window, blurRadiusPx)
-            onDispose { restore() }
+            val crossWindowBlurEnabled = window.windowManager.isCrossWindowBlurEnabled
+            if (!crossWindowBlurEnabled) {
+                onDispose { }
+            } else {
+                val restore = enableBlurBehind(window, blurRadiusPx)
+                onDispose { restore() }
+            }
         }
     }
 }
@@ -139,7 +150,8 @@ private fun SheetWindowBlurBehind() {
  * 模型选择底部弹层（design-pages 页面4，AC-10）：
  * v1.9.4 对齐 web `.sheet.glass-strong.edge.refract`——liquidGlass 玻璃卡片容器
  * （Strong 填充 frost+0.17 + glassBorder 发丝描边 + 顶边内高光 + --g-shadow 双影）+
- * 顶圆角 26 + 窗口级 4dp 背景模糊（API 31+，低版本降级不透明 elevated 面）+ muted 拖拽条；
+ * 顶圆角 26 + 窗口级背景模糊（半径锁死 100dp = GLASS_BLUR_DEFAULT；API 31+，
+ * 低版本降级不透明 elevated 面）+ muted 拖拽条；
  * **色相跟随**：弹层是独立窗口，主窗口全局色相层罩不到——本组件内容自套同一 hue-rotate
  * 矩阵（LocalFluidHue 随 composition 传播进 Dialog，填充挪进内容层自绘随层一起转），
  * 色相≠0 时弹层与主界面同步变色（web .sheet 是 body 子节点天然被转，此处对齐该语义）；

@@ -286,8 +286,9 @@ class LlmClient(
          * F125/安全终检：仅允许 http/https；https 直接放行；http 仅放行
          * localhost/环回/私有与链路本地网段（LM Studio/Ollama 等本地模型服务），
          * 公网明文一律拒绝。返回 null 表示放行，否则返回拒绝原因（作 Failed.detail 上报）。
+         * internal：LlmRouteClassifier（知识路由小请求）复用同一策略，避免两处口径漂移。
          */
-        private fun endpointPolicyViolation(baseUrl: String): String? {
+        internal fun endpointPolicyViolation(baseUrl: String): String? {
             val scheme = baseUrl.trim().substringBefore(':').lowercase()
             if (scheme !in ALLOWED_SCHEMES) return "unsupported scheme"
             if (scheme == "https") return null

@@ -108,6 +108,7 @@ import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.navigation.rememberViewModel
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
+import com.wenyan.app.ui.theme.GLASS_BLUR_DEFAULT
 import com.wenyan.app.ui.theme.LocalGtjColors
 import com.wenyan.app.ui.theme.rememberReducedMotion
 import kotlinx.coroutines.delay
@@ -391,7 +392,9 @@ fun ChatScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .glassBackdropContent(glassBackdrop)
+                // [design F] v1.9.4 修复（栏模糊静默失效）：悬浮栏模糊层的 record 移到本内容层
+                // 宿主分发内（glassBackdropContent）；半径锁死 GLASS_BLUR_DEFAULT（100dp，滑条已移除）
+                .glassBackdropContent(glassBackdrop, GLASS_BLUR_DEFAULT.dp)
                 .pointerInput(textSelectForId) {
                     if (textSelectForId != null) {
                         detectTapGestures(onTap = { textSelectForId = null })
@@ -748,15 +751,18 @@ private fun ChatTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                // v1.9.4 根因④ + F41 修复：全量磨砂（背景+消息穿透）改由 liquidGlass 经
-                // backdropLayer 参数在内部消费——投影之后、填充之前绘制。原先经独立的
-                // glassBackdropLayer modifier 垫在链最底层（链上靠前的 drawBehind 先画），
-                // 不透明磨砂被其上的 α.30 栏级投影整体压暗，与卡片路径层级矛盾；
-                // backdrop=false 保持不变：本面已显式全量磨砂，卡片级磨砂不再叠加
+                // v1.9.4 根因④ + F41 修复 + design J：全量磨砂（消息穿透）underlay 已由
+                // 内容层宿主（glassBackdropContent）在同一次 draw 分发内 record+draw，垫在
+                // 本栏玻璃填充之下（内容节点先于 Scaffold 栏绘制）；backdropLayer 参数在此
+                // 仅承担注册/栏几何回写，本节点零绘制（rememberGraphicsLayer 层在录制分发
+                // 之外绘制会静默不出图，探针实证，见 BackdropGlass.kt recordBlurUnderlay）。
+                // backdrop=true：31+ 上 backdropLayer 优先、卡片级磨砂结构性不叠加；
+                // API<31/探测失败时 backdropLayer 恒 null，true 让雾化降级覆盖本栏
+                // （玻璃模糊度滑条的近似响应，见 liquidGlass 的 legacyFog）
                 .liquidGlass(
                     shape = GtjShape.topBar,
                     fill = GlassFill.Card,
-                    backdrop = false,
+                    backdrop = true,
                     backdropLayer = backdropLayer,
                     shadowColor = p.glassShadowTopBar,
                     shadowFeather = 14.dp,

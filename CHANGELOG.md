@@ -2,7 +2,52 @@
 
 「温言」版本历史。版本命名：`vX.Y.Z`（功能）与 `vX.Y.Z-N`（同版本迭代构建）。
 
-## v1.9.4（2026-09-28，09-29/09-30 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + Mica 视觉对齐/玻璃扁平化与内凹改版/色相全局跟随/输入栏与弹层对齐 web + 触摸修复 + 全量代码审查修复
+## v1.9.4（2026-09-28，09-29/09-30/10-01 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + Mica 视觉对齐/玻璃扁平化与内凹改版/色相全局跟随/输入栏与弹层对齐 web + 触摸修复 + 全量代码审查修复 + LLM 参与知识路由（决策门通过，默认 llm）
+
+**10-01 迭代（LLM 参与知识路由）**——LLM 参与知识路由（决策门通过，默认 llm）+ 路由评测基建（去泄漏/金种子/分桶/基线导出）+ 三臂盲评：
+
+**玻璃可调（对齐桌面 web 玻璃设置，安卓端；版本号不 bump）**：
+- 设置页「外观」新增「玻璃」卡两条运行时滑条——玻璃模糊度 0-60dp（驱动全部玻璃 backdrop 模糊：悬浮顶栏/输入栏、各页玻璃卡片、模型弹层窗口模糊，= web 单一 `--wy-glass-blur` 语义，styles.css:515-518；滑条 app.js:1069）与磨砂度 0-100%（按 web 公式运行时派生玻璃填充 alpha，`GtjPalette.withGlassFrost`：glassFill=frost / strong=frost+0.17/.29 / cardFillTop/Bottom=frost×0.50/×0.35 与 ×0.50，styles.css:483-488/526-531）；默认取磨砂档 12/60（上下栏默认即磨砂、不透底），静态基础 token 仍 frost .30 = web 基准，运行时派生不改基值；链路照 bgBrightness 五件套（DataStore `glass_blur`/`glass_frost` 双向夹取 → 契约默认实现保测试 Fake 零改动 → Settings/AppViewModel 回流 → `LocalGlassBlur` 全局下发 / `GtjTheme(glassFrost)` 派生色板，拖滑条 60ms 合并落盘）；token 登记 `design-tokens.json component.glassAppearance`，钉值护栏 `GlassTransparencyReadabilityTest`（backdrop 12dp + withGlassFrost(0.60) 派生钉值）；web 端（app/desktop）未动
+
+**玻璃模糊力度二改（10-02 迭代，版本号不 bump）**：
+- 真机实测 12dp 模糊力度不足：玻璃模糊度**默认 12→20dp**（= web `.glass` 基础档 blur(20px)，styles.css:81）、**量程 0-60→0-100dp** 留加糊余量；`GlassBackdropParams` 四值 12/24/12/24→20/40/20/40（2×采样余量不变式保持）、DataStore `glass_blur` 夹取范围与默认同步 0..100/20（修复字面量夹取会把 >60 的滑条值截回的隐患）；雾化 √ 曲线默认/满档比例不变（20/100 = 旧 12/60 = 0.2），默认档雾 alpha 钉值 0.4114 不漂移；钉值重钉 `GlassFogLegacyTest`（默认档改读 `GLASS_BLUR_DEFAULT`、新增 12dp≈0.3187 与 200dp 越界夹取）与 `GlassTransparencyReadabilityTest`（backdrop 20dp+40dp）；token 登记 `design-tokens.json component.glassAppearance/glassBackdrop`；web 端未动
+- **平台模糊半径像素上限发现 + 降采样放大（`blurRecordScale`）**：模拟器 API 35 实测 RenderEffect 模糊半径存在 **~64 物理像素硬上限**（52px 有效、66px 起整个效果被**静默丢弃**——半径扫描 20/25/30/40/99dp 定位边界；这同时解释真机「拖大不更糊」）——旧实现下滑条超过 ~24dp（设备相关）即落入完全无模糊死区。修复：悬浮栏 underlay（`recordBlurUnderlay`）半径像素超 `MAX_BLUR_PX=52` 时把内容按 s=52/半径 **缩小录进模糊层、画回时放大 1/s**——层空间模糊半径恒 ≤ 上限（效果不再被丢弃），视觉模糊全量程有效；上行重采样自带磨砂（力度只增不减）；≤上限走既证可靠的 1:1 路径逐位不变。已知平台约束：单次 RenderEffect 在绘制目标空间应用，视觉模糊封顶 ≈52px（滑条 20dp 起进入平台满档平台），100dp 与 30dp 观感同级但不再像旧版那样直接丢模糊；钉值 `GlassRecordScaleTest` 新增（1:1 段/缩放段/全量程层空间不超上限/放大还原视觉半径）
+
+**玻璃模糊量程三改（10-02 迭代，用户指定，版本号不 bump）**：
+- 玻璃模糊度滑条量程改为**最低 100 / 最高 500dp、默认 100**（用户指定重度磨砂：默认即最低档）；`GlassBackdropParams` 四值 20/40/20/40→100/200/100/200、DataStore `glass_blur` 夹取同步 100..500/默认 100（旧存值 <100 读出被下限静默迁移）；量程全段超平台单次模糊上限（~52px，见二改发现），由降采样放大（blurRecordScale）保证全段渲染——视觉进入平台满档平台（结构熔化程度随半径加深、渐进增强）；雾化 √ 曲线同比例（100/500 = 0.2），默认档钉值 0.4114 不漂移；`GlassFogLegacyTest` 重钉（满档 500dp/越界 600dp、1000dp；低半径对比点改最低档 100dp）、`GlassTransparencyReadabilityTest` 重钉（backdrop 100dp+200dp）
+
+**玻璃能力探测降级为观测 + 探测加固（10-02 迭代，versionCode 42）**：
+- **探测从「行为门禁」降级为「运行时观测」**：`rememberGlassBackdrop` 删除 `if (!probeCapable) return null` 门禁——API 31+ **恒创建** backdrop 垫真实高斯模糊（冷启动「雾化过渡」窗口随之消失，真实模糊立即可用）；`liquidGlass` 的 fogFallback 收窄为**仅 API<31**（探测状态移出全部行为条件）。行为判定唯一来源 = 新增纯函数 `glassRenderMode(sdkInt)`（`GlassRenderMode.kt`，`rememberGlassBackdrop`/fogFallback 双消费方防门槛漂移），`GlassRenderModeTest` 钉 30/31 边界
+- **已知取舍**：在「模糊构造真不渲染」的设备（探测当初动机）上，31+ 改为模糊静默失效 + 无雾化兜底的裸半透明玻璃（可读性兜底对该类设备整体失效）——让探测继续充当行为开关（`SDK<31 || state==FAILED` 折中）与「降级为观测」目标相悖，按计划取舍；对模糊可用的设备（含用户真机）为纯改善
+- **探测加固**（防「永停 PROBING」与病态管线）：`probeAsync` 加 **2s 超时兜底**——超时也翻转出 FAILED（原因 TIMEOUT），结论写入经 `tryConclude` 单写者收敛（渲染线程结论与超时兜底竞速，后到者被拒，无双写竞争）；`grabFrame` 检查 `syncAndDraw()` 返回值（AOSP `SyncAndDrawResult` 约定 SYNC_OK=0 才是干净出帧，非 0 位标志一律判失败）+ `acquireLatestImage()` 空读回短重试（共 3 次尝试、间隔 20ms）；**每次结论打 logcat**（tag `GlassBlurCapabilityProbe`，verdict/eSharp/eBlurred/比率/失败原因：异常·读回空·超时，对齐 RealChatRepository 的 tag=类名惯例）
+- **设置页「玻璃」卡运行时状态行**：31+ 显示「真实高斯模糊：已启用 · 探测已确认/未通过/超时/未见结论」（由 `GlassBlurCapabilityProbe.state`+`failure` 快照态驱动，结论翻转自动重组刷新；映射纯函数 `glassProbeStatusText` 钉四态）；<31 显示「雾化兜底（系统低于 Android 12）」，与原静态说明合并为一条
+- 测试：`GlassBlurCapabilityProbeTest` 补同步返回值判定/空读回重试边界/超时预算/观测能量明细（`decideDetail`）钉值；`GlassFogLegacyTest`/`GlassRecordScaleTest`/`GlassTransparencyReadabilityTest` 既有钉值未动（雾化曲线与 CAPABLE 路径视觉未变）
+- **评审修复①（卡片磨砂接入降采样放大）**：`GlassBackdropLayer.recordBlur` 与悬浮栏路径（recordBlurUnderlay）同构接入 `blurRecordScale`——运行时滑条 100-500dp（≈262-1312px@420dpi）超平台 RenderEffect 硬上限（~52px 有效/66px 起整个效果被静默丢弃，见二改发现）时缩小录层、`drawBackdropBlur` 按 `recordedScale` 画回放大 1/s，卡片透光磨砂全量程有效；旧实现半径原样入 BlurEffect——滑条三改起步 100dp 后卡片模糊整段被平台丢弃（HEAD 卡片 4dp≈10px 在阈内原本可用），构成回归，设置页/CHANGELOG「量程全段由降采样放大渲染」的宣称自此对卡片成立
+- **评审修复②（栏 underlay 首帧无裁剪 + 失效链补全）**：`barSize`/`barShapePath` 由普通 var 改 Compose 快照态——形状由玻璃 cache 块在 draw 阶段写入、而玻璃节点晚于内容宿主绘制，旧实现首帧 shape=null 跳过圆角裁剪且 var 写入不触发失效，「栏+2×pad（默认 200dp）」整块模糊影像无裁剪盖在内容上、静止画面下永久驻留（栏尺寸后续变化不伴随位置变化时同样不重录）；现首帧兜底 `clipRect` 裁到栏矩形本体（几何正确、仅缺圆角），形状/尺寸快照态写入驱动内容宿主下一帧带圆角重录（draw 阶段读快照 = 既有 barPositionInRoot 同款观察模式）
+
+**玻璃模糊度滑条移除、锁死 100dp（10-02 迭代，用户指定，versionCode 43）**：
+- 设置页「玻璃」卡移除「玻璃模糊度」滑条（磨砂度滑条保留）：模糊半径锁死 `GLASS_BLUR_DEFAULT` 100dp——全部 backdrop 模糊（悬浮顶栏/输入栏、各页玻璃卡片、模型弹层窗口模糊）与雾化 √ 曲线统一取该值，渲染现状与滑条停在 100dp 时一致；`LocalGlassBlur` 整条下发链路移除（DataStore `glass_blur` key 停用不再读取、历史存量留库无害；契约默认实现/RealSettingsRepository/AppViewModel/MainActivity 管线随之删除），消费方（LiquidGlass/ChatScreen/ModelSheet）直读常量；`GLASS_BLUR_MAX` 保留为雾化 √ 曲线满档归一（默认档雾 alpha 钉值 0.4114 不漂移）；web 端（app/desktop）滑条不受影响；token 登记 `design-tokens.json component.glassAppearance`（blurRange 字段删除、note 记录收尾决定）
+
+**玻璃 backdrop 模糊静默失效修复 + 构造加固（10-01 迭代，版本号不 bump）**：
+- **根因（栏模糊在真机与模拟器上均完全不渲染）**：Compose ui 1.8.3 的 `rememberGraphicsLayer` 层在「录制分发之外」经 drawLayer 绘制会**静默不出图**——`GraphicsLayer.draw$ui_graphics_release` 发现 display list 失效时按存档 drawBlock 重录（`recreateDisplayListIfNeeded`→`recordInternal`，异常被吞），而含 `drawContent()` 的块在原分发外重放必然失败 → 空层；且嵌套 drawLayer（某层 record 块内再画另一 remember 层）恒缺内容，无论源层新鲜与否（模拟器探针 E4-E9 逐项实证：同分发直接绘制可见、跨分发/嵌套恒缺）。旧构造「玻璃 onDrawBehind 内 recordBlur 取样 contentLayer 再画」两条件全踩，模糊层恒为空——表现为栏后文字清晰、模糊度档位间零像素差，与真机症状一致
+- **修复（design J：record+draw 同分发）**：悬浮栏全量磨砂的取样与绘制整体移到**内容层宿主节点**（`glassBackdropContent`）的同一次 draw 分发内——内容子树经 `drawContext.canvas` 换靶直接画进模糊层（无嵌套层），模糊层（renderEffect=BlurEffect）再以 `saveLayer`+栏圆角 clip 垫画到玻璃之下（内容节点先于 Scaffold 栏绘制，z 序天然正确）；玻璃节点零绘制。取样语义：源 = 内容子树（栏后消息穿透磨砂，对齐桌面 Mica）；流光背景为低频渐变不进采样（嵌套取样不可用；模糊前后视觉近似等价）。卡片透光磨砂维持 record/draw 同分发形态不变
+- **构造加固（与根因无关）**：饱和度从模糊层拆出——blur（层 renderEffect）与 saturate（独立 saveLayer paint colorFilter）分属两个效果载体，作用顺序保持 `blur() saturate()` = web 配方（styles.css:517-518），单层单效果对齐「抽屉 graphicsLayer 单层单效果」已知可用形态；2×blur 采样余量不变式与「效果对象仅半径变化重建」护栏保持
+- **运行时能力探测兜底**：新增 `GlassBlurCapabilityProbe`——HardwareRenderer+ImageReader 离屏渲染「高对比源层 → 生产同构模糊层」两帧读回像素、Laplacian 边缘能量比对（纯逻辑函数，JVM 可测 `GlassBlurCapabilityProbeTest`）；首次玻璃需要时懒触发，独立 HandlerThread 执行，结果进程内缓存；**探测期间与探测失败一律落雾化兜底**，不再只看 API 版本（ROM 关模糊/不渲染构造的设备自动降级）
+- **雾化兜底加浓**：`glassFogAlpha` 线性改 √ 曲线、满档 0.85→0.92——默认磨砂档 12dp 由 0.17（几乎不可见）加浓到 ≈0.41（肉眼明显），0dp 恒全透明语义不变；设置页「玻璃」卡副标题同步（「低版本或设备探测失败以雾化近似」）
+- **ModelSheet 窗口模糊**：API 31+ 增加 `WindowManager.isCrossWindowBlurEnabled` 检查，系统「关闭模糊」（开发者选项/无障碍）时显式跳过 FLAG_BLUR_BEHIND、走既有 scrim 降级（原先设 flag 被系统静默忽略）
+- 钉值/测试：`GlassFogLegacyTest` 重钉（√ 曲线 0.4114/0.92 + 加浓护栏）、`GlassBlurCapabilityProbeTest` 新增（渲染/无视/异常/无对比度/尺寸不符五路径 fail-closed）；模拟器双路径回归截图见修复留痕（hue=0/hue=180 × blur 0/12/60、滚动中帧、强制雾化路径）
+
+**路由评测基建（09-30 迭代）**：
+- 评测集去泄漏改写：历史评测 query 与变体库（route_query_variants.json）重叠的条目逐条改写，改写前全集存档 `route_eval_queries.pre-v110.json`；新增 `LeakGateTest` 泄漏门禁——评测集 query × 变体库 query 做最长公共子串比对（阈值 8 字符），超阈即测试失败，杜绝「考题抄自答案」的虚高指标
+- 金种子评测集：`route_eval_gold.json`（75 条，其中 60 条带非空期望文档标注、15 条为期望空召回的负例）逐条标注期望文档，作为路由评测的固定金标准
+- 分桶评测脚手架：`RouteBucketMetrics`（测试源集脚手架，不动生产 RouteEvaluator）按桶宏平均 P/R/F1（空桶 n=0 记 0 防 NaN），`RoutePredictionsDumpTest` 导出基线逐条预测（`app/app/build/reports/route-eval/predictions-baseline.json`，main 1098 + gold 75 逐条 contains/variant/hybrid），供盲评与后续回归比对
+
+**LLM 参与知识路由（决策门通过，默认开启）**：
+- 新增路由目录资产 `routing-catalog.json`（41 篇知识文档的标题 + 一句话摘要清单）与 `RoutingCatalog` 解析，作为分类器的候选文档目录
+- 新增 `LlmRouteClassifier`：用户输入 + 路由目录交给已配置 Provider 做意图→文档分类；降级链三级——分类器成功（含空集弃权）`route_source=llm`，分类器不可用/失败自动落回现有离线路由（HybridVariantRouter）`route_source=fallback`，开关关闭或平台未注入分类器则纯离线 `route_source=offline`（`KnowledgeEngine.kt`，双端日志字段一致）
+- 双端 `knowledgeRouting` 开关（`llm`/`offline` 两档）：取值定义双端唯一来源在 shared `KnowledgeRouting`（KnowledgeEngine.kt:13-18）——决策门通过后未设置/空/非法值一律归一为 `llm`（默认开），只有显式 `offline` 才纯离线；安卓走 DataStore、桌面走 Properties 槽位，设置页「智能知识路由」开关行接入
+- **三臂盲评结论：决策门通过，默认路由 `llm`**——核心桶 F1 提升达标且金种子达标，三臂盲评 B(1) > A(0)；LLM 路由转正为默认档（未设置即开），分类器不可用/失败自动落回离线路由（HybridVariantRouter）的降级链保留兜底，`offline` 档保留为用户显式关闭入口。默认切换经一致性核对后测试绿（LlmRouteClassifier 与降级链 / 双端 knowledgeRouting 开关与 route_source 埋点均全绿）。决策登记见 `docs/decisions/OPEN-DECISIONS.md`（O-路由v2，RESOLVED），错误分析见 `docs/route-error-analysis.md`（LLM 档 miss 清单 30 条：超集误召 20 / 部分命中 6 / 零召回 4，按意图类型归类与目录/摘要改进建议见该文）
+- 路由参数调优（召回优先）：分类上限 3→5 篇（`MAX_ROUTES`，注入截断 `maxDocs` 同步 5——三臂盲评中"多知识注入"臂 11/12 完胜的信号，P 会降 R 上限升高）；总超时 3s→10s（`ROUTE_TIMEOUT_MS` + OkHttp callTimeout/readTimeout 同步 10s，readTimeout 不放宽会让 10s 预算形同虚设；connectTimeout 保持 3s 快速失败），最坏情况慢 provider 挂满 10s 才静默降级离线兜底；离线兜底路径仍 ≤3 篇不变
 
 **09-30 迭代（全量代码审查与修复）**：206 个源码文件（安卓 + 共享层 + 桌面与内嵌 Web）逐目录审查，全部发现经独立复核确认后修复，修复改动再经独立 diff 验收与 CI 同款门禁（testDebugUnitTest + :desktop:test + assembleDebug + lintDebug）全绿。以下按主题列要点，完整清单（含证据与逐条处置状态：已解决 106 / 部分解决 4 / 留作建议 20）见审查报告。
 

@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wenyan.app.data.update.UpdateCheckResult
 import com.wenyan.app.data.update.UpdateInfo
+import com.wenyan.app.knowledge.KnowledgeRouting
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
@@ -15,6 +16,7 @@ import com.wenyan.app.ui.contract.TargetUi
 import com.wenyan.app.ui.contract.UsageMetricsUi
 import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
 import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
+import com.wenyan.app.ui.theme.GLASS_FROST_DEFAULT
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,6 +90,10 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _memoryAutoEnabled = MutableStateFlow(true)
     val memoryAutoEnabled: StateFlow<Boolean> = _memoryAutoEnabled.asStateFlow()
 
+    /** 知识路由模式（"llm" 默认 | "offline" 显式关闭；init 从 DataStore collect，非法值归一兜底） */
+    private val _knowledgeRouting = MutableStateFlow(KnowledgeRouting.LLM)
+    val knowledgeRouting: StateFlow<String> = _knowledgeRouting.asStateFlow()
+
     /** v1.9.4 流光背景开关（默认 true；init 从 DataStore collect） */
     private val _fluidBackgroundEnabled = MutableStateFlow(true)
     val fluidBackgroundEnabled: StateFlow<Boolean> = _fluidBackgroundEnabled.asStateFlow()
@@ -100,9 +106,14 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _bgBrightness = MutableStateFlow(BG_BRIGHTNESS_DEFAULT)
     val bgBrightness: StateFlow<Int> = _bgBrightness.asStateFlow()
 
+    /** v1.9.4 玻璃可调 磨砂度（%，0-100，默认 60 = 磨砂档） */
+    private val _glassFrost = MutableStateFlow(GLASS_FROST_DEFAULT)
+    val glassFrost: StateFlow<Int> = _glassFrost.asStateFlow()
+
     /** 滑条写盘合并任务（见 [SLIDER_WRITE_MERGE_MS]）：新值到来即取消上一笔，只落最后一笔 */
     private var fluidHueWriteJob: Job? = null
     private var bgBrightnessWriteJob: Job? = null
+    private var glassFrostWriteJob: Job? = null
 
     /** v1.7.2 一次性 Toast（消费后清空，防重组重复弹） */
     private val _toastMessage = MutableStateFlow<String?>(null)
@@ -138,9 +149,11 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.targets.collect { _targets.value = it } }
         viewModelScope.launch { repo.activeTargetId.collect { _activeTargetId.value = it } }
         viewModelScope.launch { repo.memoryAutoEnabled.collect { _memoryAutoEnabled.value = it } }
+        viewModelScope.launch { repo.knowledgeRouting.collect { _knowledgeRouting.value = it } }
         viewModelScope.launch { repo.fluidBackgroundEnabled.collect { _fluidBackgroundEnabled.value = it } }
         viewModelScope.launch { repo.fluidHue.collect { _fluidHue.value = it } }
         viewModelScope.launch { repo.bgBrightness.collect { _bgBrightness.value = it } }
+        viewModelScope.launch { repo.glassFrost.collect { _glassFrost.value = it } }
     }
 
     fun setTheme(mode: String) {
@@ -282,6 +295,11 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.setMemoryAutoEnabled(enabled) }
     }
 
+    /** 知识路由模式写入（开关 UI 映射：checked=llm / unchecked=offline） */
+    fun setKnowledgeRouting(mode: String) {
+        viewModelScope.launch { repo.setKnowledgeRouting(mode) }
+    }
+
     /** v1.9.4 流光背景开关 */
     fun setFluidBackgroundEnabled(enabled: Boolean) {
         viewModelScope.launch { repo.setFluidBackgroundEnabled(enabled) }
@@ -307,6 +325,16 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         bgBrightnessWriteJob = viewModelScope.launch {
             delay(SLIDER_WRITE_MERGE_MS)
             repo.setBgBrightness(value)
+        }
+    }
+
+    /** v1.9.4 玻璃可调 磨砂度（0-100）：同上，合并落盘 */
+    fun setGlassFrost(value: Int) {
+        _glassFrost.value = value
+        glassFrostWriteJob?.cancel()
+        glassFrostWriteJob = viewModelScope.launch {
+            delay(SLIDER_WRITE_MERGE_MS)
+            repo.setGlassFrost(value)
         }
     }
 

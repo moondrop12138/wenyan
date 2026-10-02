@@ -4,6 +4,7 @@ import com.wenyan.app.data.update.UpdateCheckResult
 import com.wenyan.app.data.update.UpdateInfo
 import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
 import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
+import com.wenyan.app.ui.theme.GLASS_FROST_DEFAULT
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -38,6 +39,14 @@ interface SettingsRepository {
     val fluidHue: Flow<Int> get() = flowOf(FLUID_HUE_DEFAULT)
     val bgBrightness: Flow<Int> get() = flowOf(BG_BRIGHTNESS_DEFAULT)
 
+    /**
+     * v1.9.4 玻璃可调：磨砂度（%，0-100，默认 60 = 磨砂档，运行时派生玻璃填充 alpha）——
+     * 对齐 web 玻璃设置滑条（app.js:1070）。带**默认实现**让既有测试 Fake 零改动继续编译
+     * （同 fluidHue 模式）；生产实现见 RealSettingsRepository（DataStore 直通，默认值兜底在
+     * DataStore 层）。模糊度已锁死 GLASS_BLUR_DEFAULT 100dp（v1.9.4 收尾移除滑条），不进契约。
+     */
+    val glassFrost: Flow<Int> get() = flowOf(GLASS_FROST_DEFAULT)
+
     suspend fun setCurrentModel(id: Long)
     suspend fun setVisionModel(id: Long)
     suspend fun setThemeMode(mode: String)
@@ -50,6 +59,9 @@ interface SettingsRepository {
 
     /** v1.9.4 三改 背景亮度（写入前夹到 0..100） */
     suspend fun setBgBrightness(value: Int) = Unit
+
+    /** v1.9.4 玻璃可调 磨砂度（写入前夹到 0..100） */
+    suspend fun setGlassFrost(value: Int) = Unit
 
     /** 测试连接：成功返回 null，失败返回归一错误 */
     suspend fun testConnection(providerId: Long): LlmError?
@@ -95,6 +107,13 @@ interface SettingsRepository {
     /** 自动记忆开关（默认开） */
     val memoryAutoEnabled: Flow<Boolean>
 
+    /**
+     * 知识路由模式（"llm" 默认 | "offline" 显式关闭；取值常量与归一见 shared KnowledgeRouting）。
+     * 默认实现 = 默认 llm（v1.10.0 起默认开）：既有测试 Fake 零改动继续编译（同 fluidHue 模式）；
+     * 生产实现见 RealSettingsRepository（DataStore 直通，默认值兜底在 DataStore 层）。
+     */
+    val knowledgeRouting: Flow<String> get() = flowOf(com.wenyan.app.knowledge.KnowledgeRouting.LLM)
+
     /** 创建档案；当前无激活档案 → 自动激活该档案 */
     suspend fun createTarget(name: String): Long
 
@@ -115,6 +134,9 @@ interface SettingsRepository {
 
     /** 自动记忆开关 */
     suspend fun setMemoryAutoEnabled(enabled: Boolean)
+
+    /** 知识路由模式写入（"llm" | "offline"；非法值实现层归一兜底） */
+    suspend fun setKnowledgeRouting(mode: String) = Unit
 
     // ===== v1.7.3 事实单条管理 + 档案详情编辑 =====
 

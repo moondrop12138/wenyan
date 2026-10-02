@@ -299,7 +299,11 @@ fun ChatInputBar(
                         shape = GtjShape.inputBar,
                         fill = GlassFill.Card,
                         enablePressAnimation = true,
-                        backdrop = false,
+                        // backdrop=true（v1.9.4 玻璃可调由 false 改回，同 ChatTopBar）：31+ 上
+                        // backdropLayer 优先、卡片级磨砂结构性不叠加；underlay 由内容层宿主绘制
+                        // （design J，见 ChatTopBar 注释）；API<31/探测失败时 backdropLayer
+                        // 恒 null，true 让雾化降级覆盖本栏（legacyFog，见 liquidGlass）
+                        backdrop = true,
                         backdropLayer = backdropLayer,
                         shadowColor = p.glassShadowInputBar,
                         shadowFeather = 16.dp,

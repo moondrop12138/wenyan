@@ -43,8 +43,15 @@ internal object KnowledgeEvalCorpus {
     }
 
     /** 评测集：真实素材 query + expectedDocs */
-    fun loadQueries(): List<RouteEvaluator.EvalQuery> {
-        val file = locate("src/test/resources/route_eval_queries.json")
+    fun loadQueries(): List<RouteEvaluator.EvalQuery> =
+        parseQueries("src/test/resources/route_eval_queries.json")
+
+    /** 金种子：高风险主诉黄金标注（与评测集同格式），predictions 落盘与分桶时一并评测 */
+    fun loadGold(): List<RouteEvaluator.EvalQuery> =
+        parseQueries("src/test/resources/route_eval_gold.json")
+
+    private fun parseQueries(relativePath: String): List<RouteEvaluator.EvalQuery> {
+        val file = locate(relativePath)
         val root = JSONArray(file.readText(Charsets.UTF_8))
         return (0 until root.length()).map { i ->
             val obj = root.getJSONObject(i)
