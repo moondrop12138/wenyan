@@ -28,7 +28,7 @@ android {
         minSdk = 26
         targetSdk = 36
         // 版本历史见根目录 CHANGELOG.md（L11 精简，不再在 build 脚本堆注释墙）
-        versionCode = 43
+        versionCode = 44
         versionName = "1.9.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

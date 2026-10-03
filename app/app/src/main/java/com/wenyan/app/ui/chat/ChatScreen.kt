@@ -94,6 +94,7 @@ import com.wenyan.app.ui.components.resolveWaitingLabel
 import com.wenyan.app.ui.components.glass.GlassSurface
 import com.wenyan.app.ui.components.glass.GlassBackdropLayer
 import com.wenyan.app.ui.components.glass.GlassFill
+import com.wenyan.app.ui.components.glass.GtjWindowTheme
 import com.wenyan.app.ui.components.glass.FluidBackground
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
@@ -565,108 +566,123 @@ fun ChatScreen(
     // 长按消息操作菜单：文本类可复制/删除，图片仅删除。
     // v1.2.1：offset 跟随长按触点（窗口坐标），菜单出现在手指处而非固定左下角。
     menuFor?.let { msg ->
-        DropdownMenu(
-            expanded = true,
-            onDismissRequest = { menuFor = null },
-            offset = with(LocalDensity.current) {
-                // 无障碍触发（读屏长按）无坐标传 Zero，给默认落点避免菜单贴顶
-                if (menuOffset == Offset.Zero) DpOffset(24.dp, 120.dp)
-                else DpOffset(menuOffset.x.toDp(), menuOffset.y.toDp())
-            },
-        ) {
-            if (msg.type != MessageType.IMAGE) {
-                // v1.3.1 freetext 融合：话术与正文分开复制（有话术段时提供两项）
-                if (msg.type == MessageType.FREETEXT) {
-                    val freetextReply = remember(msg.id) { FreetextSplitter.split(msg.content).reply }
-                    if (freetextReply.isNotBlank()) {
+        // v1.9.4 独立窗口色相跟随：DropdownMenu（Popup）是独立窗口，主窗口全局 hue-rotate
+        // 层罩不到——包 GtjWindowTheme 使取色与 M3 容器/菜单项默认色随全局色相旋转
+        // （hue==0 时原样透传零开销，与不包裹逐位一致）
+        GtjWindowTheme {
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = { menuFor = null },
+                offset = with(LocalDensity.current) {
+                    // 无障碍触发（读屏长按）无坐标传 Zero，给默认落点避免菜单贴顶
+                    if (menuOffset == Offset.Zero) DpOffset(24.dp, 120.dp)
+                    else DpOffset(menuOffset.x.toDp(), menuOffset.y.toDp())
+                },
+            ) {
+                if (msg.type != MessageType.IMAGE) {
+                    // v1.3.1 freetext 融合：话术与正文分开复制（有话术段时提供两项）
+                    if (msg.type == MessageType.FREETEXT) {
+                        val freetextReply = remember(msg.id) { FreetextSplitter.split(msg.content).reply }
+                        if (freetextReply.isNotBlank()) {
+                            DropdownMenuItem(
+                                text = { Text("复制话术") },
+                                onClick = {
+                                    copy(freetextReply)
+                                    menuFor = null
+                                },
+                            )
+                        }
+                    }
+                    DropdownMenuItem(
+                        text = { Text(if (msg.type == MessageType.FREETEXT) "复制全文" else "复制") },
+                        onClick = {
+                            // v1.6：分析卡复制成品话术（reply，新老 JSON 均兼容）而非原始 JSON
+                            val copyText = when (msg.type) {
+                                MessageType.ANALYSIS -> UiMappers.parseCoachCard(msg.content)
+                                    ?.reply?.takeIf { it.isNotBlank() } ?: msg.content
+                                else -> msg.content
+                            }
+                            copy(copyText)
+                            menuFor = null
+                        },
+                    )
+                    // v1.6.2 部分选取复制：进入文本选择模式——立即全选，拖动两端手柄选取部分内容后复制
+                    if (msg.type == MessageType.TEXT ||
+                        msg.type == MessageType.TRANSCRIPTION ||
+                        msg.type == MessageType.FREETEXT ||
+                        msg.type == MessageType.ANALYSIS
+                    ) {
                         DropdownMenuItem(
-                            text = { Text("复制话术") },
+                            text = { Text("部分选择") },
                             onClick = {
-                                copy(freetextReply)
+                                textSelectForId = msg.id
                                 menuFor = null
+                                Toast.makeText(context, "拖动两端手柄选取文字，点空白处完成", Toast.LENGTH_SHORT).show()
                             },
                         )
                     }
                 }
                 DropdownMenuItem(
-                    text = { Text(if (msg.type == MessageType.FREETEXT) "复制全文" else "复制") },
+                    text = { Text("删除") },
                     onClick = {
-                        // v1.6：分析卡复制成品话术（reply，新老 JSON 均兼容）而非原始 JSON
-                        val copyText = when (msg.type) {
-                            MessageType.ANALYSIS -> UiMappers.parseCoachCard(msg.content)
-                                ?.reply?.takeIf { it.isNotBlank() } ?: msg.content
-                            else -> msg.content
-                        }
-                        copy(copyText)
+                        confirmDeleteFor = msg
                         menuFor = null
                     },
                 )
-                // v1.6.2 部分选取复制：进入文本选择模式——立即全选，拖动两端手柄选取部分内容后复制
-                if (msg.type == MessageType.TEXT ||
-                    msg.type == MessageType.TRANSCRIPTION ||
-                    msg.type == MessageType.FREETEXT ||
-                    msg.type == MessageType.ANALYSIS
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("部分选择") },
-                        onClick = {
-                            textSelectForId = msg.id
-                            menuFor = null
-                            Toast.makeText(context, "拖动两端手柄选取文字，点空白处完成", Toast.LENGTH_SHORT).show()
-                        },
-                    )
-                }
             }
-            DropdownMenuItem(
-                text = { Text("删除") },
-                onClick = {
-                    confirmDeleteFor = msg
-                    menuFor = null
-                },
-            )
         }
     }
 
     // 删除二次确认
     confirmDeleteFor?.let { msg ->
-        AlertDialog(
-            onDismissRequest = { confirmDeleteFor = null },
-            shape = GtjShape.lg,
-            title = { Text("删除这条消息？") },
-            text = { Text(if (msg.type == MessageType.IMAGE) "这张图片消息将被删除，无法恢复。" else "这条消息将被删除，无法恢复。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.deleteMessage(msg.id)
-                        confirmDeleteFor = null
-                    },
-                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDeleteFor = null }) { Text("取消") }
-            },
-        )
+        // v1.9.4 独立窗口色相跟随：AlertDialog 是独立窗口，主窗口全局 hue-rotate 层罩不到——
+        // 包 GtjWindowTheme 使取色与 M3 容器/按钮默认色随全局色相旋转
+        // （hue==0 时原样透传零开销，与不包裹逐位一致）
+        GtjWindowTheme {
+            AlertDialog(
+                onDismissRequest = { confirmDeleteFor = null },
+                shape = GtjShape.lg,
+                title = { Text("删除这条消息？") },
+                text = { Text(if (msg.type == MessageType.IMAGE) "这张图片消息将被删除，无法恢复。" else "这条消息将被删除，无法恢复。") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            vm.deleteMessage(msg.id)
+                            confirmDeleteFor = null
+                        },
+                    ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDeleteFor = null }) { Text("取消") }
+                },
+            )
+        }
     }
 
     // 长按会话条目 → 删除确认
     confirmDeleteSession?.let { session ->
-        AlertDialog(
-            onDismissRequest = { confirmDeleteSession = null },
-            shape = GtjShape.lg,
-            title = { Text("删除这个会话？") },
-            text = { Text("「${session.title}」将被删除，无法恢复。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.deleteSession(session.id)
-                        confirmDeleteSession = null
-                    },
-                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDeleteSession = null }) { Text("取消") }
-            },
-        )
+        // v1.9.4 独立窗口色相跟随：AlertDialog 是独立窗口，主窗口全局 hue-rotate 层罩不到——
+        // 包 GtjWindowTheme 使取色与 M3 容器/按钮默认色随全局色相旋转
+        // （hue==0 时原样透传零开销，与不包裹逐位一致）
+        GtjWindowTheme {
+            AlertDialog(
+                onDismissRequest = { confirmDeleteSession = null },
+                shape = GtjShape.lg,
+                title = { Text("删除这个会话？") },
+                text = { Text("「${session.title}」将被删除，无法恢复。") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            vm.deleteSession(session.id)
+                            confirmDeleteSession = null
+                        },
+                    ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDeleteSession = null }) { Text("取消") }
+                },
+            )
+        }
     }
 
     if (showModelSheet) {

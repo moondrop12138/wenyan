@@ -93,6 +93,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.glass.GlassBackdropLayer
 import com.wenyan.app.ui.components.glass.GlassFill
+import com.wenyan.app.ui.components.glass.GtjWindowTheme
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -332,23 +333,28 @@ fun ChatInputBar(
                     iconSize = 17.dp, // web svg width/height=17（index.html:100）
                     onClick = { menuExpanded = true },
                 )
-                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text("粘贴文本", style = GtjType.BodySm) },
-                        onClick = {
-                            menuExpanded = false
-                            clipboard.getText()?.text?.toString()?.let(onPasteText)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("选择截图", style = GtjType.BodySm) },
-                        onClick = {
-                            menuExpanded = false
-                            imagePicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        },
-                    )
+                // v1.9.4 独立窗口色相跟随：DropdownMenu（Popup）是独立窗口，主窗口全局
+                // hue-rotate 层罩不到——包 GtjWindowTheme 使取色与 M3 容器/菜单项默认色
+                // 随全局色相旋转（hue==0 时原样透传零开销，与不包裹逐位一致）
+                GtjWindowTheme {
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("粘贴文本", style = GtjType.BodySm) },
+                            onClick = {
+                                menuExpanded = false
+                                clipboard.getText()?.text?.toString()?.let(onPasteText)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("选择截图", style = GtjType.BodySm) },
+                            onClick = {
+                                menuExpanded = false
+                                imagePicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            },
+                        )
+                    }
                 }
             }
             // v1.9.4 Mica 内衬输入框（web .input-box，styles.css:223-229）：
@@ -634,58 +640,64 @@ private fun FullScreenInputDialog(
     onInputChange: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val p = LocalGtjColors.current
+    // v1.9.4 独立窗口色相跟随：Dialog 是独立窗口，主窗口全局 hue-rotate 层罩不到——包
+    // GtjWindowTheme 使包内取色（p）与 M3 槽位随全局色相旋转（hue==0 时原样透传零开销，
+    // 与不包裹逐位一致）；p 取值须在本包内，故自包顶起读。
+    // focusRequester 留在包外：hue 跨 0↔非0 时包裹层换槽位重建，包内 remember 会另起新实例
     val focusRequester = remember { FocusRequester() }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(p.bg)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .windowInsetsPadding(WindowInsets.navigationBars),
+    GtjWindowTheme {
+        val p = LocalGtjColors.current
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
-            ) {
-                GtjIconButton(
-                    icon = Icons.Outlined.Close,
-                    contentDescription = "关闭全屏输入",
-                    onClick = onDismiss,
-                    tint = p.fgSecondary,
-                )
-                Spacer(Modifier.weight(1f))
-                Text("全屏输入", style = GtjType.Label, color = p.fg)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onDismiss) {
-                    Text("完成", style = GtjType.Body, color = p.accent)
-                }
-            }
-            androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = p.border)
-            TextField(
-                value = input,
-                onValueChange = onInputChange,
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .focusRequester(focusRequester),
-                placeholder = { Text("输入内容…", style = GtjType.Body, color = p.meta) },
-                textStyle = GtjType.Body,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = p.accent,
-                ),
-                maxLines = Int.MAX_VALUE,
-            )
+                    .background(p.bg)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.navigationBars),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+                ) {
+                    GtjIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = "关闭全屏输入",
+                        onClick = onDismiss,
+                        tint = p.fgSecondary,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text("全屏输入", style = GtjType.Label, color = p.fg)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) {
+                        Text("完成", style = GtjType.Body, color = p.accent)
+                    }
+                }
+                androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = p.border)
+                TextField(
+                    value = input,
+                    onValueChange = onInputChange,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusRequester(focusRequester),
+                    placeholder = { Text("输入内容…", style = GtjType.Body, color = p.meta) },
+                    textStyle = GtjType.Body,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = p.accent,
+                    ),
+                    maxLines = Int.MAX_VALUE,
+                )
+            }
         }
-    }
-    // 打开即聚焦唤起键盘
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        // 打开即聚焦唤起键盘
+        LaunchedEffect(Unit) {
+            focusRequester.requestFocus()
+        }
     }
 }

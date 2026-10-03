@@ -58,6 +58,7 @@ import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.components.SecondaryButton
 import com.wenyan.app.ui.components.glass.FluidBackground
 import com.wenyan.app.ui.components.glass.GlassFill
+import com.wenyan.app.ui.components.glass.GtjWindowTheme
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
 import com.wenyan.app.ui.components.glass.glassBackdropContent
@@ -259,25 +260,31 @@ fun ProviderEditScreen(
     } // CompositionLocalProvider（LocalGlassBackdrop）
 
     if (vm.showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = vm::dismissDelete,
-            shape = GtjShape.lg,
-            containerColor = p.surfaceElevated,
-            titleContentColor = p.fg,
-            textContentColor = p.fgSecondary,
-            title = { Text("删除此提供商？", style = GtjType.Title) },
-            text = { Text("将同时删除其下所有模型。此操作不可恢复。", style = GtjType.BodySm) },
-            confirmButton = {
-                TextButton(onClick = { vm.deleteProvider(onBack) }) {
-                    Text("删除", style = GtjType.Label, color = p.danger)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = vm::dismissDelete) {
-                    Text("取消", style = GtjType.Label, color = p.muted)
-                }
-            },
-        )
+        // v1.9.4 独立窗口色相跟随：AlertDialog 是独立 Android 窗口，主窗口全局 hue-rotate 层
+        // 罩不到，包内取色/M3 槽位随全局色相旋转（hue=0 原样透传，观感与不包裹逐位一致）；
+        // 此处 p 在包内重读（遮蔽页面级未旋转调色板），仅对话框取色走旋转值
+        GtjWindowTheme {
+            val p = LocalGtjColors.current
+            AlertDialog(
+                onDismissRequest = vm::dismissDelete,
+                shape = GtjShape.lg,
+                containerColor = p.surfaceElevated,
+                titleContentColor = p.fg,
+                textContentColor = p.fgSecondary,
+                title = { Text("删除此提供商？", style = GtjType.Title) },
+                text = { Text("将同时删除其下所有模型。此操作不可恢复。", style = GtjType.BodySm) },
+                confirmButton = {
+                    TextButton(onClick = { vm.deleteProvider(onBack) }) {
+                        Text("删除", style = GtjType.Label, color = p.danger)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = vm::dismissDelete) {
+                        Text("取消", style = GtjType.Label, color = p.muted)
+                    }
+                },
+            )
+        }
     }
 
     // AC-18：首次保存/测试 API Key 前强制隐私声明确认

@@ -54,6 +54,7 @@ import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.components.SliderField
 import com.wenyan.app.ui.components.glass.GlassFill
 import com.wenyan.app.ui.components.glass.GlassSurface
+import com.wenyan.app.ui.components.glass.GtjWindowTheme
 import com.wenyan.app.ui.components.glass.FluidBackground
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
@@ -429,39 +430,46 @@ private fun FactEditDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    val p = LocalGtjColors.current
+    // 未保存草稿声明在包裹外：GtjWindowTheme 在 hue 0↔非0 切换时 content lambda 换槽位重执行，
+    // remember 放包内会丢状态（未保存编辑文本重置回 initial）；对齐 MemoryNameDialog 的
+    // var name 位置（MemoryDialogs.kt:36）
     var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = GtjShape.lg,
-        containerColor = p.surfaceElevated,
-        titleContentColor = p.fg,
-        textContentColor = p.fgSecondary,
-        title = { Text("编辑事实", style = GtjType.Title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("已记住的关于咨询对象的信息", style = GtjType.BodySm, color = p.meta) },
-                textStyle = GtjType.BodySm,
-                minLines = 2,
-                maxLines = 4,
-                shape = GtjShape.md,
-                colors = editFieldColors(),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text) }, enabled = text.trim().isNotEmpty()) {
-                Text("保存", style = GtjType.Label, color = p.accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消", style = GtjType.Label, color = p.muted)
-            }
-        },
-    )
+    // v1.9.4 独立窗口色相跟随：AlertDialog 是独立 Android 窗口，主窗口全局 hue-rotate 层罩
+    // 不到，包内取色/M3 槽位随全局色相旋转（hue=0 原样透传，观感与不包裹逐位一致）
+    GtjWindowTheme {
+        val p = LocalGtjColors.current
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = GtjShape.lg,
+            containerColor = p.surfaceElevated,
+            titleContentColor = p.fg,
+            textContentColor = p.fgSecondary,
+            title = { Text("编辑事实", style = GtjType.Title) },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("已记住的关于咨询对象的信息", style = GtjType.BodySm, color = p.meta) },
+                    textStyle = GtjType.BodySm,
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = GtjShape.md,
+                    colors = editFieldColors(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { onConfirm(text) }, enabled = text.trim().isNotEmpty()) {
+                    Text("保存", style = GtjType.Label, color = p.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("取消", style = GtjType.Label, color = p.muted)
+                }
+            },
+        )
+    }
 }
 
 /** O2: 冲突裁决弹窗——用户选择保留哪条；未选中的一条将被删除（落库后冲突自然消失） */
@@ -472,45 +480,49 @@ private fun ConflictResolutionDialog(
     onKeepA: () -> Unit,
     onKeepB: () -> Unit,
 ) {
-    val p = LocalGtjColors.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = GtjShape.lg,
-        containerColor = p.surfaceElevated,
-        titleContentColor = p.fg,
-        textContentColor = p.fgSecondary,
-        title = { Text("记忆冲突裁决", style = GtjType.Title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("以下两条事实疑似矛盾，请选择保留哪一条（另一条将被删除）：", style = GtjType.BodySm, color = p.fgSecondary)
-                Surface(
-                    shape = GtjShape.sm,
-                    color = p.dangerSoft,
-                    border = BorderStroke(1.dp, p.danger),
-                ) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("A：${pair.a.text}", style = GtjType.BodySm, color = p.fg)
-                        Text("B：${pair.b.text}", style = GtjType.BodySm, color = p.fg)
+    // v1.9.4 独立窗口色相跟随：AlertDialog 是独立 Android 窗口，主窗口全局 hue-rotate 层罩
+    // 不到，包内取色/M3 槽位随全局色相旋转（hue=0 原样透传，观感与不包裹逐位一致）
+    GtjWindowTheme {
+        val p = LocalGtjColors.current
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = GtjShape.lg,
+            containerColor = p.surfaceElevated,
+            titleContentColor = p.fg,
+            textContentColor = p.fgSecondary,
+            title = { Text("记忆冲突裁决", style = GtjType.Title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("以下两条事实疑似矛盾，请选择保留哪一条（另一条将被删除）：", style = GtjType.BodySm, color = p.fgSecondary)
+                    Surface(
+                        shape = GtjShape.sm,
+                        color = p.dangerSoft,
+                        border = BorderStroke(1.dp, p.danger),
+                    ) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("A：${pair.a.text}", style = GtjType.BodySm, color = p.fg)
+                            Text("B：${pair.b.text}", style = GtjType.BodySm, color = p.fg)
+                        }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onKeepA) {
-                Text("保留 A", style = GtjType.Label, color = p.accent)
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onKeepB) {
-                    Text("保留 B", style = GtjType.Label, color = p.accent)
+            },
+            confirmButton = {
+                TextButton(onClick = onKeepA) {
+                    Text("保留 A", style = GtjType.Label, color = p.accent)
                 }
-                TextButton(onClick = onDismiss) {
-                    Text("取消", style = GtjType.Label, color = p.muted)
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = onKeepB) {
+                        Text("保留 B", style = GtjType.Label, color = p.accent)
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("取消", style = GtjType.Label, color = p.muted)
+                    }
                 }
-            }
-        },
-    )
+            },
+        )
+    }
 }
 
 // F53 精简：私有 editFieldColors 副本删除，改用包内共享实现（EditFieldColors.kt）

@@ -2,7 +2,13 @@
 
 「温言」版本历史。版本命名：`vX.Y.Z`（功能）与 `vX.Y.Z-N`（同版本迭代构建）。
 
-## v1.9.4（2026-09-28，09-29/09-30/10-01 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + Mica 视觉对齐/玻璃扁平化与内凹改版/色相全局跟随/输入栏与弹层对齐 web + 触摸修复 + 全量代码审查修复 + LLM 参与知识路由（决策门通过，默认 llm）
+## v1.9.4（2026-09-28，09-29/09-30/10-01/10-03 迭代）— 冷启动会话恢复 + 记忆导出/导入 + 流式状态修复 + 流光背景与外观可调 + 液态玻璃质感升级 + Mica 视觉对齐/玻璃扁平化与内凹改版/色相全局跟随/输入栏与弹层对齐 web + 触摸修复 + 全量代码审查修复 + LLM 参与知识路由（决策门通过，默认 llm）+ 弹层色相跟随（17 处独立窗口弹层统一跟随流光色相）
+
+**弹层色相跟随（10-03 迭代，versionCode 44）**：
+- **根因**：色相跟随 = MainActivity 在主窗口内容根部挂的全局 hue-rotate 图层（MainActivity.kt:83-107，saveLayer + W3C 矩阵，与 web body 级 filter 同语义）只罩主窗口——Dialog/AlertDialog/DropdownMenu 是独立 Android 窗口不在层内，取到未旋转的暖色基础调色板（米色 #EFE6D8/棕褐 #2B221A/橙 #A4551C），表现为弹层与主界面色相不符（真机截图：消息长按菜单/附件菜单/用量诊断/隐私声明四处）；凡同类弹层皆同病，全仓清点共 17 处
+- **修法**：新增 `ui/components/glass/HueWindow.kt`——`GtjPalette.hueRotated(hue)`（逐字段经 FluidAppearance 同一条 W3C 矩阵旋转，0 度逐字段恒等/保灰/保 alpha）+ `GtjWindowTheme{}` 包裹组件（旋转后调色板同时注入 LocalGtjColors 与 MaterialTheme colorScheme，M3 默认容器/按钮色一并跟随；透传现有 typography/shapes 防排版退回库默认；hue==0 原样透传零开销）；17 处弹层在各自定义内包裹：消息长按菜单/删除消息确认/删除会话确认（ChatScreen）、附件菜单/全屏输入页（ChatInputBar）、隐私声明/导入备份/导入记忆/清除档案（PrivacyDialogs）、记忆命名/记忆删除（MemoryDialogs）、事实编辑/冲突解决（MemoryEditScreen）、删除服务商（ProviderEditScreen）、更新提示（SettingsScreen）、用量诊断（UsageMetricsDialog）、跳过问卷（SkipDialog）；只改取色不动布局/文案/行为，ModelSheet（自套矩阵本就正确）与 web 端（hue-rotate 挂 body 天然跟随）未动；复核代理 grep 确证 14 处 AlertDialog 调用点全部包裹、唯一未包裹独立窗口仅剩黑白看图器（有意豁免）
+- **包裹层 remember 约束**：GtjWindowTheme 在 hue 跨 0↔非0 时换槽位重建，包内 remember 会丢状态/换实例——FactEditDialog 的 `var text` 草稿与 FullScreenInputDialog 的 focusRequester 均留在包外（后续新增弹窗照此约束）
+- 注释与验证：MainActivity.kt:82 过期注释同步（「其余 AlertDialog 仍不跟随」→ 经 GtjWindowTheme 跟随）；`:app:compileDebugKotlin`/`:app:assembleDebug` 退出码 0；色相≠0 实机视觉验收由用户执行
 
 **10-01 迭代（LLM 参与知识路由）**——LLM 参与知识路由（决策门通过，默认 llm）+ 路由评测基建（去泄漏/金种子/分桶/基线导出）+ 三臂盲评：
 

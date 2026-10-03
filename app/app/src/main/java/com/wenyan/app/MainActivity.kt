@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                     // 全局层是 LocalFluidHue 的消费方（CompositionLocal 下发链路的唯一读取点）。
                     // 已知偏差（web 无此概念）：Compose Dialog/ModalBottomSheet 等独立窗口
                     // 不在本层子树内——主弹层 ModelSheet 已在自己的内容里套同一矩阵跟随
-                    // （见 ModelSheet.kt），其余 AlertDialog 仍不跟随。
+                    // （见 ModelSheet.kt），其余 AlertDialog 经 GtjWindowTheme（HueWindow.kt）跟随。
                     val hue = LocalFluidHue.current
                     val huePaint = remember(hue) {
                         if (hue == FLUID_HUE_DEFAULT) {

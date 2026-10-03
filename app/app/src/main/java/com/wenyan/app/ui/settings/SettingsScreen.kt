@@ -77,6 +77,7 @@ import com.wenyan.app.ui.components.glass.GlassBlurCapabilityProbe
 import com.wenyan.app.ui.components.glass.GlassFill
 import com.wenyan.app.ui.components.glass.GlassRenderMode
 import com.wenyan.app.ui.components.glass.GlassSurface
+import com.wenyan.app.ui.components.glass.GtjWindowTheme
 import com.wenyan.app.ui.components.glass.LocalGlassBackdrop
 import com.wenyan.app.ui.components.glass.glassBackdropBackground
 import com.wenyan.app.ui.components.glass.glassBackdropContent
@@ -888,32 +889,36 @@ private fun UpdateDialog(
     onDownload: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val p = LocalGtjColors.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = com.wenyan.app.ui.theme.GtjShape.lg,
-        containerColor = p.surfaceElevated,
-        titleContentColor = p.fg,
-        textContentColor = p.fgSecondary,
-        title = { Text("发现新版本 v${info.versionName}", style = GtjType.Title) },
-        text = {
-            Text(
-                info.notes.ifBlank { "修复与体验优化，建议升级。" },
-                style = GtjType.BodySm,
-                color = p.fgSecondary,
-                maxLines = 8,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDownload, enabled = !downloading) {
-                Text(if (downloading) "下载中…" else "去下载", style = GtjType.Label, color = p.accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !downloading) {
-                Text("取消", style = GtjType.Label, color = p.muted)
-            }
-        },
-    )
+    // v1.9.4 独立窗口色相跟随：AlertDialog 是独立 Android 窗口，主窗口全局 hue-rotate 层罩
+    // 不到，包内取色/M3 槽位随全局色相旋转（hue=0 原样透传，观感与不包裹逐位一致）
+    GtjWindowTheme {
+        val p = LocalGtjColors.current
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = com.wenyan.app.ui.theme.GtjShape.lg,
+            containerColor = p.surfaceElevated,
+            titleContentColor = p.fg,
+            textContentColor = p.fgSecondary,
+            title = { Text("发现新版本 v${info.versionName}", style = GtjType.Title) },
+            text = {
+                Text(
+                    info.notes.ifBlank { "修复与体验优化，建议升级。" },
+                    style = GtjType.BodySm,
+                    color = p.fgSecondary,
+                    maxLines = 8,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onDownload, enabled = !downloading) {
+                    Text(if (downloading) "下载中…" else "去下载", style = GtjType.Label, color = p.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss, enabled = !downloading) {
+                    Text("取消", style = GtjType.Label, color = p.muted)
+                }
+            },
+        )
+    }
 }
