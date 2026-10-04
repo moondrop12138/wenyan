@@ -88,6 +88,7 @@ class KnowledgeEngine(
         val docPaths = routed.take(maxDocs)
         if (docPaths.isEmpty()) {
             AppLogger.d("knowledge_route_empty", "route_source" to routeSource)
+            runCatching { RouteDiagnostics.record(routeSource, routed, emptyList()) }
             return "" to emptyList()
         }
 
@@ -117,6 +118,7 @@ class KnowledgeEngine(
             "docs" to refs.joinToString(","),
             "route_source" to routeSource,
         )
+        runCatching { RouteDiagnostics.record(routeSource, routed, refs.toList()) }
         return injected.joinToString("\n\n") to refs
     }
 

@@ -87,8 +87,15 @@ class UpdateChecker(
      * 下载 APK 到 filesDir/downloads/wenyan-{versionName}.apk（覆盖写，幂等）。
      * M9：文件名清洗（防路径穿越）+ Content-Length 校验 + SHA256 digest 校验（GitHub asset 元数据）。
      * 失败返回 null（Log.w + 静默），由上层 Toast。
+     * KDoc：onProgress 为 IO 线程回调、由 VM 切回 Main 再写态，onProgress 本身不得抛
+     * （实现侧 runCatching 包裹）；total 口径 info.size>0?info.size:contentLength，
+     * total 未知时回 (downloaded, -1)，由 VM 映射 null。
      */
-    suspend fun download(info: UpdateInfo, filesDir: File): File? = withContext(Dispatchers.IO) {
+    suspend fun download(
+        info: UpdateInfo,
+        filesDir: File,
+        onProgress: (downloaded: Long, total: Long) -> Unit = { _, _ -> },
+    ): File? = withContext(Dispatchers.IO) {
         runCatchingCancellable {
             val dir = File(filesDir, "downloads").apply { mkdirs() }
             val target = File(dir, "wenyan-${sanitizeFileName(info.versionName)}.apk")
@@ -106,6 +113,7 @@ class UpdateChecker(
                     Log.w("UpdateChecker", "apk size mismatch: expected ${info.size} bytes, got $contentLength")
                     return@runCatchingCancellable null
                 }
+                val total = if (info.size > 0) info.size else contentLength
                 // M9/L25: 流式写盘 + 同步计算 SHA-256。
                 // L25 修复：直接写目标文件——中途被杀留下半截 APK，FileProvider 安装失败且
                 // 下次可能误用。改写 .tmp，校验通过后 renameTo 原子落位；异常路径清 .tmp。
@@ -115,12 +123,27 @@ class UpdateChecker(
                 try {
                     body.byteStream().use { input ->
                         FileOutputStream(tmp).use { output ->
+                            var downloaded = 0L
+                            var lastReportBytes = 0L
+                            var lastReportTime = android.os.SystemClock.elapsedRealtime()
+                            fun emit(force: Boolean = false) {
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                if (force || downloaded - lastReportBytes >= 102_400 || now - lastReportTime >= 200) {
+                                    lastReportBytes = downloaded
+                                    lastReportTime = now
+                                    runCatching { onProgress(downloaded, total) }
+                                }
+                            }
                             while (true) {
                                 val n = input.read(buffer)
                                 if (n < 0) break
                                 output.write(buffer, 0, n)
                                 digest.update(buffer, 0, n)
+                                downloaded += n
+                                emit()
                             }
+                            // 结束补一次末值
+                            runCatching { onProgress(downloaded, total) }
                         }
                     }
                     val expectedDigest = info.digest?.removePrefix("sha256:")?.lowercase()

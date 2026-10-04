@@ -54,6 +54,7 @@ import com.wenyan.app.ui.theme.rememberReducedMotion
 fun OnboardingScreen(
     container: AppContainer,
     onDone: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val vm: OnboardingViewModel = rememberViewModel("OnboardingViewModel") {
         OnboardingViewModel(container.onboardingRepository)
@@ -70,6 +71,10 @@ fun OnboardingScreen(
         animationSpec = tween(durationMillis = if (reducedMotion) 0 else 200),
         label = "progress",
     )
+    // 新用户激活链路：模型可用态（any 口径——悬空 currentId 亦判无可用，对齐设置页"未选择"判空）
+    val models by container.settingsRepository.models.collectAsState(initial = emptyList())
+    val currentModelId by container.settingsRepository.currentModelId.collectAsState(initial = null)
+    val canChat = models.any { it.id == currentModelId }
 
     // v1.8.1 B4：移除 glowState 光斑共享——dead path 且每帧重组开销大
 
@@ -160,6 +165,15 @@ fun OnboardingScreen(
                         loading = vm.submitting,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    // 新用户激活链路：末屏且无可用模型时追加配置入口（完成链路 vm.completed→onDone 不变）
+                    if (vm.currentStep == vm.totalSteps - 1 && !canChat) {
+                        Spacer(Modifier.height(8.dp))
+                        GhostButton(
+                            text = "先去配置模型服务",
+                            onClick = onOpenSettings,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -171,6 +185,7 @@ fun OnboardingScreen(
         SkipDialog(
             onContinue = vm::dismissSkip,
             onConfirmSkip = vm::confirmSkip,
+            hasModels = canChat,
         )
     }
 }

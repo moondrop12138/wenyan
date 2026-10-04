@@ -71,6 +71,7 @@ fun AppRoot(
             Route.Onboarding -> OnboardingScreen(
                 container = container,
                 onDone = { navigator.replaceAll(Route.Chat) },
+                onOpenSettings = { navigator.push(Route.Settings) },
             )
             Route.Chat -> ChatScreen(
                 container = container,

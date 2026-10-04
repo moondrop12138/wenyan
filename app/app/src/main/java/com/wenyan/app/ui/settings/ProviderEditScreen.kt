@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -86,6 +87,13 @@ fun ProviderEditScreen(
     // 原样预填，遗留 persistedId 还会静默改写上一轮落库的行），且旧 VM 的常驻收集永不停止
     val vm: ProviderEditViewModel = rememberEphemeralViewModel("ProviderEdit_$providerId") {
         ProviderEditViewModel(container.settingsRepository, providerId)
+    }
+    // Holder 会话释放：搭乘既有 dispose（onBack lambda 与绕过它的 BackHandler navigator.pop()、
+    // Crossfade 切路由、旋转回栈根，导航行为零改动）——取消 job + 删表项，重进干净。
+    // 新建页 sessionKey 为稳定键，同页组合重建时 effect 不重启、在途任务与结果不断；
+    // 真离页（pop/切路由）时 dispose 照常释放。编辑页为 per-instance UUID，零串扰。
+    DisposableEffect(vm.sessionKey) {
+        onDispose { ProviderEditSessions.release(vm.sessionKey) }
     }
     val p = LocalGtjColors.current
 

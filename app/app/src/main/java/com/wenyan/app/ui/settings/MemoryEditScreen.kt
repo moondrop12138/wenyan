@@ -156,7 +156,14 @@ fun MemoryEditScreen(
                     .glassBackdropContent(glassBackdrop),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                if (!vm.loading && vm.target == null) {
+                if (vm.loading) {
+                    Text(
+                        "加载中…",
+                        style = GtjType.BodySm,
+                        color = p.muted,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                } else if (vm.target == null) {
                     Text(
                         "档案不存在或已删除",
                         style = GtjType.BodySm,

@@ -17,6 +17,25 @@ data class UsageMetricsUi(
     val failures: Map<String, Long>,
 )
 
+/** 路由成本透明：buildInjection 调用诊断快照 Ui（本进程，未持久化；默认空） */
+data class RouteDiagnosticsUi(
+    val countsBySource: Map<String, Long>,
+    val lastSource: String?,
+    val lastRouted: List<String>,
+    val lastInjected: List<String>,
+    val lastAtMillis: Long?,
+) {
+    companion object {
+        fun empty() = RouteDiagnosticsUi(
+            countsBySource = emptyMap(),
+            lastSource = null,
+            lastRouted = emptyList(),
+            lastInjected = emptyList(),
+            lastAtMillis = null,
+        )
+    }
+}
+
 /**
  * 设置项 Repository（DataStore + Room provider/model 表）。后端实现。
  */
@@ -169,11 +188,27 @@ interface SettingsRepository {
     /** v1.7.3 T3 导出诊断日志：返回可分享的 crash 文件 Uri（无则 null） */
     suspend fun exportCrashLog(): android.net.Uri?
 
+    /** 是否存在崩溃日志（默认 false；生产实现见 RealSettingsRepository，经 IO 封送读 CrashLogStore） */
+    suspend fun hasCrashLog(): Boolean = false
+
+    /** 崩溃日志全文（无则 null；默认 null） */
+    suspend fun readCrashLogText(): String? = null
+
+    /** 只清崩溃日志（默认 Unit；生产实现调 clearCrashOnly，禁调连带删 APK 的 clear()） */
+    suspend fun clearCrashLog() = Unit
+
     /** v1.7.3 T4 检查更新：NewVersion / UpToDate / Failed */
     suspend fun checkUpdate(): UpdateCheckResult
 
     /** v1.7.3 T4 下载新版 APK 到 cacheDir（返回文件/null，失败静默） */
     suspend fun downloadUpdateApk(info: UpdateInfo): java.io.File?
+
+    /**
+     * v1.7.3 T4 下载新版 APK（带进度重载；默认转调旧方法丢弃进度）。
+     * KDoc：onProgress 为 IO 线程回调、本身不得抛（实现侧 runCatching 包裹），由 VM 切回 Main 再写态。
+     */
+    suspend fun downloadUpdateApk(info: UpdateInfo, onProgress: (Long, Long) -> Unit = { _, _ -> }): java.io.File? =
+        downloadUpdateApk(info)
 
     /** v1.7.3 T4 唤起系统安装器（FileProvider + ACTION_VIEW）；返回是否成功发起 */
     suspend fun installApk(file: java.io.File): Boolean
@@ -200,6 +235,9 @@ interface SettingsRepository {
 
     /** O6: 读取当前进程内的用量快照（已在启动时从本地文件恢复） */
     fun usageMetrics(): UsageMetricsUi
+
+    /** 路由成本透明：读取当前进程内路由诊断快照（函数形式对齐 usageMetrics() 而非 flowOf 属性） */
+    fun routeDiagnostics(): RouteDiagnosticsUi = RouteDiagnosticsUi.empty()
 }
 
 /**

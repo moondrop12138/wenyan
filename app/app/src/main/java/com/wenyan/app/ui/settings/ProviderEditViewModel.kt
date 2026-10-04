@@ -11,6 +11,7 @@ import com.wenyan.app.llm.LlmErrorCode
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.SettingsRepository
+import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -57,6 +58,18 @@ class ProviderEditViewModel(
     var privacyAck by mutableStateOf(false)
     var pendingAction by mutableStateOf<PendingAction?>(null)
 
+    /**
+     * Holder 会话键：新建用稳定键（同页组合重建后复活旧结果/在途任务认领不断）；
+     * 编辑用 per-VM-instance UUID（防同 id 连推时旧 release 误删新表项/取消新 job）。
+     * 根因：AppRoot Crossfade 只渲染 current，连续 push 同 id 时旧页 onDispose 晚于新页建表，
+     * 稳定同键下旧 release 会误删新表项；新建页栈内同时只会有一个，稳定键无此风险。
+     * providerId 只进快照不做键（新建 providerId 恒 <=0）。
+     */
+    val sessionKey: String = if (providerId <= 0) "pe-new" else "pe-" + UUID.randomUUID()
+
+    /** 镜像 Holder.effectiveId，仅作 delete 兜底（TTL 过期仍可清孤儿行） */
+    private var lastEffectiveId: Long? = null
+
     /** 隐私确认后待执行的动作（AC-18：首次保存 Key 前必须确认） */
     sealed interface PendingAction {
         /** M23 修复：携带保存完成回调——原 data object 丢失 onDone，隐私确认后保存成功但不导航 */
@@ -99,10 +112,9 @@ class ProviderEditViewModel(
             }
         }
         // F51 修复：模型列表收集对新建路径同样生效——原先收集器整体在 if (!isNew) 内，
-        // 新建页 vm.models 永远为空：doAddModel 经 ensurePersisted 已把模型写进库，
-        // 但「模型管理」列表不显示（观感如同添加失败）。过滤键用当前生效 provider id：
-        // 新建落库前 persistedId 尚空 → 过滤为空列表；首存后 ensurePersisted 记下 id，
-        // 下一次 repo.models 发射（含 addModel 触发的）即自动显示该提供商的模型
+        // 新建页 vm.models 永远为空：经 Holder persist 已把模型写进库，但「模型管理」列表不显示
+        // （观感如同添加失败）。过滤键用当前生效 provider id：新建落库前尚空 → 过滤为空列表；
+        // 首存后 Holder 记下 id，下一次 repo.models 发射（含 addModel 触发的）即自动显示该提供商的模型
         if (isNew) {
             viewModelScope.launch {
                 repo.models.collect { list ->
@@ -110,37 +122,39 @@ class ProviderEditViewModel(
                 }
             }
         }
+        // Holder 镜像：testing/testResult/saving/effectiveId 单源归 Holder per-key StateFlow，
+        // Screen 结果行（ProviderEditScreen.kt:182-198）读 VM 镜像态，签名不动
+        viewModelScope.launch {
+            ProviderEditSessions.acquire(sessionKey)
+            try {
+                val s = ProviderEditSessions.session(sessionKey)
+                launch { s.testing.collect { testing = it } }
+                launch { s.saving.collect { saving = it } }
+                launch { s.effectiveId.collect { lastEffectiveId = it } }
+                s.outcome.collect { o ->
+                    testResult = when (o) {
+                        null -> null
+                        ProviderTestOutcome.Success ->
+                            TestResult(ok = true, warn = false, message = "连接正常，模型可用")
+                        is ProviderTestOutcome.Failed -> errorToResult(o.error)
+                        is ProviderTestOutcome.KeyUnavailable ->
+                            TestResult(ok = false, warn = true, message = o.message ?: KEY_UNAVAILABLE_HINT)
+                    }
+                }
+            } finally {
+                ProviderEditSessions.uncollect(sessionKey)
+            }
+        }
     }
 
-    /** 当前生效的 provider id：新建 = 首存后记忆的 persistedId（未落库时 -1 过滤为空）；编辑 = providerId */
+    /** 当前生效的 provider id：Holder 单源优先，VM 镜像兜底（TTL 过期后仍可清孤儿行） */
     private fun currentEffectiveProviderId(): Long =
-        if (isNew) persistedId ?: -1L else providerId
+        ProviderEditSessions.effectiveIdOf(sessionKey) ?: lastEffectiveId
+            ?: if (isNew) -1L else providerId
 
     /** v1.7.5 保存用 key：未修改（== 原解密值）→ null 不重加密；清空 → null 不覆盖；新值 → 传明文 */
     private fun apiKeyToPersist(): String? =
         apiKey.takeIf { it.isNotBlank() && it != originalApiKey }
-
-    /** H2 修复：新建首次落库后记住返回 id；null = 尚未落库（原 isNew 为构造期常量永不翻转，
-     *  测试/加模型/保存四条路径各自 saveProvider 插新行 → 一次流程最多 3 条相同提供商） */
-    private var persistedId: Long? = null
-
-    /** H2: 已落库的 Key 明文（供后续 update 判断 Key 是否变化，避免每次重加密） */
-    private var persistedKey: String? = null
-
-    /**
-     * H2: 新建路径统一入口——首存返回 id 并记忆；之后一律 updateProvider。
-     * 编辑/预设路径（isNew=false）不走此函数，直接用 providerId。
-     */
-    private suspend fun ensurePersisted(): Long {
-        persistedId?.let { id ->
-            repo.updateProvider(id, name, baseUrl, apiKey.takeIf { it.isNotBlank() && it != persistedKey })
-            return id
-        }
-        val id = repo.saveProvider(name.ifBlank { "未命名服务" }, baseUrl, apiKey, isPreset = false)
-        persistedId = id
-        persistedKey = apiKey.takeIf { it.isNotBlank() }
-        return id
-    }
 
     fun toggleKeyVisibility() {
         showKey = !showKey
@@ -156,32 +170,20 @@ class ProviderEditViewModel(
         doTestConnection()
     }
 
+    /** 快照冻结（Main 线程，normalize 通过后立即执行；Holder 永不读 VM 活字段） */
+    private fun snapshot(): ProviderEditSnapshot = ProviderEditSnapshot(
+        name = name,
+        baseUrl = baseUrl,
+        keyToPersist = apiKeyToPersist(),
+        apiKeyBlank = apiKey.isBlank(),
+        providerIdArg = providerId,
+        isNew = isNew,
+    )
+
     private fun doTestConnection() {
-        if (testing) return
         if (!normalizeOrReject()) return
-        testing = true
-        testResult = null
-        viewModelScope.launch {
-            try {
-                // H2 修复：新建走 ensurePersisted（首存后记住 id，后续 update）；已有直接 update 后测
-                val id = if (isNew) {
-                    ensurePersisted()
-                } else {
-                    repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
-                    providerId
-                }
-                testResult = when (val err = repo.testConnection(id)) {
-                    null -> TestResult(ok = true, warn = false, message = "连接正常，模型可用")
-                    else -> errorToResult(err)
-                }
-            } catch (e: AesGcmCipher.KeyUnavailableException) {
-                // F21 修复：Keystore 不可用 → 提示到达 UI（原先异常击穿 launch 直接崩溃进程，
-                // KeyUnavailableException 里的用户话术全仓库无任何展示点）
-                testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
-            } finally {
-                testing = false
-            }
-        }
+        // guard 已归 Holder（短 withLock 查置即释，网络锁外）；交快照即可返回，结果经镜像收集
+        ProviderEditSessions.runTest(sessionKey, snapshot(), repo)
     }
 
     /** AC-18：确认隐私声明后执行待办动作并持久化 ack */
@@ -237,6 +239,9 @@ class ProviderEditViewModel(
         LlmErrorCode.SERVER_ERROR.name -> TestResult(ok = false, warn = true, message = "模型服务异常，请稍后重试")
         LlmErrorCode.CONNECT_TIMEOUT.name, LlmErrorCode.READ_TIMEOUT.name ->
             TestResult(ok = false, warn = true, message = "连接超时，请检查网络或服务地址")
+        // 离线弱网发送前预检：连接测试失败归一 NO_NETWORK（warn=true 可重试，文案与枚举同源）
+        LlmErrorCode.NO_NETWORK.name ->
+            TestResult(ok = false, warn = true, message = LlmErrorCode.NO_NETWORK.userMessage)
         LlmErrorCode.UNSUPPORTED_URL.name ->
             TestResult(ok = false, warn = true, message = "地址不受支持，仅支持 https://；本地服务请填 http://localhost")
         else -> TestResult(ok = false, warn = true, message = err.message.ifBlank { "连接失败" })
@@ -258,13 +263,15 @@ class ProviderEditViewModel(
 
     /** v1.6.3 新增模型默认非视觉（supportsVision=false），需要时在模型行第二行再开"视觉"开关 */
     private fun doAddModel(nameTrim: String) {
+        if (!normalizeOrReject()) return
+        val snap = snapshot()
         viewModelScope.launch {
             try {
-                val id = if (isNew) ensurePersisted() else providerId   // H2 修复
+                val id = ProviderEditSessions.ensureEffectiveId(sessionKey, snap, repo)
                 repo.addModel(id, nameTrim, supportsVision = false)
                 newModelName = ""
             } catch (e: AesGcmCipher.KeyUnavailableException) {
-                // F21 修复：加密失败提示到达 UI（ensurePersisted 落库时加密）
+                // F21 修复：加密失败提示到达 UI（Holder persist 落库时加密）
                 testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
             }
         }
@@ -272,17 +279,18 @@ class ProviderEditViewModel(
 
     /** 隐私确认后：先保存 provider，再按原意图添加模型（AC-18 意图保留） */
     private fun doSaveAndAddModel(modelName: String) {
-        if (saving) return
-        saving = true
+        // guard 唯一入口 tryBeginSaving（短 withLock 查置即释）；外层不再预读 saving.value（TOCTOU）
+        val snap = snapshot()
         viewModelScope.launch {
+            if (!ProviderEditSessions.tryBeginSaving(sessionKey)) return@launch
             try {
-                val id = if (isNew) ensurePersisted() else providerId   // H2 修复
+                val id = ProviderEditSessions.ensureEffectiveId(sessionKey, snap, repo)
                 repo.addModel(id, modelName, supportsVision = false)
                 newModelName = ""
             } catch (e: AesGcmCipher.KeyUnavailableException) {
                 testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
             } finally {
-                saving = false
+                ProviderEditSessions.endSaving(sessionKey)
             }
         }
     }
@@ -322,26 +330,20 @@ class ProviderEditViewModel(
     }
 
     private fun doSave(onDone: () -> Unit = {}) {
-        if (saving) return
-        saving = true
+        // save 系 guard 已归 Holder（tryBeginSaving/endSaving）；快照主线程冻结
+        val snap = snapshot()
         viewModelScope.launch {
+            if (!ProviderEditSessions.tryBeginSaving(sessionKey)) return@launch
             try {
-                val id = if (isNew) {
-                    // F50 修复：与 doTestConnection/doAddModel/doSaveAndAddModel 统一走 H2 入口
-                    // ensurePersisted——原先「测试连接/添加模型」已落库后再点「保存」仍直接
-                    // saveProvider 再插一条重复提供商行（无模型 → 必然红灯写在新行上）
-                    ensurePersisted()
-                } else {
-                    repo.updateProvider(providerId, name, baseUrl, apiKeyToPersist())
-                    providerId
-                }
+                val id = ProviderEditSessions.ensureEffectiveId(sessionKey, snap, repo)
                 // L30 修复：编辑页清空 Key = 真删除已存密文——原 apiKeyToPersist 的 null 语义是
                 // 「不覆盖」，清空输入框保存后旧 Key 仍在，测试连接继续用旧 Key 绿灯误导用户。
-                if (!isNew && originalApiKey != null && apiKey.isBlank()) {
+                if (!snap.isNew && snap.apiKeyBlank && originalApiKey != null) {
                     repo.deleteProviderApiKey(id)
                 }
                 // v1.6.3 保存后立即测试连接并写入红绿灯状态：成功绿灯，失败/未填 Key 红灯
-                if (apiKey.isBlank()) {
+                // （doSave 的删 Key/红绿灯/onDone 留 VM；test/add 走 Holder runTest/ensureEffectiveId）
+                if (snap.apiKeyBlank) {
                     repo.markConnectionStatus(id, ok = false)
                 } else {
                     val err = repo.testConnection(id)
@@ -352,7 +354,7 @@ class ProviderEditViewModel(
                 // F21 修复：加密失败停在当前页并提示，不导航回列表（保存未完成）
                 testResult = TestResult(ok = false, warn = true, message = e.message ?: KEY_UNAVAILABLE_HINT)
             } finally {
-                saving = false
+                ProviderEditSessions.endSaving(sessionKey)
             }
         }
     }
@@ -360,8 +362,9 @@ class ProviderEditViewModel(
     fun deleteProvider(onDone: () -> Unit) {
         viewModelScope.launch {
             if (!isNew) repo.deleteProvider(providerId)
-            // H2 修复：新建中途已落库的半成品（persistedId 存在）也一并删除，不留孤儿行
-            else persistedId?.let { repo.deleteProvider(it) }
+            // H2 修复：新建中途已落库的半成品也一并删除，不留孤儿行；
+            // id 来源改为 Holder 单源优先、VM 镜像兜底（TTL 过期仍可清孤儿行）
+            else (ProviderEditSessions.effectiveIdOf(sessionKey) ?: lastEffectiveId)?.let { repo.deleteProvider(it) }
             onDone()
         }
     }

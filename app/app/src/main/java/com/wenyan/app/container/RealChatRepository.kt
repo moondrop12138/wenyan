@@ -1,6 +1,8 @@
 package com.wenyan.app.container
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.util.Log
 import com.wenyan.app.data.datastore.SettingsRepository as DataStoreSettings
@@ -293,6 +295,15 @@ class RealChatRepository(
             conversationRepository.addMessage(sid, "USER", "text", text)
         }
 
+        // 离线弱网发送前预检：网检钉在 persist 正后方、state/LLM 之前。
+        // 离线 emit Error(NO_NETWORK)+return：routeClassifier/buildInjection 不跑，state 零污染
+        //（重试 persistUser=false 沿用未被推进的 DB state）；不看 VALIDATED——captive portal
+        // 按在线放行，由 LlmClient 失败归一兜底，避免弱网误判死锁。
+        if (!isNetworkAvailable()) {
+            emit(StreamEvent.Error(UiMappers.toLlmError(com.wenyan.app.llm.ErrorMapper.fromOffline())))
+            return@flow
+        }
+
         // v1.6 全部输入统一四段结构 JSON（无 freetext 分支）
 
         // v1.6 对话状态机全模式常开：同题判定与状态前缀对所有输入生效
@@ -468,6 +479,15 @@ class RealChatRepository(
             }
         }
 
+        // 离线弱网发送前预检：网检钉在落库正后方、通道分流之前。离线 emit Error(NO_NETWORK)+
+        // return，通道 A/B 均不可达。抉择（图片代价）：接受离线仍付 readBytes+压缩代价——dataUrls
+        // 是落库前置，先图后文落库与文本路径「先落库」不一致则提前短路会破坏落库语义；
+        // 代价为秒级本地 CPU/IO，无网络请求、无状态污染，显式接受。
+        if (!isNetworkAvailable()) {
+            emit(StreamEvent.Error(UiMappers.toLlmError(com.wenyan.app.llm.ErrorMapper.fromOffline())))
+            return@flow
+        }
+
         // 主模型是否支持视觉 → 通道 A 直读
         val mainModel = resolveModel()
         if (mainModel?.supportsVision == true) {
@@ -529,6 +549,13 @@ class RealChatRepository(
         @Suppress("NAME_SHADOWING") val sid = sid ?: ensureSession()
         owner?.retag(sid)   // H5/M18
         conversationRepository.addMessage(sid, "USER", "transcription", transcription)
+
+        // 离线弱网发送前预检：网检钉在落库正后方、buildInjection 之前。离线 emit
+        // Error(NO_NETWORK)+return，routeClassifier/buildInjection 不跑。
+        if (!isNetworkAvailable()) {
+            emit(StreamEvent.Error(UiMappers.toLlmError(com.wenyan.app.llm.ErrorMapper.fromOffline())))
+            return@flow
+        }
 
         val (knowledge, _) = knowledgeEngine.buildInjection(transcription, routeClassifier())
         val profile = profileRepository.getProfile()
@@ -869,6 +896,20 @@ class RealChatRepository(
 
     private fun noConfigError(): LlmError =
         LlmError("NO_CONFIG", "请先在设置中配置 API Key 与主模型", false)
+
+    /**
+     * 离线弱网发送前预检：同步网态读取（不持 State）。三层判空且只认
+     * NET_CAPABILITY_INTERNET——manager/activeNetwork/capabilities 任一 null 即离线；
+     * 不看 VALIDATED（captive portal 按在线放行，由 LlmClient 失败归一兜底）。
+     * 需 ACCESS_NETWORK_STATE（normal 常态权限，无运行时弹窗）。
+     */
+    private fun isNetworkAvailable(): Boolean {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
 
     // ===== v1.2.1 会话标题生成辅助 =====
 

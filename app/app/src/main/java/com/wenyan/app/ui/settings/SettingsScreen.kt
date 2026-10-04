@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -125,6 +127,11 @@ fun SettingsScreen(
         SettingsViewModel(container.settingsRepository)
     }
     val providers by vm.providers.collectAsState()
+    val providersLoaded by vm.providersLoaded.collectAsState()
+    val targetsLoaded by vm.targetsLoaded.collectAsState()
+    val pendingCrash by vm.pendingCrash.collectAsState()
+    val showCrashDialog by vm.showCrashDialog.collectAsState()
+    val downloadProgress by vm.downloadProgress.collectAsState()
     val models by vm.models.collectAsState()
     val currentId by vm.currentModelId.collectAsState()
     val visionId by vm.visionModelId.collectAsState()
@@ -134,7 +141,9 @@ fun SettingsScreen(
     val showImport by vm.showImportDialog.collectAsState()
     val showUsage by vm.showUsageDialog.collectAsState()
     val usage by vm.usage.collectAsState()
+    val route by vm.routeDiagnostics.collectAsState()
     val targets by vm.targets.collectAsState()
+    val activeTargetId by vm.activeTargetId.collectAsState()
     val memoryAutoEnabled by vm.memoryAutoEnabled.collectAsState()
     // 知识路由模式（"llm" 默认 | "offline" 显式关闭；开关行 checked = mode == llm）
     val knowledgeRouting by vm.knowledgeRouting.collectAsState()
@@ -266,10 +275,23 @@ fun SettingsScreen(
                     GtjIconButton(icon = Icons.Outlined.Add, contentDescription = "添加提供商", onClick = { onEditProvider(-1L) }, tint = p.accent, iconSize = 20.dp)
                 }
             }
-            if (providers.isEmpty()) {
+            if (!providersLoaded) {
+                item {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("加载中…", style = GtjType.BodySm, color = p.muted)
+                    }
+                }
+            } else if (providers.isEmpty()) {
                 item {
                     Column(Modifier.padding(16.dp)) {
                         Text("还没有模型服务，添加一个开始使用", style = GtjType.BodySm, color = p.muted)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "添加模型服务",
+                            style = GtjType.Label,
+                            color = p.accent,
+                            modifier = Modifier.clickable { onEditProvider(-1L) },
+                        )
                     }
                 }
             } else {
@@ -284,7 +306,13 @@ fun SettingsScreen(
             // ===== v1.7.2 「记忆」分组（模型服务之后、外观之前） =====
             item { ThickDivider() }
             item { SettingsSectionHeader("记忆") }
-            if (targets.isEmpty()) {
+            if (!targetsLoaded) {
+                item {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("加载中…", style = GtjType.BodySm, color = p.muted)
+                    }
+                }
+            } else if (targets.isEmpty()) {
                 item {
                     Column(Modifier.padding(16.dp)) {
                         Text("还没有记忆档案，添加一个开始使用", style = GtjType.BodySm, color = p.muted)
@@ -309,6 +337,48 @@ fun SettingsScreen(
                 ) {
                     Text("添加记忆", style = GtjType.Label, color = p.accent, modifier = Modifier.weight(1f))
                     GtjIconButton(icon = Icons.Outlined.Add, contentDescription = "添加记忆", onClick = vm::requestCreateTarget, tint = p.accent, iconSize = 20.dp)
+                }
+            }
+            // 新用户激活链路：问卷画像行（"添加记忆"之后、自动记忆开关之前；门控只看 activeTargetId）
+            item {
+                // 收敛到普通局部 val：delegated property 不能 smart cast，直接传参会报 Long?→Long 类型错
+                val activeId = activeTargetId
+                val activeName = targets.firstOrNull { it.id == activeId }?.name
+                GlassSurface(
+                    onClick = if (activeId != null) {
+                        { onEditTarget(activeId) }
+                    } else {
+                        {}
+                    },
+                    enabled = activeId != null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = GtjShape.md,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (activeId != null && activeName != null) "问卷画像 · $activeName" else "问卷画像",
+                                style = GtjType.Body,
+                                color = if (activeId != null) p.fg else p.muted,
+                            )
+                            Text(
+                                if (activeId != null) "查看问卷画像" else "跳过问卷或未建档时不可用",
+                                style = GtjType.Caption,
+                                color = p.muted,
+                            )
+                        }
+                        Icon(
+                            Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = p.meta,
+                        )
+                    }
                 }
             }
             item {
@@ -358,6 +428,12 @@ fun SettingsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("智能知识路由", style = GtjType.Body, color = p.fg)
                             Text("开启后由对话模型挑选知识文档；关闭仅本地关键词路由", style = GtjType.Caption, color = p.muted)
+                            // 路由成本透明：开关行成本小字（200token/10s超时/失败回退/关闭零请求）
+                            Text(
+                                "开启后每次至多 200 token、10 秒超时；失败自动回退本地路由；关闭后零路由请求",
+                                style = GtjType.Caption,
+                                color = p.muted,
+                            )
                         }
                         Spacer(Modifier.width(12.dp))
                         Switch(
@@ -523,6 +599,31 @@ fun SettingsScreen(
             }
             item { ThickDivider() }
             item { SettingsSectionHeader("隐私与安全") }
+            pendingCrash?.let { crash ->
+                item {
+                    // CrashCare 常驻内联卡：禁包 GtjWindowTheme（内联卡非独立窗口）
+                    CrashCareCard(
+                        timeText = crash.timeText,
+                        firstLine = crash.firstLine,
+                        onView = vm::requestCrashDialog,
+                        onExport = {
+                            vm.exportCrashLog { uri ->
+                                if (uri == null) {
+                                    Toast.makeText(context, "暂无崩溃日志可导出", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    runCatching { context.startActivity(Intent.createChooser(intent, "导出诊断日志")) }
+                                }
+                            }
+                        },
+                        onClear = vm::clearCrashLog,
+                    )
+                }
+            }
             item {
                 SettingsRow(
                     label = "隐私声明",
@@ -681,7 +782,7 @@ fun SettingsScreen(
         )
     }
     if (showUsage) {
-        UsageMetricsDialog(usage = usage, onDismiss = vm::dismissUsage)
+        UsageMetricsDialog(usage = usage, route = route, onDismiss = vm::dismissUsage)
     }
     // ===== v1.7.2 记忆弹窗 =====
     if (showNameDialog) {
@@ -702,7 +803,32 @@ fun SettingsScreen(
             downloading = vm.downloading,
             onDownload = { vm.downloadAndInstall(info) },
             onDismiss = vm::dismissUpdateDialog,
+            progress = downloadProgress,
         )
+    }
+    if (showCrashDialog) {
+        pendingCrash?.let { crash ->
+            CrashDialog(
+                timeText = crash.timeText,
+                fullText = crash.fullText,
+                onExport = {
+                    vm.exportCrashLog { uri ->
+                        if (uri == null) {
+                            Toast.makeText(context, "暂无崩溃日志可导出", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            runCatching { context.startActivity(Intent.createChooser(intent, "导出诊断日志")) }
+                        }
+                    }
+                },
+                onClear = vm::clearCrashLog,
+                onDismiss = vm::dismissCrashDialog,
+            )
+        }
     }
 }
 
@@ -879,6 +1005,114 @@ private fun MemoryTargetRowPreview() {
 }
 
 /**
+ * CrashCare 常驻内联卡（隐私分组；禁包 GtjWindowTheme——内联卡非独立窗口）。
+ * pendingCrash 非空渲染：timeText + firstLine + 查看/导出/清除。
+ */
+@Composable
+private fun CrashCareCard(
+    timeText: String,
+    firstLine: String,
+    onView: () -> Unit,
+    onExport: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val p = LocalGtjColors.current
+    GlassSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = GtjShape.md,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("上次崩溃", style = GtjType.Body, color = p.fg)
+            if (timeText.isNotBlank()) {
+                Text(timeText, style = GtjType.Caption, color = p.muted)
+            }
+            Text(
+                firstLine.ifBlank { "崩溃日志可用" },
+                style = GtjType.BodySm,
+                color = p.fgSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "主要含崩溃堆栈与事件名、可能含少量系统错误信息，分享前请确认",
+                style = GtjType.Caption,
+                color = p.muted,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onView) {
+                    Text("查看", style = GtjType.Label, color = p.accent)
+                }
+                TextButton(onClick = onExport) {
+                    Text("导出", style = GtjType.Label, color = p.accent)
+                }
+                TextButton(onClick = onClear) {
+                    Text("清除", style = GtjType.Label, color = p.danger)
+                }
+            }
+        }
+    }
+}
+
+/** 崩溃详情弹窗（全文可滚动 + 导出复用既有 ShareIntent + 清除 + 关闭；仅弹窗包 GtjWindowTheme） */
+@Composable
+private fun CrashDialog(
+    timeText: String,
+    fullText: String,
+    onExport: () -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    GtjWindowTheme {
+        val p = LocalGtjColors.current
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = com.wenyan.app.ui.theme.GtjShape.lg,
+            containerColor = p.surfaceElevated,
+            titleContentColor = p.fg,
+            textContentColor = p.fgSecondary,
+            title = {
+                Text(
+                    if (timeText.isNotBlank()) "崩溃日志 · $timeText" else "崩溃日志",
+                    style = GtjType.Title,
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        "主要含崩溃堆栈与事件名、可能含少量系统错误信息，分享前请确认",
+                        style = GtjType.Caption,
+                        color = p.muted,
+                    )
+                    Text(
+                        fullText,
+                        style = GtjType.BodySm,
+                        color = p.fgSecondary,
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onExport) {
+                    Text("导出", style = GtjType.Label, color = p.accent)
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = onClear) {
+                        Text("清除", style = GtjType.Label, color = p.danger)
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("关闭", style = GtjType.Label, color = p.muted)
+                    }
+                }
+            },
+        )
+    }
+}
+
+/**
  * v1.7.3 T4 更新确认弹窗：版本说明 + 「去下载」；下载中禁用按钮。
  * 失败静默/Toast 由 VM 处理（不阻塞主流程）。
  */
@@ -888,6 +1122,7 @@ private fun UpdateDialog(
     downloading: Boolean,
     onDownload: () -> Unit,
     onDismiss: () -> Unit,
+    progress: Float? = null,
 ) {
     // v1.9.4 独立窗口色相跟随：AlertDialog 是独立 Android 窗口，主窗口全局 hue-rotate 层罩
     // 不到，包内取色/M3 槽位随全局色相旋转（hue=0 原样透传，观感与不包裹逐位一致）
@@ -901,13 +1136,37 @@ private fun UpdateDialog(
             textContentColor = p.fgSecondary,
             title = { Text("发现新版本 v${info.versionName}", style = GtjType.Title) },
             text = {
-                Text(
-                    info.notes.ifBlank { "修复与体验优化，建议升级。" },
-                    style = GtjType.BodySm,
-                    color = p.fgSecondary,
-                    maxLines = 8,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column {
+                    Text(
+                        info.notes.ifBlank { "修复与体验优化，建议升级。" },
+                        style = GtjType.BodySm,
+                        color = p.fgSecondary,
+                        maxLines = 8,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (downloading) {
+                        Spacer(Modifier.height(12.dp))
+                        if (progress == null) {
+                            androidx.compose.material3.LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = p.accent,
+                                trackColor = p.borderSoft,
+                            )
+                        } else {
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = p.accent,
+                                trackColor = p.borderSoft,
+                            )
+                            Text(
+                                "已下载 ${(progress * 100).toInt()}%",
+                                style = GtjType.Caption,
+                                color = p.muted,
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = onDownload, enabled = !downloading) {

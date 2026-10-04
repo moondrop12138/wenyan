@@ -81,6 +81,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import com.wenyan.app.container.UiMappers
 import com.wenyan.app.ui.components.CoachCard
@@ -241,6 +243,18 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val models by container.settingsRepository.models.collectAsState(initial = emptyList())
     val currentId by container.settingsRepository.currentModelId.collectAsState(initial = null)
+    // 新用户激活链路：模型可用态（any 口径——删当前模型后悬空 currentId 亦判无可用，防放行跌回 ErrorCard）
+    val canChat = models.any { it.id == currentId }
+    var showNoProviderDialog by remember { mutableStateOf(false) }
+    // 离线弱网发送前预检：在线分支拦截位（与 canChat 同源门控，同步取值不持 State）
+    var showOfflineDialog by remember { mutableStateOf(false) }
+    fun checkOnline(): Boolean {
+        val manager = context.getSystemService(ConnectivityManager::class.java)
+            ?: return false
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
     val p = LocalGtjColors.current
 
     // v1.9.4 根因④：真实背景模糊（backdrop blur）。API < 31 返回 null → 全部玻璃面回退现状静态玻璃。
@@ -376,7 +390,20 @@ fun ChatScreen(
                 pendingImages = pendingImages,
                 onInputChange = onInputChange,
                 // v1.3.1 统一发送入口：有图 → 图文同发/纯图，无图 → 纯文本
-                onSend = vm::sendPending,
+                // 新用户激活链路：无可用模型时拦截弹窗（流式中 bottomBar 为 stop，不拦截）
+                // 离线弱网发送前预检：canChat 优先 → online → 放行；streaming 中 no-op 不弹窗。
+                // UI 拦截时 VM 未调用、输入未清空、未落库（输入保留、尚未发送）。
+                onSend = {
+                    if (streaming) {
+                        Unit
+                    } else if (!canChat) {
+                        showNoProviderDialog = true
+                    } else if (!checkOnline()) {
+                        showOfflineDialog = true
+                    } else {
+                        vm.sendPending()
+                    }
+                },
                 onStop = vm::stop,
                 onPasteText = onInputChange,
                 onPendingImagesPicked = vm::addPendingImages,
@@ -410,6 +437,8 @@ fun ChatScreen(
                         onInputChange(text)
                         inputFocusRequester.requestFocus()
                     },
+                    hasModels = canChat,
+                    onConfigure = onOpenSettings,
                     // v1.9.4 评审修复：小屏保底避开顶栏（calculateTopPadding 含状态栏，保底
                     // 略偏保守——标题只会更低不会钻进玻璃）；+8dp 对齐列表顶部穿透余量
                     minTopPadding = padding.calculateTopPadding() + 8.dp,
@@ -510,7 +539,19 @@ fun ChatScreen(
                             TranscriptionCard(
                                 transcription = edited,
                                 onTranscriptionChange = { edited = it },
-                                onConfirm = { vm.confirmTranscription(edited) },
+                                // 新用户激活链路：无可用模型时拦截弹窗（流式中不拦截）
+                                // 离线弱网发送前预检：canChat 优先 → online → 放行；streaming 中 no-op 不弹窗
+                                onConfirm = {
+                                    if (streaming) {
+                                        Unit
+                                    } else if (!canChat) {
+                                        showNoProviderDialog = true
+                                    } else if (!checkOnline()) {
+                                        showOfflineDialog = true
+                                    } else {
+                                        vm.confirmTranscription(edited)
+                                    }
+                                },
                                 onReselect = { vm.stop() },
                             )
                         }
@@ -519,7 +560,21 @@ fun ChatScreen(
                         item(key = "error") {
                             ErrorCard(
                                 error = e,
-                                onRetry = vm::retry,
+                                // 新用户激活链路：无可用模型时拦截弹窗（流式中不拦截）
+                                // 离线弱网发送前预检：canChat 优先 → online → 放行；streaming 中 no-op 不弹窗。
+                                // 竞态：UI 放行后断网 → repo NO_NETWORK 错误卡 → 此处重试同样先过 online 门，
+                                // 离线点重试弹离线窗而非静默。
+                                onRetry = {
+                                    if (streaming) {
+                                        Unit
+                                    } else if (!canChat) {
+                                        showNoProviderDialog = true
+                                    } else if (!checkOnline()) {
+                                        showOfflineDialog = true
+                                    } else {
+                                        vm.retry()
+                                    }
+                                },
                                 onCancel = vm::stop,
                                 onGoSettings = onOpenSettings,
                             )
@@ -709,6 +764,52 @@ fun ChatScreen(
             message = msg,
             onDismiss = { previewFor = null },
         )
+    }
+
+    // 新用户激活链路：无可用模型拦截弹窗（双钮——去配置→dismiss+onOpenSettings，取消→仅 dismiss 永不照发）
+    if (showNoProviderDialog) {
+        // v1.9.4 独立窗口色相跟随：AlertDialog 是独立窗口，主窗口全局 hue-rotate 层罩不到——
+        // 包 GtjWindowTheme 使取色与 M3 容器/按钮默认色随全局色相旋转
+        // （hue==0 时原样透传零开销，与不包裹逐位一致）
+        GtjWindowTheme {
+            AlertDialog(
+                onDismissRequest = { showNoProviderDialog = false },
+                shape = GtjShape.lg,
+                title = { Text("还没有可用模型") },
+                text = { Text("先配置一个模型服务即可开聊。") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showNoProviderDialog = false
+                            onOpenSettings()
+                        },
+                    ) { Text("去配置") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNoProviderDialog = false }) { Text("取消") }
+                },
+            )
+        }
+    }
+
+    // 离线弱网发送前预检：UI 拦截弹——输入保留、尚未发送（VM 未调用、输入未清空、未落库，
+    // 与 repo 短路错误卡「你的消息已在列表中，联网后点重试即可」严格区分，不共用一句）。
+    // 单钮关闭：仅 dismiss，不照发。
+    if (showOfflineDialog) {
+        // v1.9.4 独立窗口色相跟随：AlertDialog 是独立窗口，主窗口全局 hue-rotate 层罩不到——
+        // 包 GtjWindowTheme 使取色与 M3 容器/按钮默认色随全局色相旋转
+        // （hue==0 时原样透传零开销，与不包裹逐位一致）
+        GtjWindowTheme {
+            AlertDialog(
+                onDismissRequest = { showOfflineDialog = false },
+                shape = GtjShape.lg,
+                title = { Text("当前无网络") },
+                text = { Text("输入已保留，尚未发送，联网后重新发送即可。") },
+                confirmButton = {
+                    TextButton(onClick = { showOfflineDialog = false }) { Text("知道了") }
+                },
+            )
+        }
     }
 }
 

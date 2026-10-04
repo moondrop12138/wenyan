@@ -73,13 +73,14 @@ class ErrorMapperFullTest {
         val codes = LlmErrorCode.entries
         // v1.7.1 终检：新增 UNSUPPORTED_URL（公网明文地址被网络安全策略拦截，提示改 https/localhost）
         // H2：新增 OUTPUT_TRUNCATED（finish_reason=length 截断）；L2：新增 CONTEXT_TOO_LONG（400/413/422）
-        assertEquals("应有 15 个错误码", 15, codes.size)
+        // 离线弱网发送前预检：新增 NO_NETWORK（发送前无网短路，可重试）
+        assertEquals("应有 16 个错误码", 16, codes.size)
 
         val expected = setOf(
             "UNAUTHORIZED", "FORBIDDEN", "MODEL_NOT_FOUND", "RATE_LIMITED",
             "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "UNSUPPORTED_URL",
             "STREAM_ERROR", "EMPTY_CONTENT", "PARSE_ERROR", "OUTPUT_TRUNCATED", "CONTEXT_TOO_LONG",
-            "BAD_REQUEST", "UNKNOWN",
+            "BAD_REQUEST", "NO_NETWORK", "UNKNOWN",
         )
         assertEquals(expected, codes.map { it.name }.toSet())
 
@@ -91,7 +92,8 @@ class ErrorMapperFullTest {
     @Test
     fun `retryable flag consistent with contract`() {
         val retryable = setOf(
-            "RATE_LIMITED", "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "EMPTY_CONTENT", "UNKNOWN",
+            "RATE_LIMITED", "SERVER_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "EMPTY_CONTENT",
+            "NO_NETWORK", "UNKNOWN",
         )
         for (code in LlmErrorCode.entries) {
             assertEquals("${code.name} retryable 标记", retryable.contains(code.name), code.retryable)

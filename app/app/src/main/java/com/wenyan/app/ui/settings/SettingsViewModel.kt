@@ -11,18 +11,27 @@ import com.wenyan.app.data.update.UpdateInfo
 import com.wenyan.app.knowledge.KnowledgeRouting
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
+import com.wenyan.app.ui.contract.RouteDiagnosticsUi
 import com.wenyan.app.ui.contract.SettingsRepository
 import com.wenyan.app.ui.contract.TargetUi
 import com.wenyan.app.ui.contract.UsageMetricsUi
 import com.wenyan.app.ui.theme.BG_BRIGHTNESS_DEFAULT
 import com.wenyan.app.ui.theme.FLUID_HUE_DEFAULT
 import com.wenyan.app.ui.theme.GLASS_FROST_DEFAULT
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** 崩溃报告 Ui：timeText（time: 行缺失则空）、firstLine（全文首个非空行截 120 字）、fullText */
+data class CrashReportUi(
+    val timeText: String,
+    val firstLine: String,
+    val fullText: String,
+)
 
 /**
  * 拖滑条时 onValueChange 在拖拽中每次移动都触发；若每次直写 DataStore，
@@ -43,6 +52,10 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     private val _providers = MutableStateFlow<List<ProviderInfo>>(emptyList())
     val providers: StateFlow<List<ProviderInfo>> = _providers.asStateFlow()
+
+    /** 提供商分组加载态（init 首次 collect 置 true） */
+    private val _providersLoaded = MutableStateFlow(false)
+    val providersLoaded: StateFlow<Boolean> = _providersLoaded.asStateFlow()
 
     private val _models = MutableStateFlow<List<ModelInfo>>(emptyList())
     val models: StateFlow<List<ModelInfo>> = _models.asStateFlow()
@@ -76,6 +89,10 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     private val _usage = MutableStateFlow<UsageMetricsUi?>(null)
     val usage: StateFlow<UsageMetricsUi?> = _usage.asStateFlow()
 
+    /** 路由成本透明：用量面板打开时与 _usage 同刷的路由诊断快照 */
+    private val _routeDiagnostics = MutableStateFlow(RouteDiagnosticsUi.empty())
+    val routeDiagnostics: StateFlow<RouteDiagnosticsUi> = _routeDiagnostics.asStateFlow()
+
     var importing by mutableStateOf(false)
         private set
 
@@ -83,6 +100,10 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     private val _targets = MutableStateFlow<List<TargetUi>>(emptyList())
     val targets: StateFlow<List<TargetUi>> = _targets.asStateFlow()
+
+    /** 记忆分组加载态（init 首次 collect 置 true） */
+    private val _targetsLoaded = MutableStateFlow(false)
+    val targetsLoaded: StateFlow<Boolean> = _targetsLoaded.asStateFlow()
 
     private val _activeTargetId = MutableStateFlow<Long?>(null)
     val activeTargetId: StateFlow<Long?> = _activeTargetId.asStateFlow()
@@ -139,14 +160,26 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
     var downloading by mutableStateOf(false)
         private set
 
+    /** 下载进度（null = 未知总长；放 VM Activity store，旋转保留） */
+    private val _downloadProgress = MutableStateFlow<Float?>(null)
+    val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
+
+    /** 待展示的崩溃报告（init IO 读 hasCrashLog/readCrashLogText；wipeAll 成功后置空） */
+    private val _pendingCrash = MutableStateFlow<CrashReportUi?>(null)
+    val pendingCrash: StateFlow<CrashReportUi?> = _pendingCrash.asStateFlow()
+
+    /** 崩溃详情弹窗开关 */
+    private val _showCrashDialog = MutableStateFlow(false)
+    val showCrashDialog: StateFlow<Boolean> = _showCrashDialog.asStateFlow()
+
     init {
-        viewModelScope.launch { repo.providers.collect { _providers.value = it } }
+        viewModelScope.launch { repo.providers.collect { _providers.value = it; _providersLoaded.value = true } }
         viewModelScope.launch { repo.models.collect { _models.value = it } }
         viewModelScope.launch { repo.currentModelId.collect { _currentModelId.value = it } }
         viewModelScope.launch { repo.visionModelId.collect { _visionModelId.value = it } }
         viewModelScope.launch { repo.themeMode.collect { _themeMode.value = it } }
         viewModelScope.launch { repo.privacyAck.collect { _privacyAck.value = it } }
-        viewModelScope.launch { repo.targets.collect { _targets.value = it } }
+        viewModelScope.launch { repo.targets.collect { _targets.value = it; _targetsLoaded.value = true } }
         viewModelScope.launch { repo.activeTargetId.collect { _activeTargetId.value = it } }
         viewModelScope.launch { repo.memoryAutoEnabled.collect { _memoryAutoEnabled.value = it } }
         viewModelScope.launch { repo.knowledgeRouting.collect { _knowledgeRouting.value = it } }
@@ -154,6 +187,19 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { repo.fluidHue.collect { _fluidHue.value = it } }
         viewModelScope.launch { repo.bgBrightness.collect { _bgBrightness.value = it } }
         viewModelScope.launch { repo.glassFrost.collect { _glassFrost.value = it } }
+        viewModelScope.launch {
+            val has = runCatching { repo.hasCrashLog() }.getOrDefault(false)
+            if (has) {
+                val full = runCatching { repo.readCrashLogText() }.getOrNull()
+                if (!full.isNullOrBlank()) {
+                    val firstLine = full.lineSequence().firstOrNull { it.isNotBlank() }?.take(120).orEmpty()
+                    val timeText = full.lineSequence()
+                        .firstOrNull { it.trimStart().startsWith("time:") }
+                        ?.substringAfter("time:")?.trim().orEmpty()
+                    _pendingCrash.value = CrashReportUi(timeText = timeText, firstLine = firstLine, fullText = full)
+                }
+            }
+        }
     }
 
     fun setTheme(mode: String) {
@@ -184,6 +230,7 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 
     fun requestUsage() {
         _usage.value = repo.usageMetrics()
+        _routeDiagnostics.value = repo.routeDiagnostics()
         _showUsageDialog.value = true
     }
 
@@ -260,6 +307,8 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         _showWipeDialog.value = false
         viewModelScope.launch {
             repo.wipeAll()
+            _pendingCrash.value = null
+            _showCrashDialog.value = false
             onWiped()
         }
     }
@@ -378,6 +427,24 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch { onResult(repo.exportCrashLog()) }
     }
 
+    fun requestCrashDialog() {
+        _showCrashDialog.value = true
+    }
+
+    fun dismissCrashDialog() {
+        _showCrashDialog.value = false
+    }
+
+    /** 清除崩溃日志（调 repo.clearCrashLog，经 clearCrashOnly 不碰 APK；成功后 pendingCrash 置空） */
+    fun clearCrashLog() {
+        viewModelScope.launch {
+            repo.clearCrashLog()
+            _pendingCrash.value = null
+            _showCrashDialog.value = false
+            _toastMessage.value = "崩溃日志已清除"
+        }
+    }
+
     // ===== v1.7.3 T4 更新检查 / 下载安装 =====
 
     /** 手动检查更新：NewVersion → 弹确认弹窗；UpToDate/Failed → Toast（静默不阻塞主流程） */
@@ -398,15 +465,22 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
         updateAvailable = null
     }
 
-    /** 下载新版 APK → 唤起系统安装器；失败 Toast（不阻塞） */
+    /** 下载新版 APK → 唤起系统安装器；失败 Toast（不阻塞）；下载结束才复位 updateAvailable，下载中禁用取消 */
     fun downloadAndInstall(info: UpdateInfo) {
         if (downloading) return
         downloading = true
-        updateAvailable = null
+        _downloadProgress.value = null
         viewModelScope.launch {
-            val file = repo.downloadUpdateApk(info)
+            val file = repo.downloadUpdateApk(info) { downloaded, total ->
+                val fraction = if (total > 0) downloaded.toFloat() / total.toFloat() else null
+                viewModelScope.launch(Dispatchers.Main) {
+                    _downloadProgress.value = fraction?.coerceIn(0f, 1f)
+                }
+            }
             val installed = file != null && repo.installApk(file)
             downloading = false
+            _downloadProgress.value = null
+            updateAvailable = null
             if (!installed) {
                 _toastMessage.value = "下载失败，请稍后重试"
             }

@@ -24,13 +24,17 @@ import com.wenyan.app.ui.contract.MemoryFactUi
 import com.wenyan.app.ui.contract.ModelInfo
 import com.wenyan.app.ui.contract.ProviderInfo
 import com.wenyan.app.ui.contract.SettingsRepository
+import com.wenyan.app.knowledge.RouteDiagnostics
+import com.wenyan.app.ui.contract.RouteDiagnosticsUi
 import com.wenyan.app.ui.contract.TargetUi
 import com.wenyan.app.ui.contract.UsageMetricsUi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.withContext
 
 /**
  * 设置项/提供商/模型 Repository 真实实现（AC-09/10/11/12/18）
@@ -185,6 +189,21 @@ class RealSettingsRepository(
 
     // ===== v1.7.3 T3 崩溃日志导出 =====
 
+    /** 是否存在崩溃日志（withContext(IO) 内读 crashFile().exists，主线程只收结果） */
+    override suspend fun hasCrashLog(): Boolean = withContext(Dispatchers.IO) {
+        runCatching { crashLogStore.crashFile()?.exists() == true }.getOrDefault(false)
+    }
+
+    /** 崩溃日志全文（IO 封送读 readText；无则 null） */
+    override suspend fun readCrashLogText(): String? = withContext(Dispatchers.IO) {
+        runCatching { crashLogStore.crashFile()?.takeIf { it.exists() }?.readText() }.getOrNull()
+    }
+
+    /** 只清崩溃日志（调 clearCrashOnly；禁调连带删 APK 的 clear()，wipeAll 仍调 clear()） */
+    override suspend fun clearCrashLog() = withContext(Dispatchers.IO) {
+        crashLogStore.clearCrashOnly()
+    }
+
     /** 返回可分享的 crash 文件 Uri（无则 null）；文件不存在/授权异常 → null 静默 */
     override suspend fun exportCrashLog(): Uri? {
         val file = crashLogStore.crashFile() ?: return null
@@ -205,6 +224,12 @@ class RealSettingsRepository(
     override suspend fun downloadUpdateApk(info: com.wenyan.app.data.update.UpdateInfo): java.io.File? =
         updateChecker.download(info, context.filesDir)
 
+    /** 下载重载：直通 updateChecker.download(info, filesDir, onProgress) */
+    override suspend fun downloadUpdateApk(
+        info: com.wenyan.app.data.update.UpdateInfo,
+        onProgress: (Long, Long) -> Unit,
+    ): java.io.File? = updateChecker.download(info, context.filesDir, onProgress)
+
     /** 下载完成后唤起系统安装器（FileProvider + ACTION_VIEW + FLAG_GRANT_READ_URI_PERMISSION）；
      *  H4：Android 8+ 安装未知应用需用户授权，未授权先引导到「安装未知应用」设置页 */
     /** O6: 设置页用量面板读取当前快照（启动时已由 MetricsFileStore 恢复） */
@@ -216,6 +241,18 @@ class RealSettingsRepository(
             totalOutputTokens = s.totalOutputTokens,
             avgTtftMs = s.avgTtftMs,
             failures = s.failures,
+        )
+    }
+
+    /** 路由成本透明：进程内路由诊断快照转 Ui（快照已做深拷贝，直接透传） */
+    override fun routeDiagnostics(): RouteDiagnosticsUi {
+        val s = RouteDiagnostics.snapshot()
+        return RouteDiagnosticsUi(
+            countsBySource = s.counts,
+            lastSource = s.lastSource,
+            lastRouted = s.lastRouted,
+            lastInjected = s.lastInjected,
+            lastAtMillis = s.lastAtMillis,
         )
     }
 
@@ -244,6 +281,7 @@ class RealSettingsRepository(
             dataStore.setCurrentSessionId(null)
             onChatSessionInvalidated()
             AppLogger.i("backup_restore_ok")
+            // 路由成本透明：路由诊断计数器为本进程非持久化、不属于备份数据恢复范畴，故导入成功后不重置
         } else {
             AppLogger.i("backup_restore_fail")
         }
@@ -428,6 +466,8 @@ class RealSettingsRepository(
         dataStore.clearAll()
         // v1.7.3 隐私联动：删除崩溃日志目录与下载缓存（含事实表，随 profileRepository.clearAll 的 memoryFactDao.clear）
         crashLogStore.clear()
+        // 路由成本透明：路由诊断为本进程非持久化计数，随清除全部档案一并复位
+        RouteDiagnostics.reset()
         // F10 修复：聊天侧内存 sessionId 未复位会让下一条消息复用已删除的会话 id，
         // addMessage 违反外键静默失败（用户消息丢失且无提示）；复位回空态
         onChatSessionInvalidated()

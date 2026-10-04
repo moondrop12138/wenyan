@@ -24,6 +24,8 @@ enum class LlmErrorCode(val userMessage: String, val retryable: Boolean) {
     CONTEXT_TOO_LONG("上下文过长，请缩短输入或更换模型", false),
     // L11: 非「上下文过长」类 400（参数校验失败、图片格式错等）——不可重试，文案不误导
     BAD_REQUEST("请求参数有误，请检查输入或更换模型", false),
+    // 离线弱网发送前预检：发送前无网短路（可重试；短路不建请求、不记 UsageMetrics 账）
+    NO_NETWORK("你的消息已在列表中，联网后点重试即可", true),
     UNKNOWN("请求失败，请稍后重试", true),
     ;
 }
@@ -72,4 +74,10 @@ object ErrorMapper {
         "model_not_found" -> LlmErrorCode.MODEL_NOT_FOUND
         else -> LlmErrorCode.STREAM_ERROR
     }
+
+    /** 离线短路构造：发送前网检失败直接归一 NO_NETWORK */
+    fun fromOffline(): LlmErrorCode = LlmErrorCode.NO_NETWORK
+
+    /** 是否离线短路码（供 VM 恢复逻辑/重试门控识别；retryable=true 可重试） */
+    fun isOfflineCode(code: LlmErrorCode): Boolean = code == LlmErrorCode.NO_NETWORK
 }

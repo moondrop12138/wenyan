@@ -16,8 +16,26 @@ val keystoreProps = Properties().apply {
         f.inputStream().use { load(it) }
     }
 }
-val hasReleaseKeystore = keystoreProps.isNotEmpty() &&
-    file(keystoreProps.getProperty("storeFile", "keystore/release.jks")).exists()
+val taskNamesLower = gradle.startParameter.taskNames.map { it.substringAfterLast(":").lowercase() }
+fun isReleaseTaskName(t: String): Boolean {
+    if (t == "release") return true
+    if (t.contains("release") && (t.startsWith("assemble") || t.startsWith("bundle") || t.startsWith("publish") || t == "build" || t.startsWith("lint") || t.startsWith("test"))) return true
+    if (t == "assemble" || t == "build" || t == "bundle") return true
+    if (t.startsWith("publish")) return true
+    return false
+}
+val isReleaseBuild: Boolean = taskNamesLower.any { isReleaseTaskName(it) }
+// 四键 isNullOrBlank 同口径 + storeFile 空白时短路 false（不 file("")判存在）
+val storeFileProp: String? = keystoreProps.getProperty("storeFile")?.trim()
+val storePasswordProp: String? = keystoreProps.getProperty("storePassword")
+val keyAliasProp: String? = keystoreProps.getProperty("keyAlias")
+val keyPasswordProp: String? = keystoreProps.getProperty("keyPassword")
+val hasReleaseKeystore: Boolean =
+    !storeFileProp.isNullOrBlank() &&
+        !storePasswordProp.isNullOrBlank() &&
+        !keyAliasProp.isNullOrBlank() &&
+        !keyPasswordProp.isNullOrBlank() &&
+        file(storeFileProp as String).exists()
 
 android {
     namespace = "com.wenyan.app"
@@ -28,8 +46,8 @@ android {
         minSdk = 26
         targetSdk = 36
         // 版本历史见根目录 CHANGELOG.md（L11 精简，不再在 build 脚本堆注释墙）
-        versionCode = 44
-        versionName = "1.9.4"
+        versionCode = 45
+        versionName = "1.9.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -75,6 +93,8 @@ android {
             )
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
+            } else if (isReleaseBuild) {
+                throw GradleException("release 构建缺少可用的 release 签名（keystore.properties 四键缺失/空白或 storeFile 不存在），已 fail-fast 中断")
             } else {
                 logger.warn("未找到 keystore.properties/release.jks，release 构建回退 debug 签名（正式发布前必须配置 release 签名）")
                 signingConfigs.getByName("debug")

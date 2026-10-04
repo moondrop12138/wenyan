@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isFinite
 import androidx.compose.ui.unit.sp
+import com.wenyan.app.ui.components.PrimaryButton
 import com.wenyan.app.ui.theme.EditorialType
 import com.wenyan.app.ui.theme.GtjType
 import com.wenyan.app.ui.theme.LocalGtjColors
@@ -51,6 +52,9 @@ fun ChatEmptyState(
     // 压住（桌面 mica 稿用固定 padding-top 避开，styles.css:552）——调用方传 Scaffold 顶栏
     // 高度（padding.calculateTopPadding()）作保底；常规屏 12% 大于该值，版式不变。
     minTopPadding: Dp = 0.dp,
+    // 新用户激活链路：无可用模型时索引列表替换为引导卡
+    hasModels: Boolean = true,
+    onConfigure: () -> Unit = {},
 ) {
     val p = LocalGtjColors.current
     // v1.9.0-2（2026-08-12）：排版协调 v2（对齐 HTML 稿 empty-state-balance 右版）。
@@ -99,7 +103,22 @@ fun ChatEmptyState(
                     color = p.fg,
                 )
                 Spacer(Modifier.height(30.dp))
-                // 索引列表（壹/贰/叁，条目上分隔线）
+                // 索引列表（壹/贰/叁，条目上分隔线）；无可用模型时替换为引导卡
+                if (!hasModels) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "还没有可用模型，先配置一个即可开聊",
+                            style = GtjType.Body.copy(fontSize = 15.5f.sp, lineHeight = 25f.sp),
+                            color = p.fg,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        PrimaryButton(
+                            text = "去配置模型服务",
+                            onClick = onConfigure,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     EMPTY_INDEX.forEachIndexed { index, text ->
                         Row(
@@ -132,6 +151,7 @@ fun ChatEmptyState(
                             )
                         }
                     }
+                }
                 }
             }
         }

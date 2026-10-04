@@ -55,6 +55,10 @@ private fun errorUi(code: String, fallback: String): ErrorUi = when (code) {
         ErrorUi("地址不受支持", "仅支持 https:// 地址；本地模型服务请填 http://localhost", hasSettings = true, showRetry = false)
     LlmErrorCode.EMPTY_CONTENT.name, LlmErrorCode.PARSE_ERROR.name ->
         ErrorUi("响应异常", "模型未返回可用内容，可重试或更换模型", showCancel = true)
+    // 离线弱网发送前预检：repo 短路错误卡——消息已落库，重试 persistUser=false 不重复落库。
+    // 与 UI 拦截弹（输入保留、尚未发送）严格区分，不共用一句。
+    LlmErrorCode.NO_NETWORK.name ->
+        ErrorUi("当前无网络", "你的消息已在列表中，联网后点重试即可", showCancel = true)
     else -> ErrorUi("模型返回错误", fallback, showCancel = true)
 }
 

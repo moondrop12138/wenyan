@@ -47,6 +47,14 @@ internal class FakeSettingsRepository : SettingsRepository {
     val connectionStatusCalls = mutableListOf<Pair<Long, Boolean>>()
     val providerUpdates = mutableListOf<Triple<Long, String, String?>>()
 
+    /** saveProvider 调用记录（ProviderEditSessionsTest 单行保证用：断言只插一次） */
+    val savedProviders = mutableListOf<Triple<String, String, String>>()
+    var nextSaveId = 1L
+
+    /** 测试钩子：在 save/test 内挂起可控时长（并发交错、取消语义用；默认 0 不挂起） */
+    var saveDelayMillis = 0L
+    var testDelayMillis = 0L
+
     /** v1.7.5 编辑回显用：默认无 key，测试可配置 */
     var apiKeyValue: String? = null
 
@@ -133,9 +141,14 @@ internal class FakeSettingsRepository : SettingsRepository {
     override suspend fun setThemeMode(mode: String) = Unit
     override suspend fun testConnection(providerId: Long): LlmError? {
         testConnectionCalls++
+        if (testDelayMillis > 0) kotlinx.coroutines.delay(testDelayMillis)
         return testConnectionResult
     }
-    override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long = 1L
+    override suspend fun saveProvider(name: String, baseUrl: String, apiKey: String, isPreset: Boolean): Long {
+        if (saveDelayMillis > 0) kotlinx.coroutines.delay(saveDelayMillis)
+        savedProviders.add(Triple(name, baseUrl, apiKey))
+        return nextSaveId++
+    }
     override suspend fun updateProvider(id: Long, name: String, baseUrl: String, apiKey: String?) {
         providerUpdates.add(Triple(id, name, apiKey))
     }

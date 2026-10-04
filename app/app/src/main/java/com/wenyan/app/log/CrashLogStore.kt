@@ -59,6 +59,12 @@ class CrashLogStore(private val context: Context) {
         return if (f.exists()) f else null
     }
 
+    /** 只清崩溃日志（缓冲 + filesDir/crash），不碰下载目录（设置页「清除」按钮用；误删 APK 即删包——终审必改4） */
+    fun clearCrashOnly() {
+        synchronized(lock) { buffer.clear() }
+        runCatching { File(context.filesDir, CRASH_DIR).deleteRecursively() }
+    }
+
     /** 清除崩溃日志目录 + 下载缓存（wipeAll 隐私联动）。
      *  F29 修复：下载的 APK 实际写在 filesDir/downloads（UpdateChecker.download 由调用方传入
      *  context.filesDir），原先只删 cacheDir/downloads 旧目录导致擦除后 APK 残留——
