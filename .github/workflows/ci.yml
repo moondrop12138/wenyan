@@ -38,6 +38,10 @@ jobs:
       - name: Set up Android SDK
         # 设置 ANDROID_HOME / ANDROID_SDK_ROOT；AGP 按需自动下载缺失 platform/build-tools
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          # Action 默认装 `tools` 包（Google 已下架，sdkmanager 报 Failed to find package 'tools'）；
+          # 显式只装 platform-tools 绕开，其余 platform/build-tools 由 AGP 按需下载
+          packages: platform-tools
 
       - name: Set up Python
         # knowledgeCheck 通过 `python` 命令调用 gen_routes.py；setup-python 同时提供 python/python3
