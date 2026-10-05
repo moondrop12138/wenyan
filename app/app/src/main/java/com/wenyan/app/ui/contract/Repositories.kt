@@ -35,8 +35,13 @@ interface ChatRepository {
     val noticeEvents: Flow<String>
 
     /** v1.3.1 后台续跑发送族：应用级 scope 内收集流式事件并推送 streamingState，返回即不阻塞。
-     *  发送文本分析（"这句怎么回"用 mode=REPLY，其余 FIVE_STEP）。 */
-    fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true)
+     *  发送文本分析（"这句怎么回"用 mode=REPLY，其余 FIVE_STEP）。
+     *  [replaceAssistantId] 非空即完全重答替换：新 ASSISTANT 落库成功后才删旧行
+     *  （buildHistory 同步过滤旧回答不进 LLM 上下文；失败/取消不删旧，旧卡保留显示
+     *  直到替换成功，不出现一问两答并存）；null=普通发送。
+     *  [transcriptionMode] 转述轮重跑：USER TRANSCRIPTION 素材走 buildUserTranscription
+     *  （对齐桌面 runTextPipeline transcriptionMode），不进 route/buildUserReply。 */
+    fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean = true, replaceAssistantId: Long? = null, transcriptionMode: Boolean = false)
 
     /**
      * 截图分析（双通道分流，AC-07/AC-08）：后端内部做压缩管线（≤1568px/85%）后，
@@ -50,7 +55,18 @@ interface ChatRepository {
         text: String = "",
         mode: AnalysisMode = AnalysisMode.FIVE_STEP,
         persistUser: Boolean = true,
+        replaceAssistantId: Long? = null,
+        transcriptionMode: Boolean = false,
     )
+
+    /**
+     * v1.9.5 regenerate 图片回放：库内 IMAGE 条 content 为压缩后 dataUrl
+     * （data:image/jpeg;base64,…），analyzeImagesAsync 只收 List<Uri>——
+     * 实现侧将其解码写应用缓存临时文件并经 FileProvider 取 Uri 回放。
+     * 转换落在有 Context 的仓库层，ViewModel 不直接持 Activity Context。
+     * 默认空实现：内存 Fake（androidTest/单测）零改动继续编译；生产实现见 RealChatRepository。
+     */
+    suspend fun materializeDataUrls(dataUrls: List<String>): List<Uri> = emptyList()
 
     /**
      * 通道 B 转述确认后，携用户可编辑的转述文本继续主模型分析。

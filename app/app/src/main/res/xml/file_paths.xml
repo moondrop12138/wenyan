@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- v1.7.3 FileProvider 路径白名单：
      files-path crash/   → 崩溃诊断日志 last_crash.txt（导出分享）
-     cache-path downloads/ → 更新检查下载的 APK（唤起安装器） -->
+     cache-path downloads/ → 更新检查下载的 APK（唤起安装器）
+     v1.9.5 cache-path regenerate/ → AI 气泡「重新生成」图片回放临时文件
+     （库内 IMAGE dataUrl 解码落盘，经 FileProvider 取 Uri 供 analyzeImagesAsync 重读） -->
 <paths>
     <files-path name="crash" path="crash/" />
     <!-- M9: APK 下载目录迁到 filesDir（cache 可能被系统清理） -->
     <files-path name="downloads" path="downloads/" />
     <!-- 兼容旧版本下载到 cacheDir/downloads 的 APK -->
     <cache-path name="downloads_legacy" path="downloads/" />
+    <!-- v1.9.5：regenerate 图片回放临时文件（应用私有 cacheDir，可被系统清理） -->
+    <cache-path name="regenerate" path="regenerate/" />
 </paths>

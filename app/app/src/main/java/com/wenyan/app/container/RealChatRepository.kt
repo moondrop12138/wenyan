@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 
@@ -280,6 +281,8 @@ class RealChatRepository(
         mode: AnalysisMode,
         persistUser: Boolean,
         owner: StreamStateHost.Handle?,
+        replaceAssistantId: Long? = null,
+        transcriptionMode: Boolean = false,
     ): Flow<StreamEvent> = flow {
         // AC-13：危机关键词本地预检，命中即转介，不调 LLM
         val crisis = CrisisDetector.detect(text)
@@ -328,8 +331,14 @@ class RealChatRepository(
         //   target.copy(note = facts.joinToString("；").take(2000))，PromptBuilder 零改动。
         val target = resolveTargetWithMemory(sid)
         val system = promptBuilder.buildSystem(profile, target, knowledge)
-        val (history, historyTruncated) = buildHistory(sid, text)
-        val user = when (mode) {
+        // 完全重答替换：旧回答删除前仍在库，history 映射过滤被替换旧行，不进 LLM 上下文
+        // （与桌面 ChatEngine.buildHistory excludeMessageId 对齐）；null=普通发送不过滤
+        val (history, historyTruncated) = buildHistory(sid, text, excludeAssistantId = replaceAssistantId)
+        // 转述轮重跑（transcriptionMode）：USER TRANSCRIPTION 素材走截图转述模板，
+        // 对齐桌面 runTextPipeline transcriptionMode（ChatEngine :315），不进 route/buildUserReply
+        val user = if (transcriptionMode) {
+            promptBuilder.buildUserTranscription(text)
+        } else when (mode) {
             AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
             // REPLY/RELAYED/GREETING 共用简短输入模板（§3.3）：
             // 模型在 prompt 内做最终语境判断，拿不准时反问兜底。
@@ -359,7 +368,17 @@ class RealChatRepository(
                     // v1.6 统一结构化落库：解析失败兜底（H3）落库 freetext 展示原文，流结束置 Done
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
-                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        // v1.9.5 完全重答替换：原位更新旧回答（id/顺序不变——Room 提交后才发失效通知，
+                        // 界面无新旧双卡瞬态；取消也不会留下「已插新未删旧」的半态；二次重跑不漂移）。
+                        // 极端：旧行已被人为删除（updated==0）→ 退回尾部新增
+                        if (replaceAssistantId != null) {
+                            val updated = conversationRepository.updateMessageContent(replaceAssistantId, event.fullText)
+                            if (updated == 0) {
+                                conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                            }
+                        } else {
+                            conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        }
                         // O5: 主回复顺带产出标题则直接落库，否则走独立标题生成降级
                         if (analysis.sessionTitle.isNotBlank()) {
                             if (conversationRepository.getSession(sid)?.title?.isNotBlank() != true) {
@@ -371,7 +390,10 @@ class RealChatRepository(
                         // v1.7.2：新话题自动提炼记忆（仅 persistUser=true 首轮；开关关/无档案/同题追问跳过）
                         // v1.9.1：素材来源按输入通道——FIVE_STEP=粘贴聊天记录，其余=口述输入
                         if (persistUser && shouldExtractMemory(sid, state, text)) {
-                            val source = if (mode == AnalysisMode.FIVE_STEP) {
+                            // 转述轮重跑 transcriptionMode=true 时固定截图转述来源（对齐桌面 sourceOverride）
+                            val source = if (transcriptionMode) {
+                                MemoryFactEntity.SOURCE_TRANSCRIPTION
+                            } else if (mode == AnalysisMode.FIVE_STEP) {
                                 MemoryFactEntity.SOURCE_PASTE
                             } else {
                                 MemoryFactEntity.SOURCE_CHAT
@@ -402,9 +424,15 @@ class RealChatRepository(
                         emit(StreamEvent.Analysis(card.copy(citations = refDocs.ifEmpty { card.citations })))
                         if (historyTruncated) _noticeEvents.tryEmit(HISTORY_TRUNCATED_NOTICE)   // M22
                     } else {
-                        // H3: 解析失败不丢内容——原始回复以 freetext 落库展示，并提示
-                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
+                        // H3: 解析失败不丢内容——原始回复以 freetext 落库展示，并提示；
+                        // v1.9.5 重跑替换：不落任何新行（失败行会与旧卡并存、还会长期污染后续上下文），
+                        // 改提示已保留原回答
+                        if (replaceAssistantId == null) {
+                            conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                            _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
+                        } else {
+                            _noticeEvents.tryEmit(REGEN_PARSE_FAIL_NOTICE)   // M22
+                        }
                     }
                     emit(StreamEvent.Done)
                 }
@@ -416,6 +444,7 @@ class RealChatRepository(
     /**
      * v1.3.1 persistUser=false 供图片失败重试：image/text 首次已落库，重试不重复落库。
      * v1.9.4 [owner] 同 [sendTextFlow]：async 入口传入归属句柄，同步入口传 null。
+     * v1.9.5 [replaceAssistantId] 完全重答替换：透传 runVisionDirect，Done 新行落库成功后删旧行。
      */
     private fun analyzeImagesFlow(
         uris: List<Uri>,
@@ -423,6 +452,8 @@ class RealChatRepository(
         mode: AnalysisMode,
         persistUser: Boolean,
         owner: StreamStateHost.Handle?,
+        replaceAssistantId: Long? = null,
+        transcriptionMode: Boolean = false,
     ): Flow<StreamEvent> = flow {
         // v1.3.1 图文同发：配文先过危机预检（命中即转介，不落库、不发 LLM）
         val caption = text.trim()
@@ -491,8 +522,23 @@ class RealChatRepository(
         // 主模型是否支持视觉 → 通道 A 直读
         val mainModel = resolveModel()
         if (mainModel?.supportsVision == true) {
-            runVisionDirect(sid, dataUrls, caption, mode).collect { emit(it) }
+            runVisionDirect(sid, dataUrls, caption, mode, persistUser, replaceAssistantId, transcriptionMode).collect { emit(it) }
         } else {
+            // v1.9.5 regenerate 图片轮对齐桌面 retryMessage（ChatEngine :241-248）：
+            // 重跑替换（replaceAssistantId 非空）时主模型不支持视觉 → 直接报可理解错误，
+            // 不进通道 B 转述——转述确认链路无 replace 语义，确认后新卡落库与旧卡并存且旧卡永不删除
+            if (replaceAssistantId != null) {
+                emit(
+                    StreamEvent.Error(
+                        LlmError(
+                            "NO_VISION_RETRY",
+                            "这一轮是图片消息，当前模型不支持看图。请先到设置配置视觉模型，或换一个支持图片的模型再重来。",
+                            false,
+                        ),
+                    ),
+                )
+                return@flow
+            }
             // 通道 B：先调视觉模型转述（配文已作为独立消息在历史里，确认转述后模型可见）
             // v1.9.2 等待文案三档：转述期间 UI 显示「视觉模型正在提取截图文字…」
             owner?.markTranscribing(true)
@@ -665,18 +711,62 @@ class RealChatRepository(
 
     // ===== v1.3.1 后台续跑 async 发送族 =====
 
-    override fun sendTextAsync(text: String, mode: AnalysisMode, persistUser: Boolean) =
-        launchStream { owner -> sendTextFlow(text, mode, persistUser, owner) }
+    override fun sendTextAsync(
+        text: String,
+        mode: AnalysisMode,
+        persistUser: Boolean,
+        replaceAssistantId: Long?,
+        transcriptionMode: Boolean,
+    ) = launchStream { owner -> sendTextFlow(text, mode, persistUser, owner, replaceAssistantId, transcriptionMode) }
 
     override fun analyzeImagesAsync(
         uris: List<Uri>,
         text: String,
         mode: AnalysisMode,
         persistUser: Boolean,
-    ) = launchStream { owner -> analyzeImagesFlow(uris, text, mode, persistUser, owner) }
+        replaceAssistantId: Long?,
+        transcriptionMode: Boolean,
+    ) = launchStream { owner -> analyzeImagesFlow(uris, text, mode, persistUser, owner, replaceAssistantId, transcriptionMode) }
 
     override fun confirmTranscriptionAsync(transcription: String, sid: Long?) =
         launchStream { owner -> confirmTranscriptionFlow(transcription, sid, owner) }
+
+    /**
+     * v1.9.5 regenerate 图片回放：库内 IMAGE 条 content 为压缩后 dataUrl
+     * （data:image/jpeg;base64,…，见 analyzeImagesFlow 落库）——analyzeImagesAsync 只收
+     * List<Uri>，此处 base64 解码写应用私有缓存 regenerate/ 经 FileProvider 取 Uri，
+     * 供 ViewModel.regenerate 含图轮次重发。persistUser=false（用户图文已落库，不重复落库）。
+     * 非 dataUrl 条目跳过；单条解码/落盘失败跳过该条（不整体失败，至少回放成功部分）。
+     * 调用方在 IO 线程执行 suspend；文件名带时间戳+序号避免复用碰撞，旧文件随 cache 清理。
+     */
+    override suspend fun materializeDataUrls(dataUrls: List<String>): List<Uri> =
+        withContext(Dispatchers.IO) {
+            if (dataUrls.isEmpty()) return@withContext emptyList()
+            val dir = java.io.File(context.cacheDir, "regenerate").apply { mkdirs() }
+            val out = mutableListOf<Uri>()
+            dataUrls.forEachIndexed { index, dataUrl ->
+                val body = dataUrl.substringAfter("base64,", missingDelimiterValue = "")
+                if (body.isEmpty()) return@forEachIndexed
+                val bytes = runCatching {
+                    android.util.Base64.decode(body, android.util.Base64.DEFAULT)
+                }.getOrNull() ?: return@forEachIndexed
+                if (bytes.isEmpty()) return@forEachIndexed
+                val file = java.io.File(dir, "regen_${System.currentTimeMillis()}_$index.jpg")
+                val ok = runCatching {
+                    file.outputStream().use { it.write(bytes) }
+                    true
+                }.getOrDefault(false)
+                if (!ok) return@forEachIndexed
+                runCatching {
+                    androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                }.getOrNull()?.let { out.add(it) }
+            }
+            out
+        }
 
     /**
      * M18/H5 统一异步流入口：任务按「当前会话 key」注册，同会话已有流在跑则忽略（原全局
@@ -702,10 +792,17 @@ class RealChatRepository(
      *   先对早期消息做内容裁剪（每条最多保留 [EARLY_MSG_CHAR_BUDGET] 字 + 截断标记），
      *   仍超预算再从最早整条丢弃，并在头部插入仅模型可见的省略提示。
      *   相比旧版整轮丢弃，被裁消息的关键信息（开头）仍保留在上下文里。
+     * - v1.9.5 完全重答替换 [excludeAssistantId]：被替换旧回答不再进 LLM 上下文
+     *   （旧行删除前仍在库，按 DB id 过滤；与桌面 ChatEngine.buildHistory 对齐）。
      */
     /** O9: 返回 (历史消息, 是否发生压缩截断) */
-    private suspend fun buildHistory(sid: Long, currentUserContent: String): Pair<List<ChatHistoryMessage>, Boolean> {
+    private suspend fun buildHistory(
+        sid: Long,
+        currentUserContent: String,
+        excludeAssistantId: Long? = null,
+    ): Pair<List<ChatHistoryMessage>, Boolean> {
         val entities = conversationRepository.listMessages(sid)
+            .filter { excludeAssistantId == null || it.id != excludeAssistantId }
         val mapped = entities.mapNotNull { e ->
             when (e.type) {
                 "text" -> ChatHistoryMessage(e.role.lowercase(), e.content)
@@ -799,12 +896,16 @@ class RealChatRepository(
      * - 图文同发：mode=FIVE_STEP → buildUserText（聊天记录模板），其余 → buildUserReply（简短输入模板）；
      * - v1.6 全部统一 STRUCTURED，完成解析后落库直渲；
      * - v1.6.1 多图：dataUrls 一次请求全量直读（content 数组多 image_url）。
+     * - v1.9.5 [replaceAssistantId] 完全重答替换：history 过滤旧回答 + Done 新行落库成功后删旧行。
      */
     private suspend fun runVisionDirect(
         sid: Long,
         dataUrls: List<String>,
         text: String,
         mode: AnalysisMode,
+        persistUser: Boolean,
+        replaceAssistantId: Long? = null,
+        transcriptionMode: Boolean = false,
     ): Flow<StreamEvent> = flow {
         val profile = profileRepository.getProfile()
         // v1.7.2 会话归属档案优先；v1.7.3 注入改读事实表
@@ -814,8 +915,10 @@ class RealChatRepository(
             emit(StreamEvent.Error(noConfigError()))
             return@flow
         }
-        val (history, historyTruncated) = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER })
+        val (history, historyTruncated) = buildHistory(sid, text.ifBlank { IMAGE_PLACEHOLDER }, excludeAssistantId = replaceAssistantId)
         val userText = when {
+            // 转述轮重跑：截图转述模板（对齐桌面 runTextPipeline transcriptionMode 首分支）
+            transcriptionMode -> promptBuilder.buildUserTranscription(text)
             text.isBlank() -> "以下是用户聊天截图，请按四段结构分析。"
             mode == AnalysisMode.FIVE_STEP -> promptBuilder.buildUserText(text)
             else -> {
@@ -841,18 +944,34 @@ class RealChatRepository(
                 is LlmEvent.Done -> {
                     val analysis = runCatching { AnalysisParser.parseAny(event.fullText) }.getOrNull()
                     if (analysis != null) {
-                        conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
-                        // v1.7.2 通道 A 直读同样自动提炼（素材取截图）；v1.9.1 来源=截图转述
+                        // v1.9.5 完全重答替换：原位更新旧回答（同文本链路——无瞬态双卡、取消无半态）；
+                        // 极端：旧行已被删（updated==0）→ 退回尾部新增
+                        if (replaceAssistantId != null) {
+                            val updated = conversationRepository.updateMessageContent(replaceAssistantId, event.fullText)
+                            if (updated == 0) {
+                                conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                            }
+                        } else {
+                            conversationRepository.addMessage(sid, "ASSISTANT", "analysis", event.fullText)
+                        }
+                        // v1.7.2 通道 A 直读同样自动提炼（素材取截图）；v1.9.1 来源=截图转述；
+                        // persistUser 守门对齐文本链路（:382）与桌面 pushUserState（ChatEngine :584）：
+                        // 重跑 persistUser=false 不重复写 facts
                         val stateNow = ConversationState.fromJson(conversationRepository.getSessionState(sid))
-                        if (shouldExtractMemory(sid, stateNow, text)) {
+                        if (persistUser && shouldExtractMemory(sid, stateNow, text)) {
                             memoryScope.launch { extractMemoryOnce(sid, text, event.fullText, MemoryFactEntity.SOURCE_TRANSCRIPTION) }
                         }
                         emit(StreamEvent.Analysis(UiMappers.toCoachCard(analysis)))
                         if (historyTruncated) _noticeEvents.tryEmit(HISTORY_TRUNCATED_NOTICE)   // M22
                     } else {
-                        // H3: 解析失败兜底——原始回复以 freetext 落库展示
-                        conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
-                        _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
+                        // H3: 解析失败兜底——原始回复以 freetext 落库展示；
+                        // v1.9.5 重跑替换：不落任何新行，提示已保留原回答（同文本链路）
+                        if (replaceAssistantId == null) {
+                            conversationRepository.addMessage(sid, "ASSISTANT", "freetext", event.fullText)
+                            _noticeEvents.tryEmit(PARSE_FALLBACK_NOTICE)   // M22
+                        } else {
+                            _noticeEvents.tryEmit(REGEN_PARSE_FAIL_NOTICE)   // M22
+                        }
                     }
                     emit(StreamEvent.Done)
                 }
@@ -1097,6 +1216,9 @@ class RealChatRepository(
 
         /** H3: 解析失败兜底提示（原始回复已以 freetext 展示） */
         const val PARSE_FALLBACK_NOTICE = "模型输出格式异常，已展示原文"
+
+        /** v1.9.5 重跑替换：解析失败不落库，原回答原样保留 */
+        const val REGEN_PARSE_FAIL_NOTICE = "重新生成失败：模型返回的内容无法解析，已保留原回答"
 
         /** O9: 历史压缩透明化提示 */
         const val HISTORY_TRUNCATED_NOTICE = "对话较长，较早内容已摘要化，如需精确信息请补充"

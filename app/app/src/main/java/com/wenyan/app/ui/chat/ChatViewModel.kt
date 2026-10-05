@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.wenyan.app.ui.contract.AnalysisMode
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.ChatRepository
+import com.wenyan.app.ui.contract.ChatRole
+import com.wenyan.app.ui.contract.MessageType
 import com.wenyan.app.ui.contract.LlmError
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -264,6 +266,69 @@ class ChatViewModel(private val repo: ChatRepository) : ViewModel() {
             repo.analyzeImagesAsync(last.uris, last.text, last.mode, persistUser = needPersistUser)
         } else {
             repo.sendTextAsync(last.text, last.mode, persistUser = needPersistUser)
+        }
+    }
+
+    /**
+     * v1.9.5 AI 气泡常驻「重新生成」：从 messages 倒查该 AI 条所在轮次（上条 AI 之后
+     * 到本条之前）的用户素材重答。streaming 中直接返回（UI 侧同样门控禁用，双保险）。
+     * 素材优先级（与桌面 ChatEngine.retryMessageInner 同规则）：
+     * 1) 窗口内已有 USER TRANSCRIPTION（截图转述已确认过）→ 直接按转述文本重答，
+     *    不需要视觉模型、不需要重新确认（转述轮的重答对象是分析回答，不是转述本身）；
+     * 2) 窗口内有 IMAGE（通道 A 直读轮）→ materializeDataUrls（dataUrl→应用缓存临时文件→Uri，
+     *    转换落在有 Context 的仓库层）回放后走 analyzeImagesAsync；
+     * 3) 否则取窗口内最后一条 USER TEXT 走 sendTextAsync。
+     * 完全重答替换：被替换旧 assistantId 经 replaceAssistantId 透传仓库层——新回答成功后
+     * 原位更新旧行（id 不变，无新旧双卡瞬态、二次重跑不漂移），失败/取消不写、旧回答原样保留；
+     * 仓库内 buildHistory 同步过滤旧回答不进 LLM 上下文。
+     */
+    fun regenerate(assistantId: Long) {
+        if (_streaming.value) return
+        val msgs = _messages.value
+        val idx = msgs.indexOfFirst { it.id == assistantId }
+        if (idx < 0) {
+            // 卡片已被删除/替换（长按删除等）→ 明确提示，不静默无反应
+            _notice.value = "这条回答已不存在，无法重新生成"
+            return
+        }
+        // 轮次窗口：图文同发落库顺序为先图后文（RealChatRepository 先图后文相邻落库），
+        // 故上条 AI 之后到本条之间的 USER TEXT/TRANSCRIPTION/IMAGE 即本轮素材
+        val turnStart = msgs.take(idx).indexOfLast { it.role == ChatRole.ASSISTANT }
+        val window = msgs.subList(turnStart + 1, idx)
+        // 转述轮优先：直接按已确认的转述文本重答（无需视觉模型/无需重新确认）
+        val transcription = window.lastOrNull {
+            it.role == ChatRole.USER && it.type == MessageType.TRANSCRIPTION && it.content.isNotBlank()
+        }
+        if (transcription != null) {
+            val text = transcription.content.trim()
+            // mode 不参与转述模板选择（buildUserTranscription 固定），仅影响记忆来源——transcriptionMode 已置位
+            repo.sendTextAsync(text, AnalysisMode.FIVE_STEP, persistUser = false, replaceAssistantId = assistantId, transcriptionMode = true)
+            return
+        }
+        val dataUrls = window.filter {
+            it.role == ChatRole.USER && it.type == MessageType.IMAGE
+        }.map { it.content }
+        val captionIdx = window.indexOfLast {
+            it.role == ChatRole.USER && it.type == MessageType.TEXT
+        }
+        val caption = if (captionIdx < 0) "" else window[captionIdx].content.trim()
+        if (dataUrls.isEmpty() && caption.isEmpty()) return
+        val mode = if (caption.isEmpty()) AnalysisMode.FIVE_STEP else InputShapeRouter.route(caption)
+        if (dataUrls.isEmpty()) {
+            repo.sendTextAsync(caption, mode, persistUser = false, replaceAssistantId = assistantId)
+        } else {
+            viewModelScope.launch {
+                if (_streaming.value) return@launch
+                val uris = repo.materializeDataUrls(dataUrls)
+                // 竞态双保险：回放耗时 IO 期间用户点了停止/新流已起则丢弃本次重发（素材仍在库可再点）
+                if (_streaming.value) return@launch
+                if (uris.isEmpty()) {
+                    // 库内图片 dataUrl 损坏/非 base64 → 回放为空，明确提示而非静默无反应
+                    _notice.value = "本轮图片已失效，无法重新生成"
+                    return@launch
+                }
+                repo.analyzeImagesAsync(uris, caption, mode, persistUser = false, replaceAssistantId = assistantId)
+            }
         }
     }
 

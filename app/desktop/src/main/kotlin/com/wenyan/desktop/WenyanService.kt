@@ -189,6 +189,13 @@ class WenyanService(
 
     suspend fun deleteMessage(messageId: Long) = db.messageDao().deleteById(messageId)
 
+    /**
+     * v1.9.5 完全重答替换：原位更新旧回答（内容+类型），保持 id 与消息顺序不变。
+     * 返回受影响行数：0 = 旧行已被删除，调用方回退为新增。
+     */
+    suspend fun updateMessageContent(id: Long, content: String, type: String): Int =
+        db.messageDao().updateContent(id, content, type)
+
     // ===== 档案（profile）=====
 
     suspend fun getLatestProfile(): ProfileEntity? = db.profileDao().getLatest()

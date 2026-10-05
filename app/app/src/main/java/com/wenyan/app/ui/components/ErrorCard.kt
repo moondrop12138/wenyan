@@ -59,6 +59,10 @@ private fun errorUi(code: String, fallback: String): ErrorUi = when (code) {
     // 与 UI 拦截弹（输入保留、尚未发送）严格区分，不共用一句。
     LlmErrorCode.NO_NETWORK.name ->
         ErrorUi("当前无网络", "你的消息已在列表中，联网后点重试即可", showCancel = true)
+    // v1.9.5 重答图片轮非视觉主模型：repo 短路 NO_VISION_RETRY（对齐桌面）——可理解文案，
+    // 重试无意义（换模型前重试仍失败），只留取消
+    "NO_VISION_RETRY" ->
+        ErrorUi("当前模型不支持看图", "这一轮是图片消息，请先到设置配置视觉模型，或换一个支持图片的模型再重来", hasSettings = true, showRetry = false)
     else -> ErrorUi("模型返回错误", fallback, showCancel = true)
 }
 

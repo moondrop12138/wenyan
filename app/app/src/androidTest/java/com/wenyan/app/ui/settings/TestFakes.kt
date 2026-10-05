@@ -160,8 +160,8 @@ class FakeAppContainer(
         override val currentModelName: Flow<String> = MutableStateFlow("未配置")
         override val memoryReceiptEvents: Flow<String> = kotlinx.coroutines.flow.emptyFlow()
         override val noticeEvents: Flow<String> = kotlinx.coroutines.flow.emptyFlow()
-        override fun sendTextAsync(text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean) = Unit
-        override fun analyzeImagesAsync(uris: List<Uri>, text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean) = Unit
+        override fun sendTextAsync(text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean, replaceAssistantId: Long?, transcriptionMode: Boolean) = Unit
+        override fun analyzeImagesAsync(uris: List<Uri>, text: String, mode: com.wenyan.app.ui.contract.AnalysisMode, persistUser: Boolean, replaceAssistantId: Long?, transcriptionMode: Boolean) = Unit
         override fun confirmTranscriptionAsync(transcription: String, sid: Long?) = Unit
         override suspend fun deleteMessage(messageId: Long) = Unit
         override suspend fun switchSession(sessionId: Long) = Unit

@@ -464,6 +464,34 @@ fun Route.apiRoutes(service: WenyanService, chatEngine: ChatEngine, token: Strin
     }
 
     /**
+     * 重跑指定 AI 卡片所在轮次（POST /api/chat/retry，SSE 帧格式同 /api/chat/stream）。
+     * 请求体：{sessionId, modelId, messageId?}。messageId 为该 AI 卡片的消息 id，
+     * 后端按该条所在轮次（上一条 ASSISTANT 之后到本条之前，与 Android 同规则）
+     * 倒查 USER 文本/转述重跑；缺省时回退到最后一轮（旧调用不断）。不重复落 USER。
+     */
+    post("/api/chat/retry") {
+        val body = JSONObject(call.receiveText())
+        val sessionId = body.getLong("sessionId")
+        val modelId = body.getLong("modelId")
+        val messageId = if (body.has("messageId") && !body.isNull("messageId")) body.optLong("messageId") else null
+
+        call.response.headers.append("Cache-Control", "no-cache")
+        call.response.headers.append("Connection", "keep-alive")
+        call.response.headers.append("X-Accel-Buffering", "no")
+
+        val channel = ByteChannel(autoFlush = true)
+        // M2: 同 /api/chat/stream——生产者挂 call 作用域，断开即取消内部流
+        launchSseBridge(channel) { send ->
+            chatEngine.retryMessage(sessionId, modelId, messageId) { event -> send(event) }
+        }
+
+        call.respond(object : io.ktor.http.content.OutgoingContent.ReadChannelContent() {
+            override val contentType: ContentType = ContentType.Text.EventStream
+            override fun readFrom(): ByteReadChannel = channel
+        })
+    }
+
+    /**
      * 通道 B 第二步：确认转述后走主模型纯文本分析（SSE 流式，帧格式同 /api/chat/stream）。
      * 请求体：{sessionId, modelId, transcription}
      */

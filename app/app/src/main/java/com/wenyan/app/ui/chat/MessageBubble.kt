@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.wenyan.app.ui.components.glass.HueExemptImage
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.contract.ChatMessageUi
 import com.wenyan.app.ui.contract.ChatRole
@@ -176,16 +177,20 @@ fun ImageMessageBubble(
         ) {
             val bmp = bitmap.value
             if (bmp != null) {
-                Image(
-                    bitmap = bmp.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .widthIn(max = 240.dp)
-                        .heightIn(max = 240.dp)
-                        // v1.7.0：图片裁剪沿用 20/20/6 气泡圆角
-                        .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
-                )
+                // v1.9.5 用户位图色相豁免：全局 hue-rotate 层罩整树，照片经 HueExemptImage
+                // 逆矩阵还原（hue==0 透传零开销）；全屏预览在 Dialog 独立窗口层外，不动。
+                HueExemptImage {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .widthIn(max = 240.dp)
+                            .heightIn(max = 240.dp)
+                            // v1.7.0：图片裁剪沿用 20/20/6 气泡圆角
+                            .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
+                    )
+                }
             } else {
                 Text(
                     text = "图片加载失败",

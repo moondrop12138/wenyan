@@ -44,6 +44,14 @@ interface MessageDao {
     @Query("DELETE FROM message WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    /**
+     * v1.9.5 完全重答替换：原位更新内容与类型（freetext 失败行重答成功后转回 analysis）。
+     * 不新增行、不改 id/顺序——Room 失效通知在语句提交后发出，界面不会出现新旧两卡并存的瞬态。
+     * 返回受影响行数（0 = 该行已被删除，调用方自行回退）。
+     */
+    @Query("UPDATE message SET content = :content, type = :type WHERE id = :id")
+    suspend fun updateContent(id: Long, content: String, type: String): Int
+
     @Query("DELETE FROM message")
     suspend fun clear()
 }

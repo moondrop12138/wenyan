@@ -10,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +32,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
@@ -53,7 +56,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +64,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -106,6 +109,7 @@ import com.wenyan.app.ui.components.glass.rememberGlassBackdrop
 import com.wenyan.app.ui.components.glass.rememberGlassBackdropLayer
 import com.wenyan.app.ui.contract.AppContainer
 import com.wenyan.app.ui.contract.ChatMessageUi
+import com.wenyan.app.ui.contract.ChatRole
 import com.wenyan.app.ui.contract.MessageType
 import com.wenyan.app.ui.contract.SessionSummaryUi
 import com.wenyan.app.ui.navigation.rememberViewModel
@@ -127,6 +131,67 @@ private val PendingUrisSaver = listSaver<ArrayList<String>, String>(
     save = { list -> list.toList() },
     restore = { list -> ArrayList(list) },
 )
+
+/**
+ * v1.9.5 AI 气泡常驻「重新生成」操作行：左对齐 Material Refresh 纯图标按钮
+ * （contentDescription=重新生成），复用 streaming 与 canChat 门控（参考输入栏 onSend
+ * 与错误卡 onRetry：streaming 中 no-op、!canChat 弹无模型窗、离线弹离线窗）。
+ * 含图轮次同样可重发（dataUrl→Uri 回放通路见 RealChatRepository.materializeDataUrls）；
+ * 本轮次无可重发素材（无配文无图片无转述）时禁用防误发。
+ * 可重发口径与 ChatViewModel.regenerate 同源：轮次窗口（上条 AI 之后到本条之前）的
+ * USER TEXT/TRANSCRIPTION 非空或 USER IMAGE。替换为原位更新（id 不变），
+ * 重答成功后本卡窗口不受影响、按钮不会失效，也不需要任何回退猜测。
+ */
+@Composable
+private fun RegenerateRow(
+    msgId: Long,
+    messages: List<ChatMessageUi>,
+    streaming: Boolean,
+    canChat: Boolean,
+    checkOnline: () -> Boolean,
+    onNoProvider: () -> Unit,
+    onOffline: () -> Unit,
+    onRegenerate: (Long) -> Unit,
+) {
+    // 本轮次（上条 AI 之后到本条之前）是否有可重发素材：USER 配文/转述非空或有 USER 图片
+    val hasReplayable = remember(msgId, messages) {
+        val idx = messages.indexOfFirst { it.id == msgId }
+        if (idx < 0) {
+            false
+        } else {
+            val turnStart = messages.take(idx).indexOfLast { it.role == ChatRole.ASSISTANT }
+            messages.subList(turnStart + 1, idx).any {
+                it.role == ChatRole.USER && (
+                    ((it.type == MessageType.TEXT || it.type == MessageType.TRANSCRIPTION) && it.content.isNotBlank()) ||
+                        (it.type == MessageType.IMAGE && it.content.isNotBlank())
+                    )
+            }
+        }
+    }
+    val p = LocalGtjColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start,
+    ) {
+        GtjIconButton(
+            icon = Icons.Outlined.Refresh,
+            contentDescription = "重新生成",
+            enabled = !streaming && hasReplayable,
+            tint = if (!streaming && hasReplayable) p.fgSecondary else p.muted,
+            onClick = {
+                if (streaming) {
+                    Unit
+                } else if (!canChat) {
+                    onNoProvider()
+                } else if (!checkOnline()) {
+                    onOffline()
+                } else {
+                    onRegenerate(msgId)
+                }
+            },
+        )
+    }
+}
 @Composable
 fun ChatScreen(
     container: AppContainer,
@@ -186,12 +251,35 @@ fun ChatScreen(
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
 
+    // v1.9.5 自动跟随开关：仅「用户主动拖动」才暂停跟随（拖动结束停在中途 = 在看历史；
+    // 滚动停稳且已在底部 = 恢复跟随）。原实现用「最后一项可见」派生状态做门并把它作为
+    // 自动滚动效果的 key——自动滚动本身会改写它、内容长高也会让它误判，效果被自身取消，
+    // 列表停在半途（最后一行「重新生成」被输入栏盖住点不到）。拖动交互信号与滚动状态解耦，
+    // 不受内容测量时序影响。
+    var followPaused by remember(listState) { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is DragInteraction.Start -> followPaused = true
+                is DragInteraction.Stop, is DragInteraction.Cancel ->
+                    followPaused = listState.canScrollForward
+                else -> Unit
+            }
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
+            if (!inProgress && !listState.canScrollForward) followPaused = false
+        }
+    }
+
     // M20 修复（F31 再修）：会话切换滚到列表末尾（最新消息）——原 scrollToItem(0) 停在
-    // 最旧消息，长会话下 isAtBottom 恒为 false，此后发送/流式等待/错误卡都不会自动滚入视口。
+    // 最旧消息，长会话下自动跟随恒不成立，此后发送/流式等待/错误卡都不会自动滚入视口。
     // 等新会话的消息列表真正落地（messages 签名变化，排除旧列表残留）后滚到最后一条；
-    // 只滚这一次（landed 一次性），后续新消息仍由 isAtBottom 门控的自动跟随接管。
-    // 空会话不滚（无消息），首条消息到达时 isAtBottom 自然成立、由自动跟随接手。
+    // 只滚这一次（landed 一次性），后续新消息仍由自动跟随接管。空会话不滚（无消息），
+    // 首条消息到达时自动跟随自然接手；切会话重置跟随开关。
     LaunchedEffect(currentSessionId) {
+        followPaused = false
         var lastSig = messages.size to messages.firstOrNull()?.id
         var landed = false
         snapshotFlow { messages.size to messages.firstOrNull()?.id }
@@ -481,23 +569,63 @@ fun ChatScreen(
                                         safetyMessage = card.safetyMessage,
                                         onLongClick = { offset -> openMessageMenu(msg, offset) },
                                     )
-                                    card != null -> CoachCard(
-                                        card = card,
-                                        messageId = msg.id,
-                                        onCopy = ::copy,
-                                        onLongClick = { offset -> openMessageMenu(msg, offset) },
-                                        createdAt = msg.createdAt,
-                                    )
-                                    else -> MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                    card != null -> {
+                                        CoachCard(
+                                            card = card,
+                                            messageId = msg.id,
+                                            onCopy = ::copy,
+                                            onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                            createdAt = msg.createdAt,
+                                        )
+                                        // v1.9.5 AI 气泡常驻「重新生成」：危机卡除外（安全转介不重发）
+                                        RegenerateRow(
+                                            msgId = msg.id,
+                                            messages = messages,
+                                            streaming = streaming,
+                                            canChat = canChat,
+                                            checkOnline = ::checkOnline,
+                                            onNoProvider = { showNoProviderDialog = true },
+                                            onOffline = { showOfflineDialog = true },
+                                            onRegenerate = vm::regenerate,
+                                        )
+                                    }
+                                    else -> {
+                                        MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                        RegenerateRow(
+                                            msgId = msg.id,
+                                            messages = messages,
+                                            streaming = streaming,
+                                            canChat = canChat,
+                                            checkOnline = ::checkOnline,
+                                            onNoProvider = { showNoProviderDialog = true },
+                                            onOffline = { showOfflineDialog = true },
+                                            onRegenerate = vm::regenerate,
+                                        )
+                                    }
                                 }
                             }
-                            MessageType.IMAGE ->
+                            MessageType.IMAGE -> {
                                 // v1.3.1 点击图片气泡 → 全屏预览
                                 ImageMessageBubble(
                                     msg,
                                     onClick = { previewFor = msg },
                                     onLongClick = { offset -> openMessageMenu(msg, offset) },
                                 )
+                                // v1.9.5：与 TEXT 分支规则一致——仅 ASSISTANT 图片挂重发；
+                                // USER 自己的照片气泡不挂（regenerate 按轮次倒查 USER 素材，挂在自己名下语义错位）
+                                if (msg.role == ChatRole.ASSISTANT) {
+                                    RegenerateRow(
+                                        msgId = msg.id,
+                                        messages = messages,
+                                        streaming = streaming,
+                                        canChat = canChat,
+                                        checkOnline = ::checkOnline,
+                                        onNoProvider = { showNoProviderDialog = true },
+                                        onOffline = { showOfflineDialog = true },
+                                        onRegenerate = vm::regenerate,
+                                    )
+                                }
+                            }
                             MessageType.FREETEXT -> {
                                 // v1.3.1 freetext 融合：话术段提升为上方可复制话术卡，下方正文气泡；
                                 // 无话术段退化为纯文本气泡
@@ -522,6 +650,20 @@ fun ChatScreen(
                                             onLongClick = { offset -> openMessageMenu(msg, offset) },
                                         )
                                     }
+                                    // v1.9.5 AI 气泡常驻「重新生成」：仅 ASSISTANT 才挂
+                                    // （freetext 均为 AI 落库，但守卫与 TEXT/IMAGE 分支同形，防未来 USER 复用）
+                                    if (msg.role == ChatRole.ASSISTANT) {
+                                        RegenerateRow(
+                                            msgId = msg.id,
+                                            messages = messages,
+                                            streaming = streaming,
+                                            canChat = canChat,
+                                            checkOnline = ::checkOnline,
+                                            onNoProvider = { showNoProviderDialog = true },
+                                            onOffline = { showOfflineDialog = true },
+                                            onRegenerate = vm::regenerate,
+                                        )
+                                    }
                                 }
                             }
                             MessageType.TEXT, MessageType.TRANSCRIPTION ->
@@ -529,7 +671,22 @@ fun ChatScreen(
                                     // v1.6.2 选择模式：进入即全选，拖两端手柄部分复制
                                     SelectableMessageContent(msg)
                                 } else {
+                                    // v1.9.5：TRANSCRIPTION 为 USER 通道 B 转述确认卡，仅 ASSISTANT 文本挂重发；
+                                    // USER 文本气泡不挂（归因 USER 条就是自己，regenerate 倒查会错位）
+                                    val isAssistant = msg.role == ChatRole.ASSISTANT
                                     MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                    if (isAssistant) {
+                                        RegenerateRow(
+                                            msgId = msg.id,
+                                            messages = messages,
+                                            streaming = streaming,
+                                            canChat = canChat,
+                                            checkOnline = ::checkOnline,
+                                            onNoProvider = { showNoProviderDialog = true },
+                                            onOffline = { showOfflineDialog = true },
+                                            onRegenerate = vm::regenerate,
+                                        )
+                                    }
                                 }
                         }
                     }
@@ -588,27 +745,35 @@ fun ChatScreen(
                         }
                     }
                 }
-                // v1.2.1 滚动跟随修复：仅当用户位于底部时才自动滚到底。
-                // 此前无条件 scrollToItem 导致流式每来一个 token 就把上滑看历史的用户拽回底部。
-                // 动态项（thinking/streaming/transcription/error）都计入 totalItemsCount。
-                val isAtBottom by remember(listState) {
-                    derivedStateOf {
-                        val layout = listState.layoutInfo
-                        val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
-                        layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 1
-                    }
-                }
+                // v1.2.1 滚动跟随修复：仅当用户没有主动上滑离开时才自动滚到底（followPaused
+                // 开关见顶部声明，用拖动交互信号判定）——此前无条件 scrollToItem 会把上滑
+                // 看历史的用户拽回底部。
                 // v1.9.4 评审修复（键盘弹出滚动跟随）：M3 Scaffold body 恒以全屏测量，键盘弹出
                 // 只使 bottomBar（ChatInputBar 的 safeDrawing-bottom）长高 → 上述 contentPadding
                 // bottom 联动增大，LazyColumn viewport 高度与滚动 offset 均不变——最后一条消息
                 // 屏幕位置不动，被抬升的输入栏+键盘区域盖住（多行输入使栏长高同理）。把
-                // calculateBottomPadding 计入触发 key：栏高变化时若仍位于底部且未在拖动，
-                // 重滚到底让最新消息回到输入栏上方；手动上滑（isAtBottom=false）不受打扰。
+                // calculateBottomPadding 计入触发 key：栏高变化时若仍跟随，重滚到底让最新消息
+                // 回到输入栏上方。
                 val bottomBarPadding = padding.calculateBottomPadding()
-                LaunchedEffect(messages.size, streaming, transcription, isAtBottom, bottomBarPadding) {
-                    val count = listState.layoutInfo.totalItemsCount
-                    if (count > 0 && isAtBottom && !listState.isScrollInProgress) {
+                LaunchedEffect(messages.size, streaming, transcription, bottomBarPadding) {
+                    if (followPaused) return@LaunchedEffect
+                    // v1.9.5 重来行可达性修复：新消息项（长卡/图片）在本帧尚未完成测量，
+                    // 首次 scrollToItem 拿到的内容高度是旧值、会被 clamp 在半途；且末项比
+                    // 视口高时 scrollToItem 只把它的顶部对齐视口，最后一行「重新生成」仍落在
+                    // 输入栏下方点不到。先按项滚、再按像素补滚到底（clamp 在内容末端），
+                    // 逐帧直到不能再向后滚（每次等两帧：帧 N 完成测量与滚动落地，帧 N+1 读到的
+                    // layoutInfo 才是新值；guard 兜底防内容持续增长时死循环）。
+                    var guard = 0
+                    while (guard++ < 4) {
+                        val count = listState.layoutInfo.totalItemsCount
+                        if (count <= 0) break
                         listState.scrollToItem(count - 1)
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        if (!listState.canScrollForward) break
+                        listState.scrollBy(200_000f)
+                        withFrameNanos { }
+                        if (!listState.canScrollForward) break
                     }
                 }
             }

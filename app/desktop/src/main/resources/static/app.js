@@ -463,7 +463,7 @@ async function renderChat(){
   }
   msgs.forEach(m => {
     if (m.role === 'USER') appendUserBubble(m.content, m.type);
-    else if (m.type === 'analysis') appendAnalysisCard(m.content, false, m.createdAt);
+    else if (m.type === 'analysis') appendAnalysisCard(m.content, false, m.createdAt, m.id);
   });
   scrollBottom();
 }
@@ -496,16 +496,39 @@ function appendUserBubble(content, type){
 }
 
 // analysis content 是四段 JSON 原文；ts = 消息创建时间（毫秒），历史渲染时传入，
-// 否则用当前时间（流式刚完成的卡片）。
-function appendAnalysisCard(raw, animate, ts){
+// 否则用当前时间（流式刚完成的卡片）。msgId = 该 AI 卡片的消息 id，重跑时按该条
+// 所在轮次定位（缺省时后端回退到最后一轮；流式刚完成的卡片尚无落库 id，按钮不带 id）。
+function appendAnalysisCard(raw, animate, ts, msgId){
   let a;
   try { a = JSON.parse(raw); } catch(e){ a = null; }
   const col = $('chatCol');
   if (!a){
-    col.appendChild(el('div','msg-ai glass edge','<div class="lead">（回复解析失败）</div>'));
+    const fail = el('div','msg-ai glass edge','<div class="lead">（回复解析失败）</div>');
+    fail.appendChild(makeRetryButton(msgId));
+    col.appendChild(fail);
     return;
   }
-  col.appendChild(buildCard(a, ts));
+  col.appendChild(buildCard(a, ts, msgId));
+}
+// 重跑按钮：icon-only 纯图标（内联刷新 SVG，与 Android 同风格；无可见中文，
+// 读屏经 aria-label 读出「重新生成」）。msgId 经 dataset.mid 存底，供重跑成功后
+// 绑定真实落库 id 与定位旧卡；流式/重跑中禁用（setStreaming 统一刷新全部 .retry-btn）
+const RETRY_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
+function makeRetryButton(msgId){
+  const b = el('button','retry-btn', RETRY_SVG);
+  b.type = 'button';
+  b.setAttribute('aria-label','重新生成');
+  b.dataset.mid = msgId != null ? String(msgId) : '';
+  b.disabled = S.streaming;
+  b.onclick = () => retryMessage(msgId);
+  return b;
+}
+/** 重跑成功后把新卡按钮绑定到真实落库 id（二次重跑定位本轮，不漂移到最后一轮） */
+function bindRetryId(cardEl, mid){
+  if (!cardEl || mid == null) return;
+  cardEl.dataset.mid = String(mid);
+  const btn = cardEl.querySelector('.retry-btn');
+  if (btn){ btn.dataset.mid = String(mid); btn.onclick = () => retryMessage(mid); }
 }
 // v1.8.2：回答渲染改为 editorial 回信文章（刊头 + 衬线大标题 + 四段结构）
 function secKicker(cn, en){
@@ -535,7 +558,7 @@ function fmtHM(ts){
   const d = new Date(ts);
   return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 }
-function buildCard(a, ts){
+function buildCard(a, ts, msgId){
   const card = el('div','msg-ai editorial');
   // 刊头：短规则线 + 温言·回信 + 时间（v1.8.2-fix：历史消息显示消息时间而非渲染时刻）
   const top = el('div','coach-top');
@@ -649,6 +672,10 @@ function buildCard(a, ts){
     s.style.color = 'var(--danger)';
     card.appendChild(s);
   }
+  // 常驻重发按钮（icon-only 纯图标）：AI 气泡下方，失败解析气泡同样有（见 appendAnalysisCard）；
+  // msgId 存卡片 dataset.mid + 透传到重跑请求，按该卡片所在轮次定位
+  if (msgId != null) card.dataset.mid = String(msgId);
+  card.appendChild(makeRetryButton(msgId));
   return card;
 }
 
@@ -816,9 +843,27 @@ function buildTranscriptionCard(text, sid){
  * transcription 帧仅主链路存在，经 [onTranscription] 回调（传 null 则忽略该帧）。
  * 含 !live 过期帧丢弃、无收尾帧兜底「回复中断」、异常「连接中断」气泡与 finally 清理。
  * [think] 为调用方先建好并 append 的思考占位气泡（两链路文案不同）。
+ * [opts.replaceMid] 重跑替换语义：成功后把新卡原位换入旧卡位置（后端为原位更新，
+ * id/顺序不变；'last' = 取最后一张回答卡）；失败/取消/中断时丢弃待定新卡、保留旧卡（见 retryMessage）。
  */
-async function runChatStream(url, body, think, onTranscription){
+async function runChatStream(url, body, think, onTranscription, opts){
   const col = $('chatCol');
+  opts = opts || {};
+  const replaceMid = opts.replaceMid != null ? String(opts.replaceMid) : null;
+  let retriedCardEl = null;   // 重跑待定新卡：done 成功才转正，失败/取消则移除
+  const findOldCard = mid => {
+    if (mid == null) return null;
+    if (mid === 'last'){
+      // 未绑定 id 的旧调用：取最后一张三卡中带重跑按钮的回答卡作为替换目标
+      const cards = col.querySelectorAll('.msg-ai');
+      for (let i = cards.length - 1; i >= 0; i--){
+        if (cards[i].querySelector('.retry-btn')) return cards[i];
+      }
+      return null;
+    }
+    return col.querySelector('.msg-ai[data-mid="' + mid + '"]')
+      || col.querySelector('.retry-btn[data-mid="' + mid + '"]')?.closest('.msg-ai');
+  };
   setStreaming(true);
   S.streamSessionId = body.sessionId;
   const mySeq = ++S.streamSeq;                 // 本轮流的令牌；切会话/删除会使其过期
@@ -858,6 +903,8 @@ async function runChatStream(url, body, think, onTranscription){
     if (!live()){ setStreaming(false); return; }   // 流尾但已切走：解锁全局 streaming 防死锁，其余 UI 不动
     if (!settled){                                 // 真·异常中断（无 error/done/transcription 帧）：收尾解锁
       think.remove();
+      // 重跑取消保留旧卡：移除待定新卡（card 先到但 done 未到），旧卡不动
+      if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; }
       col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">回复中断，请重试</div>`));
       setStreaming(false);
       refreshSessions().then(renderSidebar);       // 只刷侧栏；不 renderChat（清场会抹掉刚 append 的回复中断气泡）
@@ -865,6 +912,8 @@ async function runChatStream(url, body, think, onTranscription){
   } catch(err){
     if (!live()){ setStreaming(false); return; }   // 过期流的异常不回写 UI，但同样要解锁防死锁
     think.remove();
+    // 重跑取消保留旧卡：同上，移除待定新卡
+    if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; }
     col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
     setStreaming(false);
   } finally {
@@ -875,7 +924,14 @@ async function runChatStream(url, body, think, onTranscription){
     if (!live()) return;                        // 切会话/删除后的迟到事件一律丢弃
     if (ev.type === 'card'){
       think.remove();
-      col.appendChild(buildCard(ev.card));
+      const cardEl = buildCard(ev.card);
+      if (replaceMid != null){
+        // 重跑替换：暂存新卡，done 时原位换入（后端为原位更新，id/顺序不变）
+        retriedCardEl = cardEl;
+      } else {
+        col.appendChild(cardEl);
+      }
+      if (ev.messageId != null) bindRetryId(cardEl, ev.messageId);
       scrollBottom();
     } else if (ev.type === 'transcription'){
       // 通道 B 第一步完成：替换思考占位为可编辑转述卡片，本轮流结束（无 done 帧）
@@ -889,12 +945,41 @@ async function runChatStream(url, body, think, onTranscription){
       settled = true;
       setStreaming(false);
       think.remove();
-      // 只刷侧栏标题；不 renderChat（卡片已在 DOM，重画会抹掉危机预检等未落库卡片）
+      if (replaceMid != null){
+        // 完全重答语义：成功后原位替换——后端已把新内容更新进旧行本身（id/顺序不变），
+        // 前端把新卡换到旧卡所在位置并保留原时间；旧卡已不在（被人为删除）则追加到尾部。
+        const doneMid = (ev.messageId != null) ? String(ev.messageId)
+          : (retriedCardEl ? (retriedCardEl.dataset.mid || null) : null);
+        if (retriedCardEl && doneMid) bindRetryId(retriedCardEl, doneMid);
+        if (retriedCardEl){
+          const oldCard = findOldCard(replaceMid);
+          if (oldCard && oldCard !== retriedCardEl){
+            const oldCap = oldCard.querySelector('.coach-top .caption');
+            const newCap = retriedCardEl.querySelector('.coach-top .caption');
+            if (oldCap && newCap) newCap.textContent = oldCap.textContent;
+            oldCard.replaceWith(retriedCardEl);
+          } else if (!oldCard){
+            col.appendChild(retriedCardEl);
+          }
+          retriedCardEl = null;
+        } else if (!doneMid){
+          // 极端兜底（无卡片也无 id）：从库重画，保证界面与落库一致
+          renderChat();
+        }
+        scrollBottom();
+      }
+      // 只刷侧栏标题；不 renderChat（卡片已在 DOM，重画会抹掉危机预检等未落库卡片；
+      // 重跑兜底分支除外，其已主动刷新）
       refreshSessions().then(renderSidebar);
     } else if (ev.type === 'error'){
       settled = true;
       setStreaming(false);
       think.remove();
+      if (replaceMid != null){
+        // 失败保留旧卡：移除待定新卡（若 card 先到），旧卡不动；错误气泡照常提示
+        if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; }
+        if (ev.code === 'RETRY_RUNNING'){ toast('正在重新生成，稍候…'); return; }
+      }
       col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">${esc(ev.message||'出错了')}</div>`));
       scrollBottom();
     }
@@ -920,7 +1005,40 @@ function setStreaming(v){
   S.streaming = v;
   $('btnSend').disabled = v;
   inputBox.disabled = v;
+  // 流式/重跑中禁用全部重发按钮（含历史气泡），结束后恢复
+  document.querySelectorAll('.retry-btn').forEach(b => { b.disabled = v; });
   $('tbDot').className = 'tb-dot' + (v ? ' think' : '');
+}
+
+/** 重跑该 AI 卡片所在轮次：messageId 透传到后端 /api/chat/retry 按轮次窗口取素材重答，
+ *  不重复落 USER；未绑定 id 的旧调用由后端取最后一条 ASSISTANT 作为替换目标。
+ *  完全重答语义：成功后原位替换（后端把新内容更新进旧行本身，id/顺序不变；前端 done 后
+ *  把新卡换到旧卡位置并保留原时间）；失败/取消保留旧卡、不写库。流式或重跑中直接拦截
+ *  （按钮 disabled 的双保险），取消（连接中断/回复中断）时丢弃待定新卡保留旧卡。 */
+async function retryMessage(messageId){
+  if (S.streaming) return;
+  if (S.sessionId == null){ toast('还没有可重发的消息'); return; }
+  if (S.currentModelId == null){ toast('请先选择模型'); openSheet(); renderModelSheet('main'); return; }
+  const col = $('chatCol');
+  const think = el('div','think-bubble glass edge','正在重新组织回信…<span class="dots"><i></i><i></i><i></i></span>');
+  col.appendChild(think);
+  scrollBottom();
+  const body = { sessionId: S.sessionId, modelId: S.currentModelId };
+  if (messageId != null) body.messageId = messageId;
+  try {
+    await runChatStream('/api/chat/retry',
+      body,
+      think,
+      // 重跑不再走转述通道：后端对转述轮直接按已确认转述文本重答，图片轮不支持视觉时报错，
+      // 回调传 null 防御忽略
+      null,
+      // 未绑定 id 的旧调用传 'last'：后端取最后一条 ASSISTANT 作为替换目标，前端原位换卡
+      { replaceMid: messageId != null ? messageId : 'last' });
+  } finally {
+    // 取消路径（catch/兜底分支已移除待定新卡）：此处仅保底移除思考占位残留，
+    // 旧卡保留；异常抛给 runChatStream 内部收尾，不再额外 renderChat
+    if (think.isConnected) think.remove();
+  }
 }
 
 /** 中断在途 SSE 流（删除会话时调用）：abort fetch + 使在途事件令牌过期 */

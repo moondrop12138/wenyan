@@ -305,6 +305,18 @@ a{color:var(--accent);text-decoration:none}
 .script-box .txt{font-size:14px;line-height:1.7;color:var(--fg);white-space:pre-wrap;word-break:break-word}
 .copy-link{color:var(--accent);font-size:11.5px;letter-spacing:.1em;font-weight:500;text-decoration:underline;text-underline-offset:3px;padding:0;margin-top:10px;display:inline-block}
 .copy-link:hover{color:var(--accent-hover)}
+/* 重跑按钮：icon-only 纯图标（不再复用 .copy-link 下划线文字样式） */
+.retry-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;margin-top:10px;padding:0;border-radius:50%;
+  color:var(--muted);background:transparent;border:1px solid transparent;
+  transition:background .15s,color .15s,transform .12s;
+}
+.retry-btn svg{display:block}
+.retry-btn:hover{background:var(--chip);color:var(--accent)}
+.retry-btn:active{transform:scale(.9)}
+.retry-btn:disabled{opacity:.45;cursor:not-allowed}
+.retry-btn:focus-visible{outline:2px solid var(--l2b);outline-offset:2px}
 .todo-list{list-style:none}
 .todo-list li{display:flex;gap:13px;padding:7px 0;align-items:baseline}
 .todo-list .no{font-family:var(--serif);font-weight:700;color:var(--accent);font-size:15px;flex:none;width:28px}
@@ -491,6 +503,17 @@ a{color:var(--accent);text-decoration:none}
 /* 沉浸式：让流体背景穿透所有大容器，面板全部浮在流体上。
    流体色相直接作用在 body 上，整个界面（流体+玻璃+文字）一起变色。 */
 [data-wy-glass="on"] body{background:transparent;filter:hue-rotate(var(--wy-fluid-hue))}
+/* 照片豁免：body 级 hue-rotate 会罩住消息图片/缩略图/头像，照片用反向旋转抵消。
+   hue=0 时反向为 0deg（恒等无效果）；变量为空时 calc 非法、整条声明丢弃=无滤镜。 */
+[data-wy-glass="on"] .msg-user .thumbs img,
+[data-wy-glass="on"] .pending-thumbs .pt img,
+[data-wy-glass="on"] .msg-ai img,
+[data-wy-glass="on"] .chat-col img,
+[data-wy-glass="on"] img.avatar,
+[data-wy-glass="on"] .avatar img,
+[data-wy-glass="on"] [class*="avatar"] img{
+  filter:hue-rotate(calc(var(--wy-fluid-hue) * -1));
+}
 [data-wy-glass="on"] #app{background:transparent}
 [data-wy-glass="on"] .main{background:transparent}
 [data-wy-glass="on"] .chat-scroll{background:transparent}

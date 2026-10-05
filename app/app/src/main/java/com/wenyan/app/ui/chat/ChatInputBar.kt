@@ -94,6 +94,7 @@ import com.wenyan.app.ui.components.GtjIconButton
 import com.wenyan.app.ui.components.glass.GlassBackdropLayer
 import com.wenyan.app.ui.components.glass.GlassFill
 import com.wenyan.app.ui.components.glass.GtjWindowTheme
+import com.wenyan.app.ui.components.glass.HueExemptImage
 import com.wenyan.app.ui.components.glass.liquidGlass
 import com.wenyan.app.ui.theme.GtjShape
 import com.wenyan.app.ui.theme.GtjType
@@ -204,12 +205,16 @@ fun ChatInputBar(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (thumb != null) {
-                                    Image(
-                                        bitmap = thumb.asImageBitmap(),
-                                        contentDescription = "待发送图片",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
+                                    // v1.9.5 用户位图色相豁免：待发送缩略图经 HueExemptImage
+                                    // 逆矩阵还原（hue==0 透传零开销）。
+                                    HueExemptImage {
+                                        Image(
+                                            bitmap = thumb.asImageBitmap(),
+                                            contentDescription = "待发送图片",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
                                 } else {
                                     Text("加载中…", style = GtjType.BodySm, color = p.meta)
                                 }
