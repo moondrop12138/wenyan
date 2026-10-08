@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
@@ -75,6 +76,9 @@ fun MessageBubble(
     message: ChatMessageUi,
     modifier: Modifier = Modifier,
     onLongClick: ((Offset) -> Unit)? = null,
+    reveal: RevealController? = null,
+    // 渐显中点按气泡本体 → 立即全量（由 ChatScreen 传入 revealPair 收尾）
+    onTapReveal: () -> Unit = {},
 ) {
     val p = LocalGtjColors.current
     val isUser = message.role == ChatRole.USER
@@ -89,17 +93,22 @@ fun MessageBubble(
                 .onGloballyPositioned { windowPos = it.positionInWindow() }
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onTap = {},
+                        onTap = { onTapReveal() },
                         onLongPress = { offset -> onLongClick?.invoke(windowPos + offset) },
                     )
                 }
                 // v1.2.1 无障碍补偿：原 combinedClickable 提供 click/longClick 语义动作，
-                // 换 pointerInput 后补齐（读屏双击长按触发菜单）；内容播报由下方 Text 承担
+                // 换 pointerInput 后补齐（读屏双击长按触发菜单）；内容播报由下方 Text 承担。
+                // 渐显中整块对读屏隐藏——alpha=0 的不可见文字不被聚焦朗读，全量/播完后出现
+                //（读屏用户点「重新生成」行/滚动/长按菜单同样收尾，不会被卡住）。
                 .semantics {
                     onClick(label = "查看消息") { true }
                     onLongClick(label = "打开消息操作菜单") {
                         onLongClick?.invoke(Offset.Zero)
                         true
+                    }
+                    if (!isUser && reveal != null && !reveal.finished) {
+                        invisibleToUser()
                     }
                 }
                 // v1.8.0 液态玻璃 2.0：果冻按压 + 边缘透镜（折射/辉光）
@@ -113,18 +122,26 @@ fun MessageBubble(
                 .clip(if (isUser) GtjShape.bubbleUser else GtjShape.bubbleAi),
         ) {
             Text(
+                // 回答逐段淡入：永远渲染全文，淡入+上浮层按 "body" key 挂到 modifier 链尾
+                //（key 表见 RevealController.kt coachCardRevealPlan）
                 text = message.content,
                 // v1.7.0：用户气泡 14sp/行距 1.7（原型 13px/1.7），AI 保持正文 16/24
                 style = if (isUser) UserBubbleTextStyle else GtjType.Body,
                 color = p.fg,
-                // 无障碍：读屏按"角色+内容"播报——用户消息前置"你说"，AI 消息保持原文
+                // 无障碍：用户消息播报恒为「你说：+ 全文」；AI 消息播报恒为全文
+                //（contentDescription 优先于 text，播报值与分支无关、语义树一致）。
+                // 渐显中（reveal 未完成）整段对读屏隐藏——alpha=0 的不可见文字不被聚焦朗读，
+                // 全量/播完后出现；reveal == null（历史直出）恒可见
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics {
                         if (isUser) {
                             contentDescription = "你说：" + message.content
+                        } else {
+                            contentDescription = message.content
                         }
-                    },
+                    }
+                    .revealUnit(reveal, "body"),
             )
         }
     }

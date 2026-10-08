@@ -10,7 +10,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +31,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Menu
@@ -64,7 +62,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -152,6 +149,10 @@ private fun RegenerateRow(
     onNoProvider: () -> Unit,
     onOffline: () -> Unit,
     onRegenerate: (Long) -> Unit,
+    // 逐段渐显接入：点击本行（无论走哪条门控分支）→ 未完成的渐显立即全量
+    onFinishReveal: () -> Unit = {},
+    // 本行随所属消息的末段一起淡入（见 revealLastUnit）：内容画完操作行才出，不先出空骨架
+    reveal: RevealController? = null,
 ) {
     // 本轮次（上条 AI 之后到本条之前）是否有可重发素材：USER 配文/转述非空或有 USER 图片
     val hasReplayable = remember(msgId, messages) {
@@ -170,7 +171,7 @@ private fun RegenerateRow(
     }
     val p = LocalGtjColors.current
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().revealLastUnit(reveal),
         horizontalArrangement = Arrangement.Start,
     ) {
         GtjIconButton(
@@ -179,6 +180,7 @@ private fun RegenerateRow(
             enabled = !streaming && hasReplayable,
             tint = if (!streaming && hasReplayable) p.fgSecondary else p.muted,
             onClick = {
+                onFinishReveal()
                 if (streaming) {
                     Unit
                 } else if (!canChat) {
@@ -192,6 +194,7 @@ private fun RegenerateRow(
         )
     }
 }
+
 @Composable
 fun ChatScreen(
     container: AppContainer,
@@ -208,10 +211,20 @@ fun ChatScreen(
     val searchResults by vm.searchResults.collectAsState()
     val searchResultsQuery by vm.searchResultsQuery.collectAsState()
 
+    // ── 回答逐段渐显状态（计划/控制器纯逻辑见 RevealController.kt）──
+    // 注意：本块必须在 onInputChange 之前声明——输入回调里调 finishNow 收尾，
+    // Kotlin 局部变量先声明后使用。tracker 按会话 remember（切会话重建、全量登记不触发）；
+    // revealPair = 当前渐显目标消息 id to 控制器（null = 无渐显，全量直出）。
+    val currentSessionId by vm.currentSessionId.collectAsState()
+    val tracker = remember(currentSessionId) { MessageRevealTracker() }
+    var revealPair by remember { mutableStateOf<Pair<Long, RevealController>?>(null) }
+
     // O10: 草稿输入 + 待发图片 saveable——进程被杀后恢复（发送后清空）
     val savedDraft = rememberSaveable { mutableStateOf("") }
     val savedPendingUris = rememberSaveable(stateSaver = PendingUrisSaver) { mutableStateOf(arrayListOf<String>()) }
     val onInputChange: (String) -> Unit = { text ->
+        // 渐显中用户输入/粘贴（粘贴走同一入口，见 onPasteText）→ 未完成渐显立即全量
+        revealPair?.second?.finishNow()
         savedDraft.value = text
         vm.onInputChange(text)
     }
@@ -245,51 +258,92 @@ fun ChatScreen(
     val confirming by vm.confirming.collectAsState()
     val modelName by vm.currentModelName.collectAsState()
     val sessions by vm.sessions.collectAsState()
-    val currentSessionId by vm.currentSessionId.collectAsState()
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
 
-    // v1.9.5 自动跟随开关：仅「用户主动拖动」才暂停跟随（拖动结束停在中途 = 在看历史；
-    // 滚动停稳且已在底部 = 恢复跟随）。原实现用「最后一项可见」派生状态做门并把它作为
-    // 自动滚动效果的 key——自动滚动本身会改写它、内容长高也会让它误判，效果被自身取消，
-    // 列表停在半途（最后一行「重新生成」被输入栏盖住点不到）。拖动交互信号与滚动状态解耦，
-    // 不受内容测量时序影响。
-    var followPaused by remember(listState) { mutableStateOf(false) }
-    LaunchedEffect(listState) {
-        listState.interactionSource.interactions.collect { interaction ->
-            when (interaction) {
-                is DragInteraction.Start -> followPaused = true
-                is DragInteraction.Stop, is DragInteraction.Cancel ->
-                    followPaused = listState.canScrollForward
-                else -> Unit
+    // 滚动语义（v1.9.5-滚动重构，用户已拍板）：发送/回答渐显/键盘弹出期间
+    // 列表视口【完全不动】——新消息落在下方屏幕外，用户自己滑下去看。
+    // 自动滚动彻底取消，仅保留「进入会话（抽屉切换会话/冷启动进入）时一次性定位最新消息」。
+    // 已知取舍：键盘弹出不再微调，末条消息可能被输入栏盖住一行。
+
+    // ── 回答逐段渐显效果（状态见上方声明）──
+    val reducedMotion = rememberReducedMotion()
+    // reducedMotion 计入 key：渐显进行中打开系统「移除动画」也要立即全量——否则状态变化
+    // 不重启本效果、也不打断已启动的 animate，要等下一次 messages 变化才降级。重启即走
+    // 下方残留清理分支 finishNow；同输入二次调用 onMessages 不会重复触发（diff 无变化）。
+    LaunchedEffect(messages, reducedMotion) {
+        val sid = currentSessionId
+        val id = if (sid != null) tracker.onMessages(sid, messages) else null
+        // 残留清理：本效果重启即取消旧 animate()——渐显目标已不在当前列表（切会话/删消息）
+        // 则丢弃 pair；仍在列表却未完成则直接全量收尾（否则进度冻结半途、消息停在半透明
+        // 中间态）。两个分支都让残留渐显有确定出口，不回归会话切换落底。
+        revealPair?.let { pair ->
+            if (messages.none { it.id == pair.first }) {
+                revealPair = null
+            } else if (!pair.second.finished) {
+                pair.second.finishNow()
             }
         }
-    }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
-            if (!inProgress && !listState.canScrollForward) followPaused = false
+        // 系统「移除动画」（reduced motion）时不做任何渐显——全量直出，仅登记快照
+        if (id != null && !reducedMotion) {
+            val msg = messages.firstOrNull { it.id == id } ?: return@LaunchedEffect
+            val controller = RevealController(buildRevealPlan(msg))
+            revealPair = id to controller
+            controller.animate()
+            // 自然播完即撤 pair：残留清理分支不再看到已完成旧目标，消息回落无层开销的直出态；
+            // 若中途被新效果取消（切会话/删消息/新渐显），取消点即停，不会误清新的 pair
+            if (revealPair?.first == id) revealPair = null
         }
     }
+    // 归属兜底：messages 与 currentSessionId 是两路独立 StateFlow，若新会话 messages 比
+    // sid 先一帧进组合，上面的 diff 会拿旧 tracker 把新会话历史误判为新消息开渐显。
+    // ChatMessageUi 不带 sessionId 无法逐条归属校验，故以 tracker 重建（remember(currentSessionId)
+    // → 会话归属变化）为信号撤销在途渐显——消息回落全量直出，下一帧新 tracker 首调全量登记不触发。
+    LaunchedEffect(tracker) {
+        revealPair = null
+    }
+    // 立即完成①：streaming 由 false 变 true（新一轮问答已开始）→ 未完成渐显直接全量
+    LaunchedEffect(streaming) {
+        if (streaming) revealPair?.second?.finishNow()
+    }
 
-    // M20 修复（F31 再修）：会话切换滚到列表末尾（最新消息）——原 scrollToItem(0) 停在
-    // 最旧消息，长会话下自动跟随恒不成立，此后发送/流式等待/错误卡都不会自动滚入视口。
-    // 等新会话的消息列表真正落地（messages 签名变化，排除旧列表残留）后滚到最后一条；
-    // 只滚这一次（landed 一次性），后续新消息仍由自动跟随接管。空会话不滚（无消息），
-    // 首条消息到达时自动跟随自然接手；切会话重置跟随开关。
+    // 进入会话一次性定位（v1.9.5-滚动重构）：只在进入会话时滚一次到最新消息，
+    // 其余路径（发送/回答落库/键盘弹出/切回空态→新会话首发）一律不滚动。
+    // arm 点：首次组合 landingArmed=true（冷启动进入）；抽屉 onSelectSession 置 true。
+    // disarm 点（防新会话首发被误判为进入）：onNewSession、空态 onSend（ensureSession
+    // 落新 id 前）、删除当前会话确认——三处均只改 arm，不滚动。
+    // 其余路径不 arm——新会话首发（startNewSession 置空→ensureSession 落新 id，
+    // currentSessionId 由 null 变非 null）不 arm，保证发送/回答落地绝不滚动。
+    // 冷启动落底判定依据：RealChatRepository.sessionId 初值 null，构造后 appScope 异步
+    // restoreLastSessionId 写穿恢复（RealChatRepository.kt:186-215）；ChatViewModel
+    // _currentSessionId 初值同样 null（ChatViewModel.kt:69），UI 侧无法区分"恢复中 null"
+    // 与"新会话空态 null"——故首次组合直接 arm=true：冷启动有持久化 id 则恢复后落底；
+    // 无持久化 id（全新安装/隐私清空后键残留被清）则 messages 恒空，守卫 (a) 不滚动，
+    // 守卫 (b) 不消耗 landed，之后切到任意会话仍能落底。
+    var landingArmed by remember { mutableStateOf(true) }
     LaunchedEffect(currentSessionId) {
-        followPaused = false
-        var lastSig = messages.size to messages.firstOrNull()?.id
+        // null = 空态（新建会话待首发/恢复中），不滚动、不消费 arm。
+        if (currentSessionId == null || !landingArmed) return@LaunchedEffect
+        landingArmed = false
+        // 哨兵初值（而非组合时刻快照）：snapshotFlow 收集开始前列表可能已就绪，
+        // 若用快照做初值，首个 sig 即等于初值、之后再无变化则永久错过落底。
+        // 哨兵保证首个非空发射即落底；空列表发射由守卫 (b) 跳过不消耗 landed，
+        // 后续回填到达时再落底。
+        var lastSig: Pair<Int, Long?>? = null
         var landed = false
         snapshotFlow { messages.size to messages.firstOrNull()?.id }
             .collect { sig ->
                 if (!landed && sig != lastSig) {
-                    landed = true
+                    // (a) 空列表不滚动；(b) 空列表的签名变化不消耗 landed——
+                    // 防止空列表占坑后切有消息的会话永不落底。
                     if (messages.isNotEmpty()) {
+                        landed = true
                         listState.scrollToItem(messages.size - 1)
                     }
                 }
+                lastSig = sig
             }
     }
 
@@ -357,20 +411,33 @@ fun ChatScreen(
     val inputBarBackdropLayer = rememberGlassBackdropLayer(glassBackdrop)
 
     fun copy(text: String) {
+        // 立即完成②：复制是明确交互 → 未完成渐显直接全量
+        revealPair?.second?.finishNow()
         clipboard.setText(AnnotatedString(text))
         Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
     }
 
     /** 长按任意消息 → 打开菜单并记录触点位置（菜单弹出在手指处） */
     fun openMessageMenu(msg: ChatMessageUi, offset: Offset) {
+        // 立即完成③：长按弹菜单是明确交互 → 未完成渐显直接全量
+        revealPair?.second?.finishNow()
         menuFor = msg
         menuOffset = offset
     }
 
-    // v1.6.1 滚动列表时退出选择模式（用户已转移注意力）
+    // v1.6.1 滚动列表时退出选择模式（用户已转移注意力）；
+    // 渐显中用户拖动滚动 → 未完成渐显同样立即全量（读屏滚动走同一滚动信号）。
+    // v1.9.6：唯一的程序化滚动是进入会话一次性落底（上方 LaunchedEffect），
+    // 其余发送/回答/键盘路径均无程序化滚动；此收集器响应用户手势与那一处落底，
+    // 落底滚动同样触发渐显收尾（与"任意交互立即全量"一致）。
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
-            .collect { scrolling -> if (scrolling) textSelectForId = null }
+            .collect { scrolling ->
+                if (scrolling) {
+                    textSelectForId = null
+                    revealPair?.second?.finishNow()
+                }
+            }
     }
 
     // ── v1.7.0 顶栏状态点四态（原型 sdot：已连接绿 / 连接中杏棕呼吸 / 思考中赭石呼吸 / 失败灰）──
@@ -423,10 +490,16 @@ fun ChatScreen(
                     sessions = sessions,
                     currentSessionId = currentSessionId,
                     onNewSession = {
+                        // 新会话空态不 arm：之后首发（null→新 id）是用户新建，不是一次性定位。
+                        landingArmed = false
                         vm.startNewSession()
                         scope.launch { drawerState.close() }
                     },
                     onSelectSession = { id ->
+                        // 进入会话：仅切到不同会话才武装一次性落底信号
+                        //（同会话重复点选不武装，LaunchedEffect(currentSessionId) 的 key 也不变，
+                        // 无人消费的 arm 不残留）。
+                        if (id != currentSessionId) landingArmed = true
                         vm.switchSession(id)
                         scope.launch { drawerState.close() }
                     },
@@ -482,6 +555,8 @@ fun ChatScreen(
                 // 离线弱网发送前预检：canChat 优先 → online → 放行；streaming 中 no-op 不弹窗。
                 // UI 拦截时 VM 未调用、输入未清空、未落库（输入保留、尚未发送）。
                 onSend = {
+                    // 点发送（无论哪条门控分支）→ 未完成的渐显立即全量
+                    revealPair?.second?.finishNow()
                     if (streaming) {
                         Unit
                     } else if (!canChat) {
@@ -489,6 +564,8 @@ fun ChatScreen(
                     } else if (!checkOnline()) {
                         showOfflineDialog = true
                     } else {
+                        // 空态发送将经 ensureSession 建新会话（null→新 id），不是进入会话，不 arm。
+                        if (currentSessionId == null) landingArmed = false
                         vm.sendPending()
                     }
                 },
@@ -554,6 +631,9 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(messages, key = { it.id }) { msg ->
+                        // 逐段渐显取用：仅当前渐显目标消息取控制器；部分选择分支与危机卡
+                        //（safetyOverride）分支不渐显（相应渲染组件不传 reveal）
+                        val reveal = revealPair?.takeIf { it.first == msg.id }?.second
                         when (msg.type) {
                             MessageType.ANALYSIS -> {
                                 // v1.6 统一 CoachCard：新四段 schema 与老五步法 JSON 均经 parseCoachCard 兼容映射
@@ -576,6 +656,9 @@ fun ChatScreen(
                                             onCopy = ::copy,
                                             onLongClick = { offset -> openMessageMenu(msg, offset) },
                                             createdAt = msg.createdAt,
+                                            reveal = reveal,
+                                            // 点按卡片本体是明确交互 → 未完成渐显直接全量
+                                            onTapReveal = { revealPair?.second?.finishNow() },
                                         )
                                         // v1.9.5 AI 气泡常驻「重新生成」：危机卡除外（安全转介不重发）
                                         RegenerateRow(
@@ -587,10 +670,18 @@ fun ChatScreen(
                                             onNoProvider = { showNoProviderDialog = true },
                                             onOffline = { showOfflineDialog = true },
                                             onRegenerate = vm::regenerate,
+                                            onFinishReveal = { revealPair?.second?.finishNow() },
+                                            reveal = reveal,
                                         )
                                     }
                                     else -> {
-                                        MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                        MessageBubble(
+                                            msg,
+                                            onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                            reveal = reveal,
+                                            // 点按气泡本体是明确交互 → 未完成渐显直接全量
+                                            onTapReveal = { revealPair?.second?.finishNow() },
+                                        )
                                         RegenerateRow(
                                             msgId = msg.id,
                                             messages = messages,
@@ -600,6 +691,8 @@ fun ChatScreen(
                                             onNoProvider = { showNoProviderDialog = true },
                                             onOffline = { showOfflineDialog = true },
                                             onRegenerate = vm::regenerate,
+                                            onFinishReveal = { revealPair?.second?.finishNow() },
+                                            reveal = reveal,
                                         )
                                     }
                                 }
@@ -608,7 +701,11 @@ fun ChatScreen(
                                 // v1.3.1 点击图片气泡 → 全屏预览
                                 ImageMessageBubble(
                                     msg,
-                                    onClick = { previewFor = msg },
+                                    onClick = {
+                                        // 点开图片预览是明确交互 → 未完成渐显直接全量
+                                        revealPair?.second?.finishNow()
+                                        previewFor = msg
+                                    },
                                     onLongClick = { offset -> openMessageMenu(msg, offset) },
                                 )
                                 // v1.9.5：与 TEXT 分支规则一致——仅 ASSISTANT 图片挂重发；
@@ -623,6 +720,8 @@ fun ChatScreen(
                                         onNoProvider = { showNoProviderDialog = true },
                                         onOffline = { showOfflineDialog = true },
                                         onRegenerate = vm::regenerate,
+                                        onFinishReveal = { revealPair?.second?.finishNow() },
+                                        reveal = reveal,
                                     )
                                 }
                             }
@@ -641,13 +740,22 @@ fun ChatScreen(
                                 } else {
                                     val split = remember(msg.id) { FreetextSplitter.split(msg.content) }
                                     if (split.reply.isBlank()) {
-                                        MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                        MessageBubble(
+                                            msg,
+                                            onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                            reveal = reveal,
+                                            // 点按气泡本体是明确交互 → 未完成渐显直接全量
+                                            onTapReveal = { revealPair?.second?.finishNow() },
+                                        )
                                     } else {
                                         FreetextBubble(
                                             msg,
                                             split,
                                             onCopyReply = ::copy,
                                             onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                            reveal = reveal,
+                                            // 点按气泡本体是明确交互 → 未完成渐显直接全量
+                                            onTapReveal = { revealPair?.second?.finishNow() },
                                         )
                                     }
                                     // v1.9.5 AI 气泡常驻「重新生成」：仅 ASSISTANT 才挂
@@ -662,6 +770,8 @@ fun ChatScreen(
                                             onNoProvider = { showNoProviderDialog = true },
                                             onOffline = { showOfflineDialog = true },
                                             onRegenerate = vm::regenerate,
+                                            onFinishReveal = { revealPair?.second?.finishNow() },
+                                            reveal = reveal,
                                         )
                                     }
                                 }
@@ -674,7 +784,13 @@ fun ChatScreen(
                                     // v1.9.5：TRANSCRIPTION 为 USER 通道 B 转述确认卡，仅 ASSISTANT 文本挂重发；
                                     // USER 文本气泡不挂（归因 USER 条就是自己，regenerate 倒查会错位）
                                     val isAssistant = msg.role == ChatRole.ASSISTANT
-                                    MessageBubble(msg, onLongClick = { offset -> openMessageMenu(msg, offset) })
+                                    MessageBubble(
+                                        msg,
+                                        onLongClick = { offset -> openMessageMenu(msg, offset) },
+                                        reveal = reveal,
+                                        // 点按气泡本体是明确交互 → 未完成渐显直接全量
+                                        onTapReveal = { revealPair?.second?.finishNow() },
+                                    )
                                     if (isAssistant) {
                                         RegenerateRow(
                                             msgId = msg.id,
@@ -685,6 +801,8 @@ fun ChatScreen(
                                             onNoProvider = { showNoProviderDialog = true },
                                             onOffline = { showOfflineDialog = true },
                                             onRegenerate = vm::regenerate,
+                                            onFinishReveal = { revealPair?.second?.finishNow() },
+                                            reveal = reveal,
                                         )
                                     }
                                 }
@@ -699,6 +817,8 @@ fun ChatScreen(
                                 // 新用户激活链路：无可用模型时拦截弹窗（流式中不拦截）
                                 // 离线弱网发送前预检：canChat 优先 → online → 放行；streaming 中 no-op 不弹窗
                                 onConfirm = {
+                                    // 点确认（无论哪条门控分支）→ 未完成的渐显立即全量
+                                    revealPair?.second?.finishNow()
                                     if (streaming) {
                                         Unit
                                     } else if (!canChat) {
@@ -706,10 +826,16 @@ fun ChatScreen(
                                     } else if (!checkOnline()) {
                                         showOfflineDialog = true
                                     } else {
+                                        // 空态首发经 ensureSession 建新会话（null→新 id），不是进入会话，不 arm。
+                                        if (currentSessionId == null) landingArmed = false
                                         vm.confirmTranscription(edited)
                                     }
                                 },
-                                onReselect = { vm.stop() },
+                                onReselect = {
+                                    // 重新选择是明确交互 → 未完成渐显直接全量
+                                    revealPair?.second?.finishNow()
+                                    vm.stop()
+                                },
                             )
                         }
                     }
@@ -722,6 +848,8 @@ fun ChatScreen(
                                 // 竞态：UI 放行后断网 → repo NO_NETWORK 错误卡 → 此处重试同样先过 online 门，
                                 // 离线点重试弹离线窗而非静默。
                                 onRetry = {
+                                    // 点重试（无论哪条门控分支）→ 未完成的渐显立即全量
+                                    revealPair?.second?.finishNow()
                                     if (streaming) {
                                         Unit
                                     } else if (!canChat) {
@@ -732,7 +860,11 @@ fun ChatScreen(
                                         vm.retry()
                                     }
                                 },
-                                onCancel = vm::stop,
+                                onCancel = {
+                                    // 取消本次重试同样是明确交互 → 未完成渐显直接全量
+                                    revealPair?.second?.finishNow()
+                                    vm.stop()
+                                },
                                 onGoSettings = onOpenSettings,
                             )
                         }
@@ -745,37 +877,8 @@ fun ChatScreen(
                         }
                     }
                 }
-                // v1.2.1 滚动跟随修复：仅当用户没有主动上滑离开时才自动滚到底（followPaused
-                // 开关见顶部声明，用拖动交互信号判定）——此前无条件 scrollToItem 会把上滑
-                // 看历史的用户拽回底部。
-                // v1.9.4 评审修复（键盘弹出滚动跟随）：M3 Scaffold body 恒以全屏测量，键盘弹出
-                // 只使 bottomBar（ChatInputBar 的 safeDrawing-bottom）长高 → 上述 contentPadding
-                // bottom 联动增大，LazyColumn viewport 高度与滚动 offset 均不变——最后一条消息
-                // 屏幕位置不动，被抬升的输入栏+键盘区域盖住（多行输入使栏长高同理）。把
-                // calculateBottomPadding 计入触发 key：栏高变化时若仍跟随，重滚到底让最新消息
-                // 回到输入栏上方。
-                val bottomBarPadding = padding.calculateBottomPadding()
-                LaunchedEffect(messages.size, streaming, transcription, bottomBarPadding) {
-                    if (followPaused) return@LaunchedEffect
-                    // v1.9.5 重来行可达性修复：新消息项（长卡/图片）在本帧尚未完成测量，
-                    // 首次 scrollToItem 拿到的内容高度是旧值、会被 clamp 在半途；且末项比
-                    // 视口高时 scrollToItem 只把它的顶部对齐视口，最后一行「重新生成」仍落在
-                    // 输入栏下方点不到。先按项滚、再按像素补滚到底（clamp 在内容末端），
-                    // 逐帧直到不能再向后滚（每次等两帧：帧 N 完成测量与滚动落地，帧 N+1 读到的
-                    // layoutInfo 才是新值；guard 兜底防内容持续增长时死循环）。
-                    var guard = 0
-                    while (guard++ < 4) {
-                        val count = listState.layoutInfo.totalItemsCount
-                        if (count <= 0) break
-                        listState.scrollToItem(count - 1)
-                        withFrameNanos { }
-                        withFrameNanos { }
-                        if (!listState.canScrollForward) break
-                        listState.scrollBy(200_000f)
-                        withFrameNanos { }
-                        if (!listState.canScrollForward) break
-                    }
-                }
+                // v1.9.5-滚动重构：发送/回答/键盘一律不滚动，此处无程序化滚动；
+                // 唯一的程序化滚动是进入会话一次性落底（上方 LaunchedEffect）。
             }
         }
     }
@@ -835,6 +938,8 @@ fun ChatScreen(
                         DropdownMenuItem(
                             text = { Text("部分选择") },
                             onClick = {
+                                // 立即完成④：进入部分选择是明确交互 → 未完成渐显直接全量
+                                revealPair?.second?.finishNow()
                                 textSelectForId = msg.id
                                 menuFor = null
                                 Toast.makeText(context, "拖动两端手柄选取文字，点空白处完成", Toast.LENGTH_SHORT).show()
@@ -867,6 +972,8 @@ fun ChatScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
+                            // 删除消息是明确交互 → 未完成渐显直接全量
+                            revealPair?.second?.finishNow()
                             vm.deleteMessage(msg.id)
                             confirmDeleteFor = null
                         },
@@ -893,6 +1000,10 @@ fun ChatScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
+                            // 删除会话是明确交互 → 未完成渐显直接全量
+                            revealPair?.second?.finishNow()
+                            // 删的是当前会话 → 回空态，之后发送是新建，不 arm（ pending 落底同时作废）。
+                            if (session.id == currentSessionId) landingArmed = false
                             vm.deleteSession(session.id)
                             confirmDeleteSession = null
                         },
