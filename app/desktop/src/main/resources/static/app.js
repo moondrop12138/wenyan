@@ -5,7 +5,7 @@
 'use strict';
 
 // L6: 版本号从 /api/health 拉取（避免与后端 DESKTOP_VERSION 漂移），此处为兜底默认
-let APP_VERSION = '1.9.5';
+let APP_VERSION = '1.9.6';
 async function loadVersion(){
   try { const h = await (await fetch('/api/health')).json(); if (h && h.version) APP_VERSION = h.version.replace('-desktop',''); } catch(e) {}
 }
@@ -248,6 +248,7 @@ function renderSidebar(){
       // v1.8.2-fix（审查 P3-11）：删除会话同时 abort 在途 fetch → 后端 SSE 写入失败 →
       // 取消传播到 LLM 请求（不再浪费 token 写孤儿消息）
       if (S.sessionId === s.id){ S.sessionId = null; persistSessionId(null); abortStream(); }
+      // v1.9.6：删除刷新非进入会话，不滚动
       await refreshSessions(); renderSidebar(); renderChat();
     };
     item.appendChild(del);
@@ -260,7 +261,8 @@ function renderSidebar(){
       // 原实现落到下方 S.streamSeq++ 会使在途流令牌过期，此后每个 SSE 帧都被丢弃，
       // renderChat 还会清掉思考占位，本轮回复从界面静默消失（服务端已落库，须重新点进才可见）。
       if (S.streaming && s.id === S.sessionId) return;
-      S.sessionId = s.id; persistSessionId(s.id); S.streamSeq++; renderSidebar(); renderChat();
+      // v1.9.6：侧栏切换会话 = 进入会话，渲染后落底一次
+      S.sessionId = s.id; persistSessionId(s.id); S.streamSeq++; renderSidebar(); renderChat({ scroll: true });
     };
     list.appendChild(item);
   });
@@ -282,7 +284,8 @@ function wireSearch(){
         // F119 修复（同侧栏点击）：流式中命中的正是正在流式的当前会话时不跳转，
         // S.streamSeq++ / renderChat 会吞掉在途流的回复；提示文案保持一致
         if (!(S.streaming && target.id === S.sessionId)){
-          S.sessionId = target.id; persistSessionId(target.id); S.streamSeq++; renderSidebar(); renderChat();
+          // v1.9.6：搜索跳转会话 = 进入会话，渲染后落底一次
+          S.sessionId = target.id; persistSessionId(target.id); S.streamSeq++; renderSidebar(); renderChat({ scroll: true });
         }
         toast('找到 ' + ids.length + ' 个相关会话，已跳转最近一个');
       }
@@ -431,7 +434,14 @@ function shortName(name){
 }
 
 // ===== 聊天渲染 =====
-async function renderChat(){
+/**
+ * 重画当前会话全部消息。
+ * v1.9.6（滚动不打扰）：仅会话导航入口传 {scroll:true} 才落底一次
+ * （侧栏切换/搜索跳转/冷启动进入）；其余调用一律不动视口。
+ * @param {Object} [opts] 选项；opts.scroll=true = 进入会话，渲染后滚到底一次
+ */
+async function renderChat(opts){
+  finishReveal();   // v1.9.6：重画前收尾在途渐显（清计时器、残留单元全量），防泄漏到已清空 DOM
   // v1.9.4-fix（P0 白屏）：d6352e8 曾误删本行，使下方消息拉取与迟到守卫引用未定义的 sid——
   // 点侧栏会话 / 搜索跳转 / 删除刷新时聊天区已清空却抛 ReferenceError，历史消息白屏。
   const sid = S.sessionId;                      // await 期间用户可能已切走
@@ -465,11 +475,116 @@ async function renderChat(){
     if (m.role === 'USER') appendUserBubble(m.content, m.type);
     else if (m.type === 'analysis') appendAnalysisCard(m.content, false, m.createdAt, m.id);
   });
-  scrollBottom();
+  // v1.9.6 滚动不打扰：历史/切会话铺陈直出不渐显；仅进入会话（opts.scroll）落底一次
+  if (opts && opts.scroll) scrollBottom();
 }
 function scrollBottom(){
   const sc = $('chatScroll');
   requestAnimationFrame(()=>{ sc.scrollTop = sc.scrollHeight; });
+}
+// v1.9.6：用户滚动即全量（wheel/touchmove 被动监听，不拦截滚动本身；
+// 对齐 Android「用户拖动滚动」收尾）。监听挂 #chatScroll（实际滚动容器）。
+// 滚动条拖拽/键盘滚动不产生 wheel/touchmove，用 scroll 事件兜底（程序化滚动
+// scrollBottom 经 rAF 置 scrollTop 同样会触发，但此时 revealState 已随新会话
+// 重画被 finishReveal 收尾，或新卡尚未 startReveal，故无误伤）。
+$('chatScroll').addEventListener('wheel', finishReveal, { passive: true });
+$('chatScroll').addEventListener('touchmove', finishReveal, { passive: true });
+$('chatScroll').addEventListener('scroll', finishReveal, { passive: true });
+// 非按钮复制（Ctrl+C/右键菜单）与部分文本选择即全量（对齐 Android 复制/部分选择）。
+// copy/selectstart/contextmenu 冒泡到 document 即可捕获卡片内操作。
+document.addEventListener('copy', finishReveal);
+document.addEventListener('selectstart', finishReveal);
+document.addEventListener('contextmenu', finishReveal);
+
+/* ===== v1.9.6 回答逐段渐显（对齐 Android RevealController / ChatScreen）=====
+ * 触发面：仅新回答卡片（card 事件直挂）与重答替换卡（done 时 replaceWith 换入旧卡位）
+ * 经 startReveal(cardEl) 渐显；历史/切会话/刷新经 renderChat 直出（animate=false）。
+ * 单元粒度与 Android coachCardRevealPlan key 表同渲染顺序（刊头 brand/time → 标题 core →
+ * ①接住你（kicker+正文）→ ②事实（kicker+各组标签+各行）→ ③军师建议（kicker+tag+
+ * 理由行+话术tab+话术框+发送时机）→ ④行动（kicker+各行）→ 尾注（引用/安全）；
+ * 桌面端不渲染记忆依据/ token 估算位点，故 key 表为 Android 表的子集（顺序一致），
+ * 入表条件同样与渲染条件同源。
+ * 文本渲染全文不切片；节奏：每段淡入 320ms、段间错峰约 140ms、总时长钳制 [0.9s, 2.6s]
+ * （段数多时压缩错峰；单单元淡入窗口拉伸到总时长，对齐 Android REVEAL_MIN/MAX_MS
+ * 与 alpha() fadeIn 拉伸语义）。
+ * 收尾面（任一 → finishReveal()，对齐 Android 文件头触发面注释）：点按卡片任意处、
+ * 滚动（wheel/touchmove/scroll）、复制（含非按钮 Ctrl+C/右键菜单）、部分文本选择
+ * （selectstart/contextmenu）、转述确认、输入框输入/粘贴/聚焦、发送、重试、
+ * 话术 tab 切换、新一轮流式开始（setStreaming(true)）、renderChat 重画。
+ * prefers-reduced-motion 与危机卡（safetyOverride）直接全量；渐显期整卡 aria-hidden、
+ * 末段淡入播完/全量后解除（对齐 Android invisibleToUser），既有 aria-label 不动。 */
+const REVEAL_FADE_MS = 320;      // 单段淡入时长（CSS transition 同值；单单元时拉伸到总时长）
+const REVEAL_STAGGER_MS = 140;   // 段间错峰基准（对齐 Android REVEAL_STAGGER_MS）
+const REVEAL_MIN_MS = 900;       // 总时长下限
+const REVEAL_MAX_MS = 2600;      // 总时长上限
+let revealState = null;          // 在途渐显：{card, units, timers}，null = 无渐显
+function reducedMotion(){
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+/** 指定卡片无条件全量（历史直出/危机卡/reduced-motion 收尾用，不依赖在途状态） */
+function revealAll(cardEl){
+  if (!cardEl) return;
+  cardEl.querySelectorAll('.rv').forEach(u => {
+    u.style.transitionDuration = '';   // 清掉单单元拉伸的行内时长，打断即瞬间全量
+    u.classList.add('rv-in');
+  });
+  cardEl.classList.remove('rv-card');
+  cardEl.removeAttribute('aria-hidden');
+}
+/** 立即全量：清所有计时器、剩余单元立刻显现、解除 aria-hidden（交互打断/重画/新轮开始用） */
+function finishReveal(){
+  if (!revealState) return;
+  const st = revealState; revealState = null;
+  st.timers.forEach(t => clearTimeout(t));
+  revealAll(st.card);
+}
+/**
+ * 对一张已挂载的回答卡启动逐段渐显。
+ * 单元登记条件与 buildCard 渲染条件同源：空文本不渲染 → 不入表（避免为空耗时长）。
+ * @param {Element} cardEl buildCard 产出的卡片元素（已在 DOM 中）
+ * @param {Object} a 解析后的 analysis JSON（与 buildCard 同一对象语义）
+ * @returns {boolean} true=已启动渐显，false=直接全量（危机卡/reduced-motion/无单元）
+ */
+function startReveal(cardEl, a){
+  finishReveal();   // 新一轮开始，上一轮未完渐显立即全量
+  if (!cardEl || !a) return false;
+  // 危机卡/移除动画直接全量：先清掉 buildCard 已打的 .rv 隐藏态（否则刊头永久不可见）
+  if (a.safetyOverride || reducedMotion()){ revealAll(cardEl); return false; }
+  // 按渲染顺序收集渐显单元：buildCard 内用 markReveal(el) 逐处打标（顺序=DOM 顺序=入表顺序）
+  const units = Array.from(cardEl.querySelectorAll('.rv'));
+  if (!units.length){ revealAll(cardEl); return false; }
+  cardEl.classList.add('rv-card');      // 关 :pop 入场动画，渐显替代（历史卡无此类保留 pop）
+  cardEl.setAttribute('aria-hidden','true');
+  const n = units.length;
+  const total = Math.min(REVEAL_MAX_MS, Math.max(REVEAL_MIN_MS, n * REVEAL_STAGGER_MS));
+  // 对齐 Android alpha()：单单元淡入窗口拉伸到整个总时长（≥900ms），不为单段退化成
+  // 320ms 一闪即出；多段保持 320ms 窗口错峰。末段淡入播完（+FADE）才解除 aria-hidden，
+  // 读屏在视觉播完后才读到全文。
+  const fadeIn = n <= 1 ? total : REVEAL_FADE_MS;
+  const step = n <= 1 ? 0 : Math.max(1, (total - fadeIn) / (n - 1));  // 段多时压缩错峰
+  const st = { card: cardEl, units, timers: [] };
+  revealState = st;
+  // 单单元淡入窗口拉伸到总时长：行内覆盖 transition 时长（CSS 默认 320ms），
+  // 收尾同样等足总时长，保证最小时长契约（内容再短也播足 900ms 才解除 aria-hidden）。
+  if (n <= 1) units.forEach(u => { u.style.transitionDuration = total + 'ms'; });
+  st.timers = units.map((u, i) => setTimeout(() => {
+    u.classList.add('rv-in');
+    if (i === n - 1){
+      // 末段淡入播完才收尾：多段等一个淡入窗口，单单元等整个总时长
+      const tail = n <= 1 ? total : fadeIn;
+      st.timers.push(setTimeout(() => {
+        if (revealState === st) finishReveal();
+      }, tail));
+    }
+  }, Math.round(i * step)));
+  return true;
+}
+/** buildCard 内打标渐显单元：顺序即 DOM 追加顺序，即错峰淡入顺序。
+ * 非渐显路径（历史直出/危机卡/移除动画）由 appendAnalysisCard 或 startReveal
+ * 经 revealAll 清掉 .rv 隐藏态，单元默认不自带可见性。 */
+function markReveal(elm){
+  elm.classList.add('rv');
+  return elm;
 }
 
 function appendUserBubble(content, type){
@@ -495,9 +610,10 @@ function appendUserBubble(content, type){
   col.appendChild(b);
 }
 
-// analysis content 是四段 JSON 原文；ts = 消息创建时间（毫秒），历史渲染时传入，
-// 否则用当前时间（流式刚完成的卡片）。msgId = 该 AI 卡片的消息 id，重跑时按该条
-// 所在轮次定位（缺省时后端回退到最后一轮；流式刚完成的卡片尚无落库 id，按钮不带 id）。
+// analysis content 是四段 JSON 原文；animate=true 时新回答/重答卡逐段渐显
+// （startReveal，文本全文渲染），false=历史/切会话直出；ts = 消息创建时间（毫秒），
+// 历史渲染时传入，否则用当前时间（流式刚完成的卡片）。msgId = 该 AI 卡片的消息 id，
+// 重跑时按该条所在轮次定位（缺省时后端回退到最后一轮；流式刚完成的卡片尚无落库 id，按钮不带 id）。
 function appendAnalysisCard(raw, animate, ts, msgId){
   let a;
   try { a = JSON.parse(raw); } catch(e){ a = null; }
@@ -508,7 +624,11 @@ function appendAnalysisCard(raw, animate, ts, msgId){
     col.appendChild(fail);
     return;
   }
-  col.appendChild(buildCard(a, ts, msgId));
+  // v1.9.6：animate 参数正式启用——true=新回答/重答渐显，false=历史直出（revealAll 清隐藏态）
+  const cardEl = buildCard(a, ts, msgId);
+  col.appendChild(cardEl);
+  if (animate) startReveal(cardEl, a);
+  else revealAll(cardEl);
 }
 // 重跑按钮：icon-only 纯图标（内联刷新 SVG，与 Android 同风格；无可见中文，
 // 读屏经 aria-label 读出「重新生成」）。msgId 经 dataset.mid 存底，供重跑成功后
@@ -533,15 +653,15 @@ function bindRetryId(cardEl, mid){
 // v1.8.2：回答渲染改为 editorial 回信文章（刊头 + 衬线大标题 + 四段结构）
 function secKicker(cn, en){
   const k = el('div','sec-kicker');
-  k.appendChild(el('span','kicker', cn));
-  k.appendChild(el('span','en label', en));
+  k.appendChild(markReveal(el('span','kicker', cn)));
+  k.appendChild(markReveal(el('span','en label', en)));
   return k;
 }
 function factGroup(label, cls, items){
   const g = el('div','fact-group');
-  g.appendChild(el('div','fg-label label', label));
+  g.appendChild(markReveal(el('div','fg-label label', label)));
   items.forEach(t => {
-    const it = el('div','fact-item');
+    const it = markReveal(el('div','fact-item'));
     it.appendChild(el('span','mk ' + cls));
     it.appendChild(el('span','txt', esc(t)));
     g.appendChild(it);
@@ -560,23 +680,28 @@ function fmtHM(ts){
 }
 function buildCard(a, ts, msgId){
   const card = el('div','msg-ai editorial');
+  // v1.9.6 渐显单元打标（markReveal）：刊头 brand/time → 标题 core → ①②③④各段 →
+  // 尾注，与 Android coachCardRevealPlan 同渲染顺序（桌面无记忆依据/token 估算位点，
+  // 为其子集）；登记条件与渲染条件同源（空文本不渲染即不打标，避免为空耗时长）。
+  // 交互收尾见下方卡片点击接线。
+  card.addEventListener('click', finishReveal);   // 点按卡片任意处即全量
   // 刊头：短规则线 + 温言·回信 + 时间（v1.8.2-fix：历史消息显示消息时间而非渲染时刻）
   const top = el('div','coach-top');
   const l = el('div','l');
   l.appendChild(el('hr','rule-short'));
-  l.appendChild(el('span','kicker','温言 · 回信'));
+  l.appendChild(markReveal(el('span','kicker','温言 · 回信')));
   top.appendChild(l);
-  top.appendChild(el('span','caption', fmtHM(ts)));
+  top.appendChild(markReveal(el('span','caption', fmtHM(ts))));
   card.appendChild(top);
   // 衬线大标题 = 军师建议核心句
   const adv = a.advice || {};
   const core = adv.core || '';
-  if (core) card.appendChild(el('h2','displayLg coach-headline', esc(core)));
+  if (core) card.appendChild(markReveal(el('h2','displayLg coach-headline', esc(core))));
   // ① 接住你
   if (a.empathy){
     const s = el('section','coach-sec');
     s.appendChild(secKicker('接住你','EMPATHY'));
-    s.appendChild(el('p','body empathy-body', esc(a.empathy)));
+    s.appendChild(markReveal(el('p','body empathy-body', esc(a.empathy))));
     card.appendChild(s);
   }
   // ② 先分清事实
@@ -597,11 +722,11 @@ function buildCard(a, ts, msgId){
   if (adv.tag || (adv.reasons||[]).length || styles.length || adv.replyTiming){
     const s = el('section','coach-sec');
     s.appendChild(secKicker('军师建议','COLUMN'));
-    if (adv.tag) s.appendChild(el('span','tag', esc(adv.tag)));
+    if (adv.tag) s.appendChild(markReveal(el('span','tag', esc(adv.tag))));
     if ((adv.reasons||[]).length){
       const ul = el('ol','reason-list');
       adv.reasons.forEach((r, i) => {
-        const li = el('li');
+        const li = markReveal(el('li'));
         li.appendChild(el('span','no', (i + 1) + '.'));
         li.appendChild(el('span','tx', esc(r)));
         ul.appendChild(li);
@@ -614,26 +739,27 @@ function buildCard(a, ts, msgId){
       // v1.8.2-fix（审查 P2-7）：澄清场景（UNCERTAIN）显示「先确认一下」且不提供复制话术，
       // 与手机端 ScriptBox 语义对齐
       const isClar = !!(a.isClarification || a.inputKind === 'uncertain');
-      box.appendChild(el('div','caption', isClar ? '先确认一下' : '可以直接发'));
+      box.appendChild(markReveal(el('div','caption', isClar ? '先确认一下' : '可以直接发')));
       const txt = el('p','txt', esc(styles[0].text || ''));
-      box.appendChild(txt);
+      box.appendChild(markReveal(txt));
       if (!isClar){
         const copy = el('button','copy-link','复制话术');
-        copy.onclick = () => navigator.clipboard.writeText(txt.textContent).then(()=>toast('已复制'));
-        box.appendChild(copy);
+        copy.onclick = () => { finishReveal(); navigator.clipboard.writeText(txt.textContent).then(()=>toast('已复制')); };
+        box.appendChild(markReveal(copy));
       }
       styles.forEach((st, i) => {
         const b = el('button','style-tab' + (i === 0 ? ' active' : ''), esc(st.label || ('风格' + (i + 1))));
         b.onclick = () => {
+          finishReveal();   // v1.9.6：话术风格 tab 切换即全量
           tabs.querySelectorAll('.style-tab').forEach((x, j) => x.classList.toggle('active', j === i));
           txt.textContent = st.text || '';
         };
-        tabs.appendChild(b);
+        tabs.appendChild(markReveal(b));
       });
       s.appendChild(tabs);
       s.appendChild(box);
     }
-    if (adv.replyTiming) s.appendChild(el('div','caption','发送时机：' + esc(adv.replyTiming)));
+    if (adv.replyTiming) s.appendChild(markReveal(el('div','caption','发送时机：' + esc(adv.replyTiming))));
     card.appendChild(s);
   }
   // ④ 行动清单
@@ -642,7 +768,7 @@ function buildCard(a, ts, msgId){
     s.appendChild(secKicker('行动清单','TAKEAWAYS'));
     const ul = el('ol','todo-list');
     a.actions.forEach((it, i) => {
-      const li = el('li');
+      const li = markReveal(el('li'));
       li.appendChild(el('span','no', String(i + 1).padStart(2,'0') + '.'));
       li.appendChild(el('span','tx', esc(it.text || '')));
       ul.appendChild(li);
@@ -656,17 +782,17 @@ function buildCard(a, ts, msgId){
     const s = el('section','coach-sec');
     s.appendChild(secKicker('可以回','REPLY'));
     const box = el('div','script-box');
-    box.appendChild(el('p','txt', esc(a.reply)));
+    box.appendChild(markReveal(el('p','txt', esc(a.reply))));
     const copy = el('button','copy-link','复制话术');
-    copy.onclick = () => navigator.clipboard.writeText(a.reply).then(()=>toast('已复制'));
-    box.appendChild(copy);
+    copy.onclick = () => { finishReveal(); navigator.clipboard.writeText(a.reply).then(()=>toast('已复制')); };
+    box.appendChild(markReveal(copy));
     s.appendChild(box);
     card.appendChild(s);
   }
   // 引用 / 安全
   if ((a.citations||[]).length)
     // v1.9.4 安全修复：citations 是模型输出（可经提示注入携带 HTML），并入 innerHTML 前必须转义
-    card.appendChild(el('div','cite', '参考知识库：' + esc(a.citations.join('、'))));
+    card.appendChild(markReveal(el('div','cite', '参考知识库：' + esc(a.citations.join('、')))));
   if (a.safetyOverride && a.safetyMessage){
     const s = el('div','core-txt', esc(a.safetyMessage));
     s.style.color = 'var(--danger)';
@@ -717,11 +843,13 @@ function autoGrow(){
   inputBox.style.height = 'auto';
   inputBox.style.height = Math.min(inputBox.scrollHeight, 160) + 'px';
 }
-inputBox.addEventListener('input', autoGrow);
+inputBox.addEventListener('input', e => { finishReveal(); autoGrow(e); });   // v1.9.6：输入即全量
+inputBox.addEventListener('paste', finishReveal);   // v1.9.6：粘贴即全量
+inputBox.addEventListener('focus', finishReveal);   // v1.9.6：聚焦即全量
 inputBox.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
 });
-$('btnSend').onclick = sendMessage;
+$('btnSend').onclick = () => { finishReveal(); sendMessage(); };   // v1.9.6：发送即全量
 
 // 图片上传
 $('btnAttach').onclick = () => $('fileInput').click();
@@ -804,7 +932,7 @@ async function sendMessage(){
   const think = el('div','think-bubble glass edge',
     (willTranscribe ? '视觉模型正在提取截图文字…' : '正在翻知识库，梳理你的处境…') + '<span class="dots"><i></i><i></i><i></i></span>');
   col.appendChild(think);
-  scrollBottom();
+  // v1.9.6 滚动不打扰：发送/流式期间不动视口（用户自己滑下去看）
 
   // F121：SSE 读取/解析/收尾骨架提炼为 runChatStream（与 confirmTranscription 共用）；
   // transcription 帧仅本链路存在，经回调转 buildTranscriptionCard
@@ -827,6 +955,7 @@ function buildTranscriptionCard(text, sid){
   confirm.onclick = () => {
     const edited = ta.value.trim();
     if (!edited){ toast('转述内容不能为空'); return; }
+    finishReveal();   // v1.9.6：转述确认即全量（对齐 Android 转述确认/重选）
     confirm.disabled = true;
     card.remove();
     confirmTranscription(sid, edited);
@@ -851,6 +980,7 @@ async function runChatStream(url, body, think, onTranscription, opts){
   opts = opts || {};
   const replaceMid = opts.replaceMid != null ? String(opts.replaceMid) : null;
   let retriedCardEl = null;   // 重跑待定新卡：done 成功才转正，失败/取消则移除
+  let retriedCardJson = null; // 重跑待定新卡的 analysis 对象（done 帧无卡片内容，渐显用；后端 ChatEngine 只在 done 带 messageId）
   const findOldCard = mid => {
     if (mid == null) return null;
     if (mid === 'last'){
@@ -904,7 +1034,7 @@ async function runChatStream(url, body, think, onTranscription, opts){
     if (!settled){                                 // 真·异常中断（无 error/done/transcription 帧）：收尾解锁
       think.remove();
       // 重跑取消保留旧卡：移除待定新卡（card 先到但 done 未到），旧卡不动
-      if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; }
+      if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; retriedCardJson = null; }
       col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">回复中断，请重试</div>`));
       setStreaming(false);
       refreshSessions().then(renderSidebar);       // 只刷侧栏；不 renderChat（清场会抹掉刚 append 的回复中断气泡）
@@ -913,7 +1043,7 @@ async function runChatStream(url, body, think, onTranscription, opts){
     if (!live()){ setStreaming(false); return; }   // 过期流的异常不回写 UI，但同样要解锁防死锁
     think.remove();
     // 重跑取消保留旧卡：同上，移除待定新卡
-    if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; }
+    if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; retriedCardJson = null; }
     col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">连接中断，请重试</div>`));
     setStreaming(false);
   } finally {
@@ -924,15 +1054,19 @@ async function runChatStream(url, body, think, onTranscription, opts){
     if (!live()) return;                        // 切会话/删除后的迟到事件一律丢弃
     if (ev.type === 'card'){
       think.remove();
+      // 后端 card 帧的 card 字段是 analysis JSONObject 直传的对象（ChatEngine.kt），
+      // buildCard(a) 接受对象；startReveal 同用该对象判危机卡（safetyOverride）
       const cardEl = buildCard(ev.card);
       if (replaceMid != null){
         // 重跑替换：暂存新卡，done 时原位换入（后端为原位更新，id/顺序不变）
         retriedCardEl = cardEl;
+        retriedCardJson = ev.card;
       } else {
         col.appendChild(cardEl);
+        // v1.9.6：新回答卡片挂载即逐段渐显（文本全文渲染）；滚动不动
+        startReveal(cardEl, ev.card);
       }
       if (ev.messageId != null) bindRetryId(cardEl, ev.messageId);
-      scrollBottom();
     } else if (ev.type === 'transcription'){
       // 通道 B 第一步完成：替换思考占位为可编辑转述卡片，本轮流结束（无 done 帧）
       if (!onTranscription) return;             // 确认链路无 transcription 帧，防御忽略
@@ -940,7 +1074,7 @@ async function runChatStream(url, body, think, onTranscription, opts){
       setStreaming(false);
       think.remove();
       onTranscription(ev.text || '');
-      scrollBottom();
+      // v1.9.6 滚动不打扰：转述卡出现不动视口
     } else if (ev.type === 'done'){
       settled = true;
       setStreaming(false);
@@ -961,12 +1095,16 @@ async function runChatStream(url, body, think, onTranscription, opts){
           } else if (!oldCard){
             col.appendChild(retriedCardEl);
           }
+          // v1.9.6：重答替换后的卡片逐段渐显（与新回答同口径；done 帧无卡片内容，
+          // 用 card 帧暂存的 analysis 对象）；滚动不动
+          if (retriedCardJson) startReveal(retriedCardEl, retriedCardJson);
           retriedCardEl = null;
+          retriedCardJson = null;
         } else if (!doneMid){
           // 极端兜底（无卡片也无 id）：从库重画，保证界面与落库一致
           renderChat();
         }
-        scrollBottom();
+        // v1.9.6 滚动不打扰：done 落定不动视口
       }
       // 只刷侧栏标题；不 renderChat（卡片已在 DOM，重画会抹掉危机预检等未落库卡片；
       // 重跑兜底分支除外，其已主动刷新）
@@ -977,11 +1115,11 @@ async function runChatStream(url, body, think, onTranscription, opts){
       think.remove();
       if (replaceMid != null){
         // 失败保留旧卡：移除待定新卡（若 card 先到），旧卡不动；错误气泡照常提示
-        if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; }
+        if (retriedCardEl){ retriedCardEl.remove(); retriedCardEl = null; retriedCardJson = null; }
         if (ev.code === 'RETRY_RUNNING'){ toast('正在重新生成，稍候…'); return; }
       }
       col.appendChild(el('div','msg-ai glass edge',`<div class="lead" style="color:var(--danger)">${esc(ev.message||'出错了')}</div>`));
-      scrollBottom();
+      // v1.9.6 滚动不打扰：错误气泡不动视口
     }
   }
 }
@@ -992,7 +1130,7 @@ async function confirmTranscription(sid, transcription){
   appendUserBubble(transcription, 'transcription');
   const think = el('div','think-bubble glass edge','军师分析中…<span class="dots"><i></i><i></i><i></i></span>');
   col.appendChild(think);
-  scrollBottom();
+  // v1.9.6 滚动不打扰：转述确认发送不动视口
 
   // F121：流式骨架与 sendMessage 共用；确认链路不产生 transcription 帧，回调传 null
   await runChatStream('/api/chat/confirm-transcription',
@@ -1002,6 +1140,8 @@ async function confirmTranscription(sid, transcription){
 }
 
 function setStreaming(v){
+  // v1.9.6：新一轮流式开始，未完渐显立即全量（对齐 Android LaunchedEffect(streaming)）
+  if (v) finishReveal();
   S.streaming = v;
   $('btnSend').disabled = v;
   inputBox.disabled = v;
@@ -1017,12 +1157,13 @@ function setStreaming(v){
  *  （按钮 disabled 的双保险），取消（连接中断/回复中断）时丢弃待定新卡保留旧卡。 */
 async function retryMessage(messageId){
   if (S.streaming) return;
+  finishReveal();   // v1.9.6：点重新生成即全量（旧卡直出，新卡 done 后另起渐显）
   if (S.sessionId == null){ toast('还没有可重发的消息'); return; }
   if (S.currentModelId == null){ toast('请先选择模型'); openSheet(); renderModelSheet('main'); return; }
   const col = $('chatCol');
   const think = el('div','think-bubble glass edge','正在重新组织回信…<span class="dots"><i></i><i></i><i></i></span>');
   col.appendChild(think);
-  scrollBottom();
+  // v1.9.6 滚动不打扰：重试发送不动视口（重试本身即交互，setStreaming(true) 已收尾在途渐显）
   const body = { sessionId: S.sessionId, modelId: S.currentModelId };
   if (messageId != null) body.messageId = messageId;
   try {
@@ -1050,6 +1191,7 @@ function abortStream(){
 // ===== 侧栏 =====
 $('btnNewSession').onclick = () => {
   if (S.streaming){ toast('军师还在奋笔疾书，写完这一轮再开新会话'); return; }
+  // v1.9.6：新建会话切到空态非进入会话，不滚动
   S.sessionId = null; persistSessionId(null); renderSidebar(); renderChat(); inputBox.focus();
 };
 $('btnToggleSb').onclick = () => $('sidebar').classList.toggle('closed');
@@ -1921,5 +2063,6 @@ async function render(){
   if (m){ S.route = m[1]; S.routeArg = m[2] ? Number(m[2]) : null; }
   else if (ob.needsOnboarding){ S.route = 'onboarding'; location.hash = '#/onboarding'; }
   await render();
-  renderChat();
+  // v1.9.6：冷启动进入（恢复上次会话）= 进入会话，渲染后落底一次
+  renderChat({ scroll: true });
 })();

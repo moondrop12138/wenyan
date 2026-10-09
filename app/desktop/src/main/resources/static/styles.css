@@ -270,6 +270,14 @@ a{color:var(--accent);text-decoration:none}
   animation:pop .26s cubic-bezier(.34,1.56,.64,1);
 }
 .msg-ai.editorial:hover{transform:none}
+/* ===== v1.9.6 回答逐段渐显（fade，对齐 Android RevealController）=====
+   取舍：新回答/重答卡用逐段渐显【替代】.msg-ai 的 :pop 入场动画（.rv-card 关 pop，
+   避免双重动画）；历史卡（renderChat 直出）保留原样 pop。
+   单元 .rv 初始 opacity:0 + 下沉 6px，加 .rv-in 后 320ms 回到原位，
+   缓动 cubic-bezier(0.4,0,0.2,1) ≈ Android FastOutSlowIn。文本渲染全文不切片。 */
+.msg-ai.editorial.rv-card{animation:none}
+.rv{opacity:0;transform:translateY(6px)}
+.rv.rv-in{opacity:1;transform:none;transition:opacity 320ms cubic-bezier(0.4,0,0.2,1),transform 320ms cubic-bezier(0.4,0,0.2,1)}
 .coach{display:flex;flex-direction:column}
 .coach-top{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
 .coach-top .l{display:flex;flex-direction:column;gap:10px}
@@ -442,6 +450,9 @@ a{color:var(--accent);text-decoration:none}
 @media (prefers-reduced-motion:reduce){
   .glow,.msg-user,.msg-ai{animation:none!important}
   .msg-ai:hover{transform:none}
+  /* v1.9.6：系统「移除动画」→ 渐显单元直接全量（JS 侧同样直出，此处为双保险） */
+  .rv{opacity:1!important;transform:none!important}
+  .rv.rv-in{transition:none}
 }
 
 /* 记忆/档案条目 */
