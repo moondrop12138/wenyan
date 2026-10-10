@@ -6,11 +6,11 @@
 
 它不是虚拟恋人，也不替你读心——它帮你把"凭感觉"变成"看证据"。
 
-> 📥 **下载**：两端独立发布、互不影响——Android 见 [v 系列 Release](https://github.com/moondrop12138/wenyan/releases) 装 `.apk`；Windows 桌面版见 [desktop-v 系列 Release](https://github.com/moondrop12138/wenyan/releases?q=desktop)，提供：
-> - `*-windows.exe`：安装包，双击安装到 `AppData\Local\温言`，写卸载项并创建快捷方式。
-> - `*-windows.zip`：绿色版/便携版，解压到任意位置即可运行 `温言.exe`，不写注册表，删文件夹即卸载。
+> 📥 **下载**：Android 与 Windows 桌面版自 v1.9.4 起在 [v 系列 Release](https://github.com/moondrop12138/wenyan/releases) 同发（旧桌面版见 [desktop-v 系列](https://github.com/moondrop12138/wenyan/releases?q=desktop)）——Android 装 `app-release.apk`；Windows 提供：
+> - `wenyan-*.exe`：安装包，双击安装到 `AppData\Local\温言`，写卸载项并创建快捷方式。
+> - `wenyan-*-windows.zip`：绿色版/便携版，解压到任意位置即可运行 `温言.exe`，不写注册表，删文件夹即卸载。
 >
-> 两者均内嵌裁剪 JRE，无需单独装 Java。两端数据各自本地存储，互不同步。
+> Windows 包内嵌裁剪 JRE，无需单独装 Java。两端数据各自本地存储，互不同步。
 
 > ⚠️ **非商业使用声明**：本仓库知识库部分衍生自 [powerycy/goutoujunshi](https://github.com/powerycy/goutoujunshi)（PolyForm Noncommercial 1.0.0），因此**本仓库整体采用非商业许可**，详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
 
@@ -43,7 +43,7 @@
 - **应用内更新检查**：自动检测 GitHub Releases 新版本并下载安装（带进度条）；崩溃日志本地落盘，Android 设置页有「上次崩溃」关怀卡（查看/导出/清除）与一键导出诊断
 - **截图分析**：主模型多模态直读；非多模态模型自动走"视觉转述"通道（可编辑确认后再分析）
 - **多图发送**：一次最多选 10 张，单次 LLM 请求全量分析
-- **知识库路由**：41 份关系科学与实用沟通文档（心理/法律/沟通/婚姻/安全）打包进 App，按场景自动注入至多 5 篇、结果回显引用来源；默认 LLM 智能路由（10 秒超时 + 文档白名单校验，失败自动回退离线 BM25 + 问法变体库混合路由，设置页可关），评测经去泄漏改写与 LeakGate 门禁把关后转正
+- **知识库路由**：41 份关系科学与实用沟通文档（心理/法律/沟通/婚姻/安全）打包进 App，按场景自动注入至多 5 篇、结果回显引用来源；默认 LLM 智能路由（10 秒超时 + 文档白名单校验，失败自动回退离线 BM25 + 问法变体库混合路由，设置页可关）。评测经去泄漏改写与 LeakGate 门禁把关后转正：去泄漏评测集上 LLM 路由核心桶 F1 **0.729**（离线混合路由 0.519），金种子集 F1 **0.80**（数字为评测口径，实际效果随用户所配模型而变）
 - **危机转介**：检测到家暴/跟踪/自伤等风险时，先给安全计划与紧急服务，不给恋爱话术
 - **自带 Key 直连**：无后端、数据不出本机，支持任意 OpenAI 兼容服务商；API Key 本机加密存储（Android 走 Keystore，桌面走机器指纹派生 AES-256-GCM）
 - **流式输出**：SSE 增量回复，思考过程可折叠，流式期间只预览成品话术而非原始 JSON
