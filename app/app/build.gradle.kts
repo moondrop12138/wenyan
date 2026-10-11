@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    // O8 消费端：接收 :benchmark GMD 生成并回写的 baseline profile
+    alias(libs.plugins.baselineprofile)
 }
 
 // release 签名配置：keystore.properties 不入 git（见根 .gitignore），内容由运维在本地生成。
@@ -137,6 +139,8 @@ android {
 }
 
 dependencies {
+    // O8: baseline profile 产线由 :benchmark（com.android.test + GMD）生成后回写本模块
+    baselineProfile(project(":benchmark"))
     // Compose BOM
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

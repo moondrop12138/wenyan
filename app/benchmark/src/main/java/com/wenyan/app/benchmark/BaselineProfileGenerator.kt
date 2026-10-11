@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 /**
  * O8: 冷启动 Baseline Profile 采集。
  * 覆盖 App 启动路径（WenyanApp/MainActivity/Compose 首页首帧），
- * CI 由 :benchmark:pixel6Api34BaselineProfile 生成并回写 src/main/baseline-prof.txt。
+ * CI 由 :app:generateReleaseBaselineProfile（GMD pixel6Api34）生成并回写 app 源码目录。
  */
 @RunWith(AndroidJUnit4::class)
 class BaselineProfileGenerator {

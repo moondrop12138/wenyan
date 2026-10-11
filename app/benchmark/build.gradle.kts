@@ -4,6 +4,9 @@
 plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.kotlin.android)
+    // 生成 <GMD 设备名>BaselineProfile 任务（com.android.test 只出 BenchmarkAndroidTest 任务，
+    // 没有它 workflow 里的 :benchmark:pixel6Api34BaselineProfile 会 TaskSelectionException）
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -48,4 +51,10 @@ kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
+}
+
+// baselineprofile 插件默认只认 connected device，GMD 必须显式登记
+baselineProfile {
+    managedDevices += "pixel6Api34"
+    useConnectedDevices = false
 }

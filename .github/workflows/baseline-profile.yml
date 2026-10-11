@@ -37,8 +37,16 @@ jobs:
           sudo chmod 666 /dev/kvm || true
           ls -l /dev/kvm
 
+      # GMD pixel6Api34Setup 会在构建期现场拉取 aosp-atd 系统镜像，许可证未接受会直接失败
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      # 任务入口是消费端聚合任务（本插件版本不生成 per-device 的
+      # :benchmark:pixel6Api34BaselineProfile，那会 TaskSelectionException）：
+      # generateReleaseBaselineProfile → pixel6Api34Setup → pixel6Api34NonMinifiedReleaseAndroidTest
+      # → collect → merge → copyReleaseBaselineProfileIntoSrc
       - name: Generate baseline profile
-        run: ./gradlew :benchmark:pixel6Api34BaselineProfile --no-daemon --stacktrace
+        run: ./gradlew :app:generateReleaseBaselineProfile --no-daemon --stacktrace
 
       - name: Upload generated baseline profile
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -46,6 +54,7 @@ jobs:
           name: baseline-prof
           path: |
             app/app/src/main/baseline-prof.txt
+            app/app/src/*/generated/baselineProfiles/**
             app/benchmark/build/outputs/**/*.prof
             app/benchmark/build/outputs/**/*.txt
           if-no-files-found: warn
